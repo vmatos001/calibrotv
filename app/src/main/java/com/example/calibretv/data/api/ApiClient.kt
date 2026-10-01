@@ -66,12 +66,18 @@ object ApiClient {
 
                     val type = obj.optString("type", "character")
                     val isChar = type == "character"
+                    val hasImg = obj.optBoolean("has_image", true) || obj.has("image_url")
+                    val rawImg = obj.optString("image_url", "/personajes/api/shelves/$id/image")
+                    val imageUrl = if (hasImg) resolveCoverUrl(rawImg) else null
+
                     list.add(
                         CalibreShelf(
                             id = id,
                             name = name,
                             bookIds = emptyList(),
-                            isCharacterShelf = isChar
+                            isCharacterShelf = isChar,
+                            hasImage = hasImg,
+                            imageUrl = imageUrl
                         )
                     )
                 }
@@ -105,7 +111,7 @@ object ApiClient {
                     val id = obj.optString("id", "")
                     val title = obj.optString("title", "Sin título")
                     val author = obj.optString("author", "Autor Desconocido")
-                    val coverRaw = obj.optString("cover_url", null)
+                    val coverRaw = if (obj.has("cover_url") && !obj.isNull("cover_url")) obj.getString("cover_url") else null
                     val coverUrl = resolveCoverUrl(coverRaw)
                     val synopsis = obj.optString("synopsis", "")
 

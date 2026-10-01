@@ -22,7 +22,9 @@ data class CalibreShelf(
     val id: String,
     val name: String,
     val bookIds: List<String> = emptyList(),
-    val isCharacterShelf: Boolean = false
+    val isCharacterShelf: Boolean = false,
+    val hasImage: Boolean = false,
+    val imageUrl: String? = null
 )
 
 @Serializable
