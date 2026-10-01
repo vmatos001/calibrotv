@@ -368,9 +368,10 @@ object OpdsClient {
      */
     fun isCharacterShelfName(name: String): Boolean {
         val lower = name.lowercase().trim()
+        if (lower.isBlank() || lower == "null") return false
         if (lower.matches(Regex("""^\d+.*"""))) return false // Ej: "1 nivel", "2 nivel", "3 nivel", etc.
         if (lower.startsWith("nivel") || lower.startsWith("level")) return false
-        if (lower in listOf("leídos", "leidos", "favoritos", "read", "reading", "por leer", "general")) return false
+        if (lower in listOf("leídos", "leidos", "favoritos", "read", "reading", "por leer", "general", "null")) return false
         return true
     }
 

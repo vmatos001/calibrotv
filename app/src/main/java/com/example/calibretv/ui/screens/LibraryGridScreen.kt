@@ -122,6 +122,24 @@ fun getBookDifficultyLevel(book: Book): Int {
     return 99
 }
 
+fun isEnglishBook(b: Book): Boolean {
+    val text = (b.shelves + b.tags + listOf(b.category, b.title, b.author)).joinToString(" ").lowercase()
+    if (text.contains("ingl") || text.contains("english") || text.contains("ingles") || text.contains("en_us") || text.contains("en_gb")) {
+        return true
+    }
+    val titleLower = b.title.lowercase().trim()
+    val englishKeywords = listOf(
+        "a girl from yamhill", "a separate peace", "dead men do tell tales", "babe",
+        "the ", "a ", "of ", "in ", "and ", "girl", "peace", "tales", "world", "stories", "history", "book"
+    )
+    if (englishKeywords.any { titleLower.startsWith(it) || titleLower.contains(" $it ") || titleLower.equals(it) }) {
+        if (!titleLower.contains("el ") && !titleLower.contains("la ") && !titleLower.contains("los ") && !titleLower.contains("las ") && !titleLower.contains("de ") && !titleLower.contains("del ") && !titleLower.contains("en el ") && !titleLower.contains("en la ")) {
+            return true
+        }
+    }
+    return false
+}
+
 @Composable
 fun LibraryGridScreen(
     repository: BookRepository,
@@ -215,7 +233,7 @@ fun LibraryGridScreen(
 
         // 2. Shelves de Personajes de TV (desde Calibre-Web, ubicados entre TODOS y NIVEL 1)
         val shelvesFromBooks = allBooks.flatMap { it.shelves }.distinct()
-            .filter { it.isNotBlank() && !it.matches(Regex("""^\d+\s*nivel.*""", RegexOption.IGNORE_CASE)) && !it.contains("ingl", ignoreCase = true) && !it.matches(Regex("""^[1-5]$""")) }
+            .filter { it.isNotBlank() && !it.equals("null", ignoreCase = true) && !it.matches(Regex("""^\d+\s*nivel.*""", RegexOption.IGNORE_CASE)) && !it.contains("ingl", ignoreCase = true) && !it.matches(Regex("""^[1-5]$""")) }
 
         val charShelves = shelvesFromBooks.filter { OpdsClient.isCharacterShelfName(it) }.sorted()
 
@@ -250,11 +268,7 @@ fun LibraryGridScreen(
         }
 
         // 4. Estantería Inglés
-        val englishBooks = allBooks.filter { b ->
-            b.shelves.any { it.contains("ingl", ignoreCase = true) || it.contains("english", ignoreCase = true) } ||
-            b.tags.any { it.contains("ingl", ignoreCase = true) || it.contains("english", ignoreCase = true) } ||
-            b.category.contains("ingl", ignoreCase = true) || b.category.contains("english", ignoreCase = true)
-        }
+        val englishBooks = allBooks.filter { isEnglishBook(it) }
         list.add(
             CircleShelfFilter(
                 id = "ingles",
@@ -274,10 +288,14 @@ fun LibraryGridScreen(
             CircleShelfType.ALL -> allBooks
             CircleShelfType.LEVEL -> allBooks.filter { getBookDifficultyLevel(it) == selected.levelNumber }
             CircleShelfType.CHARACTER, CircleShelfType.TAG -> {
-                val matches = allBooks.filter { b ->
-                    b.shelves.any { it.equals(selected.id, ignoreCase = true) } ||
-                    b.tags.any { it.equals(selected.id, ignoreCase = true) } ||
-                    b.category.equals(selected.id, ignoreCase = true)
+                val matches = if (selected.id == "ingles") {
+                    allBooks.filter { isEnglishBook(it) }
+                } else {
+                    allBooks.filter { b ->
+                        b.shelves.any { it.equals(selected.id, ignoreCase = true) } ||
+                        b.tags.any { it.equals(selected.id, ignoreCase = true) } ||
+                        b.category.equals(selected.id, ignoreCase = true)
+                    }
                 }
                 // Sort books from level 1 to 5, then alphabetically
                 matches.sortedWith(compareBy({ getBookDifficultyLevel(it) }, { it.title }))

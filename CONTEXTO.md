@@ -6,7 +6,7 @@
 
 ## 📅 Estado Actual del Proyecto (Actualizado: 28/09/2026)
 
-- **Versión Activa:** `v2.7` (Build `versionCode = 11`, `versionName = "2.7"`)
+- **Versión Activa:** `v2.8` (Build `versionCode = 12`, `versionName = "2.8"`)
 - **Repositorio:** `https://github.com/vmatos001/calibrotv`
 - **Descarga Directa Downloader / TinyURL:** `https://tinyurl.com/29t27s6q`
 - **Keystore de Firma:** `app/keystore/calibrotv.keystore` (Firma unificada permanente para Debug y Release con Huella SHA256: `52:E8:ED:A7:6F:9C:CA:51:F5:55:6E:48:47:7C:20:C3:8F:AE:6B:4F:6C:AE:C3:D4:84:FB:98:17:7F:7E:F8:0C`).

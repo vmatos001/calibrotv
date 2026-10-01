@@ -132,7 +132,10 @@ class BookRepository(private val context: Context) {
     }
 
     suspend fun saveCachedBooks(books: List<Book>) = withContext(Dispatchers.IO) {
-        bookDao.upsertBooks(books.map { it.toEntity() })
+        val unique = books.distinctBy { it.id.ifBlank { it.title } }
+            .distinctBy { "${it.title.lowercase().trim()}_${it.author.lowercase().trim()}" }
+        bookDao.clearAll()
+        bookDao.upsertBooks(unique.map { it.toEntity() })
     }
 
     fun getBookProgress(bookId: String): Int = runBlocking(Dispatchers.IO) {

@@ -62,6 +62,8 @@ object ApiClient {
                     val obj = shelvesArray.getJSONObject(i)
                     val id = obj.optString("id", i.toString())
                     val name = obj.optString("name", "")
+                    if (name.isBlank() || name.equals("null", ignoreCase = true)) continue
+
                     val type = obj.optString("type", "character")
                     val isChar = type == "character"
                     list.add(
@@ -107,18 +109,8 @@ object ApiClient {
                     val coverUrl = resolveCoverUrl(coverRaw)
                     val synopsis = obj.optString("synopsis", "")
 
-                    // Formats & EPUB URL construction if available
-                    val formatsArr = obj.optJSONArray("formats")
-                    var epubUrl: String? = null
-                    if (formatsArr != null) {
-                        for (f in 0 until formatsArr.length()) {
-                            val fmt = formatsArr.getString(f)
-                            if (fmt.equals("EPUB", ignoreCase = true)) {
-                                epubUrl = "$BASE_URL/books/$id/file/epub"
-                                break
-                            }
-                        }
-                    }
+                    // Valid Calibre-Web OPDS EPUB Download URL
+                    val epubUrl = "https://b-blio-tk.duckdns.org/opds/download/$id/epub/"
 
                     // Extract shelves names & level tags
                     val shelvesList = mutableListOf<String>()
@@ -127,17 +119,19 @@ object ApiClient {
                         for (s in 0 until shelvesArr.length()) {
                             val sObj = shelvesArr.getJSONObject(s)
                             val sName = sObj.optString("name", "")
-                            if (sName.isNotBlank()) shelvesList.add(sName)
+                            if (sName.isNotBlank() && !sName.equals("null", ignoreCase = true)) {
+                                shelvesList.add(sName)
+                            }
                         }
                     }
 
                     val charName = obj.optString("character", "")
-                    if (charName.isNotBlank() && !shelvesList.contains(charName)) {
+                    if (charName.isNotBlank() && !charName.equals("null", ignoreCase = true) && !shelvesList.contains(charName)) {
                         shelvesList.add(charName)
                     }
 
                     val levelName = obj.optString("level", "")
-                    if (levelName.isNotBlank() && !shelvesList.contains(levelName)) {
+                    if (levelName.isNotBlank() && !levelName.equals("null", ignoreCase = true) && !shelvesList.contains(levelName)) {
                         shelvesList.add(levelName)
                     }
 
@@ -147,9 +141,9 @@ object ApiClient {
                             title = title,
                             author = author,
                             coverUrl = coverUrl,
-                            epubUrl = epubUrl ?: "$BASE_URL/books/$id/file/epub",
+                            epubUrl = epubUrl,
                             summary = synopsis,
-                            category = charName.ifBlank { "General" },
+                            category = if (charName.isNotBlank() && !charName.equals("null", ignoreCase = true)) charName else "General",
                             tags = shelvesList.distinct(),
                             shelves = shelvesList.distinct()
                         )
