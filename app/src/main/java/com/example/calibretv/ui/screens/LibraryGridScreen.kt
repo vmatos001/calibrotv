@@ -239,10 +239,7 @@ fun LibraryGridScreen(
         val shelvesFromBooks = allBooks.flatMap { it.shelves }.distinct()
             .filter { it.isNotBlank() && !it.equals("null", ignoreCase = true) && !it.matches(Regex("""^\d+\s*nivel.*""", RegexOption.IGNORE_CASE)) && !it.contains("ingl", ignoreCase = true) && !it.matches(Regex("""^[1-5]$""")) }
 
-        val charShelves = (shelvesFromBooks + cachedShelves.map { it.name })
-            .distinct()
-            .filter { OpdsClient.isCharacterShelfName(it) }
-            .sorted()
+        val charShelves = shelvesFromBooks.filter { OpdsClient.isCharacterShelfName(it) }.sorted()
 
         charShelves.forEach { shelfName ->
             val matchingBooks = allBooks.filter { b ->

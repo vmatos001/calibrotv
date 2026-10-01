@@ -123,8 +123,8 @@ object ApiClient {
                     val shelvesArr = obj.optJSONArray("shelves")
                     if (shelvesArr != null) {
                         for (s in 0 until shelvesArr.length()) {
-                            val sObj = shelvesArr.getJSONObject(s)
-                            val sName = sObj.optString("name", "")
+                            val sItem = shelvesArr.get(s)
+                            val sName = if (sItem is JSONObject) sItem.optString("name", "") else sItem.toString()
                             if (sName.isNotBlank() && !sName.equals("null", ignoreCase = true)) {
                                 shelvesList.add(sName)
                             }
