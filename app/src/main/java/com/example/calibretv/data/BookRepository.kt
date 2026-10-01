@@ -167,6 +167,12 @@ class BookRepository(private val context: Context) {
     fun getShelves(): List<CalibreShelf> = cachedShelves
 
     suspend fun loadAndApplyShelves(config: ServerConfig): List<CalibreShelf> = withContext(Dispatchers.IO) {
+        val apiResult = com.example.calibretv.data.api.ApiClient.fetchShelves()
+        if (apiResult.isSuccess && apiResult.getOrNull()!!.isNotEmpty()) {
+            val shelves = apiResult.getOrNull()!!
+            cachedShelves = shelves
+            return@withContext shelves
+        }
         val result = OpdsClient.fetchShelves(config.serverUrl, config.username, config.password)
         if (result.isSuccess) {
             val shelves = result.getOrNull() ?: emptyList()
@@ -232,6 +238,22 @@ class BookRepository(private val context: Context) {
      * Performs incremental comparison preserving local reading progress.
      */
     suspend fun scanServerLibrary(config: ServerConfig): Result<OpdsFeedContent> = withContext(Dispatchers.IO) {
+        // Try REST API first
+        val apiBooksRes = com.example.calibretv.data.api.ApiClient.fetchBooks(500)
+        if (apiBooksRes.isSuccess && apiBooksRes.getOrNull()!!.isNotEmpty()) {
+            val books = apiBooksRes.getOrNull()!!
+            saveServerConfig(config)
+            val mergedBooks = books.map { newBook ->
+                val savedPct = getBookProgressPercent(newBook.id)
+                if (savedPct > 0) newBook.copy(progressPercent = savedPct) else newBook
+            }
+            saveCachedBooks(mergedBooks)
+            try {
+                loadAndApplyShelves(config)
+            } catch (_: Exception) {}
+            return@withContext Result.success(OpdsFeedContent(title = "Biblioteca", categories = emptyList(), books = mergedBooks))
+        }
+
         val scanResult = OpdsClient.fetchLibraryCatalog(
             serverUrl = config.serverUrl,
             username = config.username,
@@ -302,18 +324,16 @@ class BookRepository(private val context: Context) {
             )
         }
 
-        // 3. If no cached books but server URL configured, attempt scan
-        if (config.serverUrl.isNotBlank() && (config.serverUrl.startsWith("http://") || config.serverUrl.startsWith("https://"))) {
-            val scanResult = scanServerLibrary(config)
-            if (scanResult.isSuccess) {
-                val feed = scanResult.getOrNull()!!
-                if (feed.books.isNotEmpty()) {
-                    val annotated = feed.books.map { b ->
-                        val realPct = getBookProgressPercent(b.id)
-                        b.copy(progressPercent = if (realPct > 0) realPct else b.progressPercent)
-                    }
-                    return@withContext feed.copy(books = annotated)
+        // 3. If no cached books, scan via ApiClient / Server
+        val scanResult = scanServerLibrary(config)
+        if (scanResult.isSuccess) {
+            val feed = scanResult.getOrNull()!!
+            if (feed.books.isNotEmpty()) {
+                val annotated = feed.books.map { b ->
+                    val realPct = getBookProgressPercent(b.id)
+                    b.copy(progressPercent = if (realPct > 0) realPct else b.progressPercent)
                 }
+                return@withContext feed.copy(books = annotated)
             }
         }
 

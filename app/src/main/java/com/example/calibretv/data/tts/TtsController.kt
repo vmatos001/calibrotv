@@ -19,6 +19,8 @@ class TtsController(context: Context) : TextToSpeech.OnInitListener {
     private var pendingText: String? = null
     private var pendingSpeed: Float = 1.0f
 
+    var onPageFinishedListener: (() -> Unit)? = null
+
     init {
         try {
             tts = TextToSpeech(context.applicationContext, this)
@@ -27,7 +29,6 @@ class TtsController(context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
-    // Índice de la oración actualmente siendo leída
     private val _currentSentenceIndex = MutableStateFlow(-1)
     val currentSentenceIndex: StateFlow<Int> = _currentSentenceIndex
 
@@ -47,14 +48,12 @@ class TtsController(context: Context) : TextToSpeech.OnInitListener {
             _isEngineAvailable.value = true
             val ttsEngine = tts ?: return
             try {
-                // Configure speech audio attributes for media playback
                 val audioAttributes = AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
                 ttsEngine.setAudioAttributes(audioAttributes)
 
-                // Multilingual fallback list prioritizing Spanish variants
                 val candidates = listOf(
                     Locale.getDefault(),
                     Locale("es", "ES"),
@@ -89,10 +88,22 @@ class TtsController(context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
-    /**
-     * Divide el texto de la página en oraciones y las encola en el TTS.
-     * Cada oración dispara una actualización del índice resaltado.
-     */
+    fun setVoiceLocale(locale: Locale) {
+        if (isReady && tts != null) {
+            try {
+                tts?.language = locale
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun setPitch(pitch: Float) {
+        if (isReady && tts != null) {
+            try {
+                tts?.setPitch(pitch)
+            } catch (_: Exception) {}
+        }
+    }
+
     fun readPage(text: String, speedRate: Float = 1.0f) {
         if (!isReady || tts == null) {
             pendingText = text
@@ -121,6 +132,7 @@ class TtsController(context: Context) : TextToSpeech.OnInitListener {
                         _isPlaying.value = false
                         _currentSentenceIndex.value = -1
                         _currentSentenceText.value = ""
+                        onPageFinishedListener?.invoke()
                     }
                 }
 

@@ -176,6 +176,57 @@ fun ReaderScreen(
         }
     }
 
+    // Trigger Apple Books realistic 3D paper curl
+    fun turnPage(forward: Boolean) {
+        if (isFlipping) return
+        val nextIdx = if (forward) currentSpreadIndex + 1 else currentSpreadIndex - 1
+        if (nextIdx !in spreads.indices) return
+        ttsController.stop()
+        if (settings.pageSoundEnabled) {
+            soundManager.playPageTurn()
+        }
+
+        isFlipping = true
+        flipDirectionForward = forward
+        targetSpreadIndex = nextIdx
+
+        scope.launch {
+            // Realistic organic duration: Apple Books 500ms vs Fluid 320ms
+            val animDuration = if (settings.curlSpeed == CurlSpeed.APPLE_BOOKS_SMOOTH) 500 else 320
+            // Organic paper physics easing (starts with natural peel resistance, accelerates through apex, decelerates as page lands)
+            val paperEasing = CubicBezierEasing(0.35f, 0.05f, 0.25f, 1.0f)
+
+            curlAnim.snapTo(0f)
+            curlAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(animDuration, easing = paperEasing)
+            )
+
+            val pct = if (spreads.isNotEmpty()) (((nextIdx + 1) * 100) / spreads.size).coerceIn(1, 100) else 0
+            currentSpreadIndex = nextIdx
+            repository.saveBookProgress(book.id, nextIdx, pct)
+            curlAnim.snapTo(0f)
+            isFlipping = false
+        }
+    }
+
+    LaunchedEffect(ttsController) {
+        ttsController.onPageFinishedListener = {
+            if (currentSpreadIndex < spreads.size - 1) {
+                scope.launch {
+                    turnPage(forward = true)
+                    kotlinx.coroutines.delay(450L)
+                    val nextL = spreads.getOrNull(currentSpreadIndex)?.leftPage?.paragraphs?.joinToString(" ") ?: ""
+                    val nextR = spreads.getOrNull(currentSpreadIndex)?.rightPage?.paragraphs?.joinToString(" ") ?: ""
+                    val nextText = listOf(nextL, nextR).filter { it.isNotBlank() }.joinToString(" ")
+                    if (nextText.isNotBlank()) {
+                        ttsController.readPage(nextText, settings.ttsSpeedRate)
+                    }
+                }
+            }
+        }
+    }
+
     // Load parsed book once
     LaunchedEffect(book.id) {
         isLoading = true
@@ -231,40 +282,6 @@ fun ReaderScreen(
                 val pct = (((newIndex + 1) * 100) / newSpreads.size).coerceIn(1, 100)
                 repository.saveBookProgress(book.id, newIndex, pct)
             }
-        }
-    }
-
-    // Trigger Apple Books realistic 3D paper curl
-    fun turnPage(forward: Boolean) {
-        if (isFlipping) return
-        val nextIdx = if (forward) currentSpreadIndex + 1 else currentSpreadIndex - 1
-        if (nextIdx !in spreads.indices) return
-        ttsController.stop()
-        if (settings.pageSoundEnabled) {
-            soundManager.playPageTurn()
-        }
-
-        isFlipping = true
-        flipDirectionForward = forward
-        targetSpreadIndex = nextIdx
-
-        scope.launch {
-            // Realistic organic duration: Apple Books 500ms vs Fluid 320ms
-            val animDuration = if (settings.curlSpeed == CurlSpeed.APPLE_BOOKS_SMOOTH) 500 else 320
-            // Organic paper physics easing (starts with natural peel resistance, accelerates through apex, decelerates as page lands)
-            val paperEasing = CubicBezierEasing(0.35f, 0.05f, 0.25f, 1.0f)
-
-            curlAnim.snapTo(0f)
-            curlAnim.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(animDuration, easing = paperEasing)
-            )
-
-            val pct = if (spreads.isNotEmpty()) (((nextIdx + 1) * 100) / spreads.size).coerceIn(1, 100) else 0
-            currentSpreadIndex = nextIdx
-            repository.saveBookProgress(book.id, nextIdx, pct)
-            curlAnim.snapTo(0f)
-            isFlipping = false
         }
     }
 
