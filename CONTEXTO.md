@@ -4,7 +4,7 @@
 
 ---
 
-## 📅 Estado Actual del Proyecto (Actualizado: 28/09/2026)
+## 📅 Estado Actual del Proyecto (Actualizado: 01/10/2026)
 
 - **Versión Activa:** `v3.1` (Build `versionCode = 15`, `versionName = "3.1"`)
 - **Repositorio:** `https://github.com/vmatos001/calibrotv`
@@ -23,7 +23,7 @@ Si en la TV aparece el mensaje:
 **Solución por única vez:**
 1. Desinstalar la versión antigua de CalibroTV en la TV.
 2. Instalar **v2.2** utilizando el código de Downloader `https://tinyurl.com/29t27s6q`.
-3. A partir de **v2.2 en adelante** (v2.3, v2.4, v2.5, etc.), todas las actualizaciones automáticas OTA o vía Downloader se instalarán **sin desinstalar nada**, ya que mantendrán la misma firma oficial.
+3. A partir de **v2.2 en adelante** (v2.3, v2.4, v2.5, v2.6, v2.9, v3.1, etc.), todas las actualizaciones automáticas OTA o vía Downloader se instalarán **sin desinstalar nada**, ya que mantendrán la misma firma oficial.
 
 ---
 
@@ -36,7 +36,7 @@ Si en la TV aparece el mensaje:
    - `SettingsScreen.kt`: Configuración de temas, fuentes, velocidad de hoja, sonidos ambientales y actualización OTA.
 
 2. **Estanterías de Calibre-Web & Niveles de Dificultad:**
-   - **Sección A:** Avatares circulares para Shelves de personajes (ej: Dr. House, Lisa Simpson, Matilda, Patrick Jane, Dune, etc.) con portada recortada en círculo y medallas circulares del 1 al 5 para Niveles de Dificultad.
+   - **Sección A:** Avatares circulares para Shelves de personajes (ej: Dr. House, Lisa Simpson, Matilda, Patrick Jane, Dune, etc.) con imágenes de estantes oficiales (`/personajes/api/shelves/<id>/image`) o portada de libro recortada en círculo y medallas circulares del 1 al 5 para Niveles de Dificultad.
    - **Sección B:** Cuadrícula vertical de libros. Al presionar una estantería de personaje, se muestran los libros de esa estantería **ordenados estrictamente del Nivel 1 al 5**.
 
 3. **Lector 3D Inmersivo (Page Curl Engine):**
@@ -44,8 +44,8 @@ Si en la TV aparece el mensaje:
    - `ComicReaderScreen.kt`: Lector de Cómics y Mangas (.cbz / .cbr).
    - **Regla Intocable:** NO modificar los parámetros físicos de la animación 3D (`curlAnim`, `CubicBezierEasing`, `TransformOrigin`) sin autorización.
 
-4. **Motor TTS (Lectura en Voz Alta):**
-   - `TtsController.kt`: Configurado con `AudioAttributes` (`USAGE_MEDIA`, `CONTENT_TYPE_SPEECH`), salida a `STREAM_MUSIC` y paquete visible en `AndroidManifest.xml` (`<queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>`) para compatibilidad con Android 11+ / API 30+.
+4. **Motor TTS (Lectura en Voz Alta & HUD de Controles):**
+   - `TtsController.kt`: Configurado con `AudioAttributes` (`USAGE_MEDIA`, `CONTENT_TYPE_SPEECH`), salida a `STREAM_MUSIC`, compatibilidad con Android 11+ / API 30+ y soporte para Tono/Pitch, Velocidad y Acento de Voz (España, México, Latino).
 
 5. **Sonidos Ambientales y Foley:**
    - Ubicados en `app/src/main/res/raw/` en formato OGG Vorbis liviano (lluvia, chimenea, bosque, océano, café murmur) y efecto de paso de hoja suave (`page_turn_*.wav`).
@@ -57,20 +57,26 @@ Si en la TV aparece el mensaje:
 
 ## 📋 Historial de Versiones
 
-### v2.5 (Versión Actual)
-- **Foco de Navegación D-Pad:** Restauración precisa de foco al cerrar la ficha técnica de un libro; el cursor vuelve exactamente al libro seleccionado en lugar de saltar al título superior.
-- **Sinopsis Real OPDS:** Carga directa de descripciones de libros desde el feed individual del servidor Calibre-Web y almacenamiento persistente en Room.
-- **Diseño Modal Resiliente:** Contenedor de sinopsis con desplazamiento vertical (scroll D-Pad) con límite de altura para evitar que la sinopsis oculte los botones de lectura 3D, favoritos y cerrar.
-- **Filtros e Iconografía de Estanterías:** Ubicación de las estanterías de personajes entre `[TODOS]` y `[NIVEL 1]` y parser de niveles flexible para etiquetas numéricas o mixtas.
-- **Audio Ambiental Blindado:** Captura preventiva de errores en `MediaPlayer` para garantizar que la reproducción de sonidos ambientales (lluvia, mar, café) no interrumpa ni cierre la aplicación.
-- **Importador WiFi Sideload (Java Socket HTTP):** Reemplazo del módulo `HttpServer` por un servidor HTTP ligero embebido con `ServerSocket` compatible con el runtime ART de Android TV.
-- **Diagnóstico y Soporte TTS:** Notificaciones claras al usuario cuando la TV carece de motor TTS o idioma instalado.
+### v3.1 (Versión Activa)
+- **Arquitectura de Biblioteca v2.6 Restaurada:** Carga directa y fluida de catálogo y estantes desde la API REST (`/personajes/api/books` y `/personajes/api/shelves`), preservando las etiquetas de estantes de personaje y nivel en los libros.
+- **Imágenes Oficiales de Estantes de la API REST:** Soporte completo para `has_image` e `image_url` (`/personajes/api/shelves/<id>/image`) mostrando las fotografías oficiales de personajes e insignias de nivel en la Sección A.
+- **Optimización de Peso (v2.7):** Compilación minificada con R8 y ProGuard (APK Release reducido a 11.75 MB).
+- **Filtro de Libros en Inglés (v2.8):** Clasificación dinámica de libros en inglés sin incluir estantes nulos.
+- **Mejoras de Usabilidad y Lector 3D (v2.9):**
+  - **Modal de Detalles:** Salida inmediata con 1 sola pulsación de Atrás (`detailsBook = null`, `onKeyEvent`).
+  - **Botón Favoritos:** Texto limpio sin estrella duplicada (`En Favoritos` / `Añadir a Favoritos`).
+  - **HUD Lector TTS:** Opciones de Acento de Voz (España 🇪🇸, México 🇲🇽, Latino 🌐), Tono/Pitch (Grave, Normal, Agudo) y Velocidad (0.75x a 1.5x).
+  - **Fire TV Stick Banner:** Banner launcher en `mipmap-xhdpi/banner.png` y `mipmap-xxhdpi/banner.png`.
+
+### v2.5
+- **Foco de Navegación D-Pad:** Restauración precisa de foco al cerrar la ficha técnica de un libro; el cursor vuelve exactamente al libro seleccionado.
+- **Sinopsis Real OPDS:** Carga directa de descripciones de libros desde el feed individual del servidor Calibre-Web y almacenamiento en Room.
+- **Audio Ambiental Blindado:** Captura preventiva de errores en `MediaPlayer` para evitar cierres de la app.
 
 ### v2.4 y v2.3
 - **Biblioteca estilo Netflix Kids:** Estanterías circulares de personajes y números 1-5.
 - **Lectura TTS:** Corrección de compatibilidad en Android TV para lectura continua en voz alta.
-- **Sonidos Ambientales OGG:** Sustitución de audio sintético por sonidos profesionales en bucle continuo.
-- **Firma Única Keystore:** Configuración de `calibrotv.keystore` tanto en debug como release.
+- **Firma Única Keystore:** Configuración de `calibrotv.keystore` unificado.
 
 ---
 
