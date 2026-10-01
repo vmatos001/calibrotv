@@ -82,6 +82,8 @@ data class ReadingSettings(
     val spineDepth3D: Float = 0.5f, // 0.0 = plano, 1.0 = tomo grueso
     val ttsEnabled: Boolean = false,
     val ttsSpeedRate: Float = 1.0f, // 0.5 = lento, 1.0 = normal, 1.5 = rápido
+    val ttsPitch: Float = 1.0f, // 0.8 = grave, 1.0 = normal, 1.2 = agudo
+    val ttsVoiceLocale: String = "es-ES", // "es-ES", "es-MX", "es-US"
     val pageSoundEnabled: Boolean = true,
     val ambientSound: AmbientSound = AmbientSound.NONE,
     val ambientVolume: Float = 0.4f // 0.0f a 1.0f

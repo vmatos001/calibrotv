@@ -220,7 +220,7 @@ fun ReaderScreen(
                     val nextR = spreads.getOrNull(currentSpreadIndex)?.rightPage?.paragraphs?.joinToString(" ") ?: ""
                     val nextText = listOf(nextL, nextR).filter { it.isNotBlank() }.joinToString(" ")
                     if (nextText.isNotBlank()) {
-                        ttsController.readPage(nextText, settings.ttsSpeedRate)
+                        ttsController.readPage(nextText, settings.ttsSpeedRate, settings.ttsPitch, settings.ttsVoiceLocale)
                     }
                 }
             }
@@ -924,7 +924,7 @@ fun ReaderScreen(
                                 isPrimary = isTtsPlaying,
                                 onClick = {
                                     if (!isTtsEngineAvailable) {
-                                        android.widget.Toast.makeText(context, "Tu TV no tiene motor de voz TTS instalado. Instala 'Google Speech Services' o 'eSpeak'.", android.widget.Toast.LENGTH_LONG).show()
+                                        android.widget.Toast.makeText(context, "Lectura en voz alta no disponible en este dispositivo.", android.widget.Toast.LENGTH_LONG).show()
                                     } else if (isTtsPlaying) {
                                         ttsController.stop()
                                     } else {
@@ -932,9 +932,68 @@ fun ReaderScreen(
                                         val rightText = currentSpread?.rightPage?.paragraphs?.joinToString(" ") ?: ""
                                         val pageText = listOf(leftText, rightText).filter { it.isNotBlank() }.joinToString(" ")
                                         if (pageText.isNotBlank()) {
-                                            ttsController.readPage(pageText, settings.ttsSpeedRate)
+                                            ttsController.readPage(pageText, settings.ttsSpeedRate, settings.ttsPitch, settings.ttsVoiceLocale)
                                         }
                                     }
+                                }
+                            )
+                        }
+                        item {
+                            val voiceName = when (settings.ttsVoiceLocale) {
+                                "es-ES" -> "Voz: España 🇪🇸"
+                                "es-MX" -> "Voz: México 🇲🇽"
+                                else -> "Voz: Latino 🌐"
+                            }
+                            StitchHudButton(
+                                title = voiceName,
+                                icon = Icons.Default.RecordVoiceOver,
+                                isPrimary = false,
+                                onClick = {
+                                    val nextLoc = when (settings.ttsVoiceLocale) {
+                                        "es-ES" -> "es-MX"
+                                        "es-MX" -> "es-US"
+                                        else -> "es-ES"
+                                    }
+                                    settings = settings.copy(ttsVoiceLocale = nextLoc)
+                                    repository.saveReadingSettings(settings)
+                                }
+                            )
+                        }
+                        item {
+                            val pitchName = when (settings.ttsPitch) {
+                                0.8f -> "Tono: Grave"
+                                1.2f -> "Tono: Agudo"
+                                else -> "Tono: Normal"
+                            }
+                            StitchHudButton(
+                                title = pitchName,
+                                icon = Icons.Default.MusicNote,
+                                isPrimary = false,
+                                onClick = {
+                                    val nextPitch = when (settings.ttsPitch) {
+                                        1.0f -> 1.2f
+                                        1.2f -> 0.8f
+                                        else -> 1.0f
+                                    }
+                                    settings = settings.copy(ttsPitch = nextPitch)
+                                    repository.saveReadingSettings(settings)
+                                }
+                            )
+                        }
+                        item {
+                            StitchHudButton(
+                                title = "Velocidad: ${settings.ttsSpeedRate}x",
+                                icon = Icons.Default.Timer,
+                                isPrimary = settings.ttsSpeedRate != 1.0f,
+                                onClick = {
+                                    val nextSpeed = when (settings.ttsSpeedRate) {
+                                        1.0f -> 1.25f
+                                        1.25f -> 1.5f
+                                        1.5f -> 0.75f
+                                        else -> 1.0f
+                                    }
+                                    settings = settings.copy(ttsSpeedRate = nextSpeed)
+                                    repository.saveReadingSettings(settings)
                                 }
                             )
                         }

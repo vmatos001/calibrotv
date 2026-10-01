@@ -167,7 +167,10 @@ fun LibraryGridScreen(
     val bookFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
 
     BackHandler {
-        if (showDetailsModal) showDetailsModal = false
+        if (showDetailsModal) {
+            showDetailsModal = false
+            detailsBook = null
+        }
         else if (showUserProfilesModal) showUserProfilesModal = false
         else if (isDrawerOpen) isDrawerOpen = false
         else onBack()
@@ -555,7 +558,17 @@ fun LibraryGridScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.88f))
-                    .clickable { showDetailsModal = false },
+                    .onKeyEvent { keyEvent ->
+                        if (keyEvent.type == KeyEventType.KeyDown && (keyEvent.key == Key.Back || keyEvent.key == Key.Escape)) {
+                            showDetailsModal = false
+                            detailsBook = null
+                            true
+                        } else false
+                    }
+                    .clickable {
+                        showDetailsModal = false
+                        detailsBook = null
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Box(
@@ -719,11 +732,12 @@ fun LibraryGridScreen(
                                     modifier = Modifier.focusRequester(modalReadFocusRequester),
                                     onClick = {
                                         showDetailsModal = false
+                                        detailsBook = null
                                         onBookSelected(book)
                                     }
                                 )
                                 GridActionCapsule(
-                                    title = if (isFav) "★ En Favoritos" else "☆ Añadir a Favoritos",
+                                    title = if (isFav) "En Favoritos" else "Añadir a Favoritos",
                                     icon = Icons.Default.Star,
                                     isPrimary = isFav,
                                     onClick = {
@@ -735,7 +749,10 @@ fun LibraryGridScreen(
                                     title = "Cerrar",
                                     icon = Icons.Default.Close,
                                     isPrimary = false,
-                                    onClick = { showDetailsModal = false }
+                                    onClick = {
+                                        showDetailsModal = false
+                                        detailsBook = null
+                                    }
                                 )
                             }
                         }

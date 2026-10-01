@@ -90,6 +90,8 @@ class PreferencesManager(context: Context) {
             spineDepth3D = prefs.getFloat("spine_depth_3d", 0.5f),
             ttsEnabled = prefs.getBoolean("tts_enabled", false),
             ttsSpeedRate = prefs.getFloat("tts_speed_rate", 1.0f),
+            ttsPitch = prefs.getFloat("tts_pitch", 1.0f),
+            ttsVoiceLocale = prefs.getString("tts_voice_locale", "es-ES") ?: "es-ES",
             pageSoundEnabled = prefs.getBoolean("page_sound_enabled", true),
             ambientSound = try {
                 com.example.calibretv.data.model.AmbientSound.valueOf(
@@ -117,6 +119,8 @@ class PreferencesManager(context: Context) {
             .putFloat("spine_depth_3d", settings.spineDepth3D)
             .putBoolean("tts_enabled", settings.ttsEnabled)
             .putFloat("tts_speed_rate", settings.ttsSpeedRate)
+            .putFloat("tts_pitch", settings.ttsPitch)
+            .putString("tts_voice_locale", settings.ttsVoiceLocale)
             .putBoolean("page_sound_enabled", settings.pageSoundEnabled)
             .putString("ambient_sound", settings.ambientSound.name)
             .putFloat("ambient_volume", settings.ambientVolume)

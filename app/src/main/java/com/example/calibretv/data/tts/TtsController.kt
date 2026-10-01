@@ -104,7 +104,7 @@ class TtsController(context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
-    fun readPage(text: String, speedRate: Float = 1.0f) {
+    fun readPage(text: String, speedRate: Float = 1.0f, pitch: Float = 1.0f, localeCode: String = "es-ES") {
         if (!isReady || tts == null) {
             pendingText = text
             pendingSpeed = speedRate
@@ -117,6 +117,14 @@ class TtsController(context: Context) : TextToSpeech.OnInitListener {
         val ttsEngine = tts ?: return
         try {
             ttsEngine.setSpeechRate(speedRate)
+            ttsEngine.setPitch(pitch)
+            try {
+                val parts = localeCode.split("-")
+                val loc = if (parts.size >= 2) java.util.Locale(parts[0], parts[1]) else java.util.Locale(localeCode)
+                if (ttsEngine.isLanguageAvailable(loc) >= TextToSpeech.LANG_AVAILABLE) {
+                    ttsEngine.language = loc
+                }
+            } catch (_: Exception) {}
 
             ttsEngine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String) {
