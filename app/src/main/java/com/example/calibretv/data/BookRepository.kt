@@ -170,33 +170,56 @@ class BookRepository(private val context: Context) {
     fun getShelves(): List<CalibreShelf> = cachedShelves
 
     suspend fun loadAndApplyShelves(config: ServerConfig): List<CalibreShelf> = withContext(Dispatchers.IO) {
-        val apiResult = com.example.calibretv.data.api.ApiClient.fetchShelves()
-        if (apiResult.isSuccess && apiResult.getOrNull()!!.isNotEmpty()) {
-            val shelves = apiResult.getOrNull()!!
-            cachedShelves = shelves
-            return@withContext shelves
-        }
-        val result = OpdsClient.fetchShelves(config.serverUrl, config.username, config.password)
-        if (result.isSuccess) {
-            val shelves = result.getOrNull() ?: emptyList()
-            cachedShelves = shelves
+        // 1. Fetch OPDS shelves for book ID mappings
+        val opdsResult = OpdsClient.fetchShelves(config.serverUrl, config.username, config.password)
+        val opdsShelves = opdsResult.getOrNull() ?: emptyList()
 
-            if (shelves.isNotEmpty()) {
-                val currentBooks = getCachedBooks()
-                val updatedBooks = currentBooks.map { book ->
-                    val matchingShelves = shelves.filter { it.bookIds.contains(book.id) }.map { it.name }
-                    if (matchingShelves.isNotEmpty()) {
-                        book.copy(shelves = matchingShelves)
-                    } else {
-                        book
-                    }
-                }
-                saveCachedBooks(updatedBooks)
-            }
-            shelves
-        } else {
-            emptyList()
+        // 2. Fetch REST API shelves for official shelf image URLs
+        val apiResult = com.example.calibretv.data.api.ApiClient.fetchShelves()
+        val apiShelves = apiResult.getOrNull() ?: emptyList()
+
+        // 3. Merge OPDS book mappings with API image URLs
+        val allNames = (opdsShelves.map { it.name } + apiShelves.map { it.name })
+            .distinct()
+            .filter { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+
+        val mergedShelves = allNames.map { name ->
+            val opdsShelf = opdsShelves.firstOrNull { it.name.equals(name, ignoreCase = true) }
+            val apiShelf = apiShelves.firstOrNull { it.name.equals(name, ignoreCase = true) }
+
+            val id = apiShelf?.id ?: opdsShelf?.id ?: name
+            val isChar = apiShelf?.isCharacterShelf ?: opdsShelf?.isCharacterShelf ?: OpdsClient.isCharacterShelfName(name)
+            val hasImg = apiShelf?.hasImage ?: false
+            val imgUrl = apiShelf?.imageUrl
+            val bookIds = opdsShelf?.bookIds ?: emptyList()
+
+            CalibreShelf(
+                id = id,
+                name = name,
+                bookIds = bookIds,
+                isCharacterShelf = isChar,
+                hasImage = hasImg,
+                imageUrl = imgUrl
+            )
         }
+
+        cachedShelves = mergedShelves
+
+        if (mergedShelves.isNotEmpty()) {
+            val currentBooks = getCachedBooks()
+            val updatedBooks = currentBooks.map { book ->
+                val matchingShelves = mergedShelves.filter { it.bookIds.contains(book.id) }.map { it.name }
+                if (matchingShelves.isNotEmpty()) {
+                    val combined = (book.shelves + matchingShelves).distinct().filter { !it.equals("null", ignoreCase = true) }
+                    book.copy(shelves = combined)
+                } else {
+                    book
+                }
+            }
+            saveCachedBooks(updatedBooks)
+        }
+
+        mergedShelves
     }
 
     suspend fun getOrFetchBookDescription(book: Book): String = withContext(Dispatchers.IO) {
