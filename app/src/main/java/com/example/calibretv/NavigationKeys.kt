@@ -42,3 +42,11 @@ data class ComicReaderNavKey(
     val bookAuthor: String,
     val epubUrl: String? = null
 ) : NavKey
+
+@Serializable
+data class PdfReaderNavKey(
+    val bookId: String,
+    val bookTitle: String,
+    val bookAuthor: String,
+    val pdfUrl: String? = null
+) : NavKey
