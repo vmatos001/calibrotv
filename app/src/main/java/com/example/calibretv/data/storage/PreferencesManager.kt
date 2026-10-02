@@ -137,11 +137,22 @@ class PreferencesManager(context: Context) {
             val list = mutableListOf<UserProfile>()
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
+                val whiteList = mutableListOf<String>()
+                val whiteArr = o.optJSONArray("whitelistBookIds")
+                if (whiteArr != null) {
+                    for (j in 0 until whiteArr.length()) {
+                        whiteList.add(whiteArr.getString(j))
+                    }
+                }
                 list.add(
                     UserProfile(
                         id = o.optString("id", "user_${i + 1}"),
                         name = o.optString("name", "Usuario"),
-                        avatarColorHex = o.optString("avatarColorHex", "#FFA000")
+                        avatarColorHex = o.optString("avatarColorHex", "#FFA000"),
+                        isKidsMode = o.optBoolean("isKidsMode", false),
+                        parentalPin = if (o.has("parentalPin") && !o.isNull("parentalPin")) o.getString("parentalPin") else null,
+                        starsCount = o.optInt("starsCount", 0),
+                        whitelistBookIds = whiteList
                     )
                 )
             }
@@ -159,34 +170,108 @@ class PreferencesManager(context: Context) {
                 o.put("id", p.id)
                 o.put("name", p.name)
                 o.put("avatarColorHex", p.avatarColorHex)
+                o.put("isKidsMode", p.isKidsMode)
+                if (p.parentalPin != null) {
+                    o.put("parentalPin", p.parentalPin)
+                }
+                o.put("starsCount", p.starsCount)
+                val whiteArr = org.json.JSONArray()
+                p.whitelistBookIds.forEach { whiteArr.put(it) }
+                o.put("whitelistBookIds", whiteArr)
                 arr.put(o)
             }
             prefs.edit().putString("user_profiles_list", arr.toString()).apply()
         } catch (_: Exception) {}
     }
 
-    fun createProfile(name: String, colorHex: String = "#FFA000"): UserProfile {
+    fun createProfile(
+        name: String,
+        colorHex: String = "#FFA000",
+        isKidsMode: Boolean = false,
+        parentalPin: String? = null
+    ): UserProfile {
         val current = getProfiles().toMutableList()
         val newId = "user_${System.currentTimeMillis()}"
-        val newProfile = UserProfile(newId, name.ifBlank { "Mi Perfil" }, colorHex)
+        val newProfile = UserProfile(
+            id = newId,
+            name = name.ifBlank { if (isKidsMode) "Modo Niños" else "Mi Perfil" },
+            avatarColorHex = colorHex,
+            isKidsMode = isKidsMode,
+            parentalPin = parentalPin
+        )
         current.add(newProfile)
         saveProfiles(current)
         saveActiveProfile(newProfile)
         return newProfile
     }
 
+    fun updateProfile(updated: UserProfile) {
+        val current = getProfiles().toMutableList()
+        val idx = current.indexOfFirst { it.id == updated.id }
+        if (idx != -1) {
+            current[idx] = updated
+            saveProfiles(current)
+            if (getActiveProfile().id == updated.id) {
+                saveActiveProfile(updated)
+            }
+        }
+    }
+
+    fun deleteProfile(profileId: String): Boolean {
+        val current = getProfiles().toMutableList()
+        val remaining = current.filter { it.id != profileId }
+        if (remaining.isEmpty()) return false
+        saveProfiles(remaining)
+        if (getActiveProfile().id == profileId) {
+            saveActiveProfile(remaining.first())
+        }
+        return true
+    }
+
+    fun awardStarToProfile(profileId: String, count: Int = 1): Int {
+        val profiles = getProfiles().toMutableList()
+        var newStars = 0
+        val idx = profiles.indexOfFirst { it.id == profileId }
+        if (idx != -1) {
+            val current = profiles[idx]
+            newStars = current.starsCount + count
+            val updated = current.copy(starsCount = newStars)
+            profiles[idx] = updated
+            saveProfiles(profiles)
+            if (getActiveProfile().id == profileId) {
+                saveActiveProfile(updated)
+            }
+        }
+        return newStars
+    }
+
+    fun updateProfileWhitelist(profileId: String, whitelistBookIds: List<String>) {
+        val profiles = getProfiles().toMutableList()
+        val idx = profiles.indexOfFirst { it.id == profileId }
+        if (idx != -1) {
+            val updated = profiles[idx].copy(whitelistBookIds = whitelistBookIds)
+            profiles[idx] = updated
+            saveProfiles(profiles)
+            if (getActiveProfile().id == profileId) {
+                saveActiveProfile(updated)
+            }
+        }
+    }
+
     fun getActiveProfile(): UserProfile {
         val id = prefs.getString("active_profile_id", null)
-        val name = prefs.getString("active_profile_name", null)
-        val color = prefs.getString("active_profile_color", "#FFA000") ?: "#FFA000"
-        if (id != null && name != null) {
-            return UserProfile(id, name, color)
+        val allProfiles = getProfiles()
+        if (id != null) {
+            val matched = allProfiles.find { it.id == id }
+            if (matched != null) return matched
         }
-        val first = getProfiles().firstOrNull()
+        val first = allProfiles.firstOrNull()
         if (first != null) {
             return first
         }
-        return UserProfile("user_default", "Mi Perfil", "#FFA000")
+        val name = prefs.getString("active_profile_name", "Mi Perfil") ?: "Mi Perfil"
+        val color = prefs.getString("active_profile_color", "#FFA000") ?: "#FFA000"
+        return UserProfile("user_default", name, color)
     }
 
     fun saveActiveProfile(profile: UserProfile) {

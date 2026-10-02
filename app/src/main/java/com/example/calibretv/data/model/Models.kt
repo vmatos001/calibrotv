@@ -95,7 +95,11 @@ data class ReadingSettings(
 data class UserProfile(
     val id: String,
     val name: String,
-    val avatarColorHex: String
+    val avatarColorHex: String,
+    val isKidsMode: Boolean = false,
+    val parentalPin: String? = null,
+    val starsCount: Int = 0,
+    val whitelistBookIds: List<String> = emptyList()
 )
 
 @Serializable

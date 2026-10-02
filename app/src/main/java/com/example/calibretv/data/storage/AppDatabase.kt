@@ -35,6 +35,16 @@ data class FavoriteEntity(
     val bookId: String
 )
 
+@Entity(tableName = "book_notes")
+data class BookNoteEntity(
+    @PrimaryKey val id: String,
+    val bookId: String,
+    val profileId: String,
+    val noteText: String,
+    val spreadIndex: Int = 0,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
 // ─── DAOs ─────────────────────────────────────────────────────────────────────
 
 @Dao
@@ -82,17 +92,33 @@ interface FavoriteDao {
     suspend fun remove(profileId: String, bookId: String)
 }
 
+@Dao
+interface BookNoteDao {
+    @Query("SELECT * FROM book_notes WHERE bookId=:bookId AND profileId=:profileId ORDER BY createdAt DESC")
+    suspend fun getNotes(bookId: String, profileId: String): List<BookNoteEntity>
+
+    @Query("SELECT * FROM book_notes WHERE bookId=:bookId ORDER BY createdAt DESC")
+    suspend fun getAllNotesForBook(bookId: String): List<BookNoteEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertNote(note: BookNoteEntity)
+
+    @Query("DELETE FROM book_notes WHERE id=:noteId")
+    suspend fun deleteNote(noteId: String)
+}
+
 // ─── Database ─────────────────────────────────────────────────────────────────
 
 @Database(
-    entities = [BookEntity::class, ReadingProgressEntity::class, FavoriteEntity::class],
-    version = 2,
+    entities = [BookEntity::class, ReadingProgressEntity::class, FavoriteEntity::class, BookNoteEntity::class],
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
     abstract fun progressDao(): ProgressDao
     abstract fun favoriteDao(): FavoriteDao
+    abstract fun bookNoteDao(): BookNoteDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null

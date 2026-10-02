@@ -33,6 +33,11 @@ object CoverLoader {
     ): Bitmap? = withContext(Dispatchers.IO) {
         if (urlStr.isBlank()) return@withContext null
 
+        if (urlStr.startsWith("/") || urlStr.startsWith("file://")) {
+            val localPath = if (urlStr.startsWith("file://")) urlStr.removePrefix("file://") else urlStr
+            return@withContext loadLocalImage(java.io.File(localPath))
+        }
+
         memoryCache.get(urlStr)?.let { return@withContext it }
 
         try {

@@ -15,13 +15,20 @@ import com.example.calibretv.data.model.UserProfile
 import com.example.calibretv.data.opds.OpdsClient
 import com.example.calibretv.data.opds.OpdsFeedContent
 import com.example.calibretv.data.opds.SslHelper
+import com.example.calibretv.data.provider.BookSourceProvider
+import com.example.calibretv.data.provider.DirectTransferProvider
+import com.example.calibretv.data.provider.LocalRoomProvider
+import com.example.calibretv.data.provider.OpdsProvider
 import com.example.calibretv.data.storage.AppDatabase
 import com.example.calibretv.data.storage.BookEntity
+import com.example.calibretv.data.storage.BookNoteEntity
 import com.example.calibretv.data.storage.FavoriteEntity
 import com.example.calibretv.data.storage.ReadingProgressEntity
 import com.example.calibretv.data.storage.PreferencesManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -36,6 +43,21 @@ class BookRepository(private val context: Context) {
     private val bookDao = db.bookDao()
     private val progressDao = db.progressDao()
     private val favoriteDao = db.favoriteDao()
+    private val bookNoteDao = db.bookNoteDao()
+
+    private val _noteAddedEvents = MutableSharedFlow<BookNoteEntity>(extraBufferCapacity = 20)
+    val noteAddedEvents = _noteAddedEvents.asSharedFlow()
+
+    // Proveedores desacoplados de fuentes de libros (Multi-Source Pattern)
+    val localProvider = LocalRoomProvider(context)
+    val directTransferProvider = DirectTransferProvider(context)
+    val opdsProvider = OpdsProvider(context) { getServerConfig() }
+
+    val providers: List<BookSourceProvider> = listOf(
+        localProvider,
+        directTransferProvider,
+        opdsProvider
+    )
 
     private fun BookEntity.toBook(): Book {
         val tagList = try {
@@ -93,6 +115,41 @@ class BookRepository(private val context: Context) {
     fun getProfiles(): List<UserProfile> = prefs.getProfiles()
     fun saveProfiles(profiles: List<UserProfile>) = prefs.saveProfiles(profiles)
     fun createProfile(name: String, colorHex: String = "#FFA000"): UserProfile = prefs.createProfile(name, colorHex)
+    fun updateProfile(updated: UserProfile) = prefs.updateProfile(updated)
+    fun deleteProfile(profileId: String): Boolean = prefs.deleteProfile(profileId)
+    fun awardStarToProfile(profileId: String, count: Int = 1): Int = prefs.awardStarToProfile(profileId, count)
+    fun updateProfileWhitelist(profileId: String, whitelistBookIds: List<String>) = prefs.updateProfileWhitelist(profileId, whitelistBookIds)
+
+    // Notas y Reseñas (Mobile Companion)
+    fun addNote(
+        bookId: String,
+        text: String,
+        spreadIndex: Int = 0,
+        profileId: String = prefs.getActiveProfile().id
+    ): BookNoteEntity = runBlocking(Dispatchers.IO) {
+        val note = BookNoteEntity(
+            id = "note_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(6)}",
+            bookId = bookId,
+            profileId = profileId,
+            noteText = text.trim(),
+            spreadIndex = spreadIndex,
+            createdAt = System.currentTimeMillis()
+        )
+        bookNoteDao.insertNote(note)
+        _noteAddedEvents.tryEmit(note)
+        note
+    }
+
+    fun getNotes(
+        bookId: String,
+        profileId: String = prefs.getActiveProfile().id
+    ): List<BookNoteEntity> = runBlocking(Dispatchers.IO) {
+        bookNoteDao.getNotes(bookId, profileId)
+    }
+
+    fun deleteNote(noteId: String) = runBlocking(Dispatchers.IO) {
+        bookNoteDao.deleteNote(noteId)
+    }
 
     fun isFavorite(bookId: String): Boolean = runBlocking(Dispatchers.IO) {
         favoriteDao.isFavorite(prefs.getActiveProfile().id, bookId)
@@ -349,35 +406,43 @@ class BookRepository(private val context: Context) {
         )
     }
 
+    /**
+     * Resuelve el archivo físico del libro a través de la cadena de proveedores:
+     * 1. LocalRoomProvider
+     * 2. DirectTransferProvider (WiFi Import)
+     * 3. OpdsProvider (Descarga remota en cacheDir)
+     */
+    suspend fun resolveBookFile(book: Book): File? = withContext(Dispatchers.IO) {
+        for (provider in providers) {
+            try {
+                val file = provider.resolveBookFile(book)
+                if (file != null && file.exists() && file.length() > 0) {
+                    return@withContext file
+                }
+            } catch (_: Exception) {}
+        }
+        null
+    }
+
     fun isSetupCompleted(): Boolean = prefs.isSetupCompleted()
     fun setSetupCompleted(completed: Boolean) = prefs.setSetupCompleted(completed)
 
     /**
-     * Lazy EPUB Loader: Downloads the EPUB file to TV cache ONLY when the user clicks 'Leer en 3D'.
-     * Returns structured ParsedBook containing chapters, text blocks and extracted images.
+     * Lazy EPUB Loader: Resuelve el archivo físico mediante la cadena de proveedores (Local, WiFi, OPDS)
+     * y extrae capítulos, texto e ilustraciones para el Lector 3D.
      */
     suspend fun loadRawBook(book: Book): ParsedBook = withContext(Dispatchers.IO) {
         saveLastOpenedBook(book)
-        val epubUrl = book.epubUrl
-        if (epubUrl.isNullOrBlank()) {
+
+        val file = resolveBookFile(book)
+        if (file == null || !file.exists() || file.length() == 0L) {
             return@withContext EpubParser.getNoticeBook(
                 book.title,
-                "Este título no cuenta con archivo EPUB descargable en el servidor."
+                "No se pudo cargar el archivo del libro. Si fue transferido por WiFi o servidor, comprueba la conexión o el almacenamiento."
             )
         }
 
-        val cacheFile = File(context.cacheDir, "book_${book.id.hashCode()}.epub")
-        if (!cacheFile.exists() || cacheFile.length() == 0L) {
-            val downloaded = downloadEpub(epubUrl, cacheFile)
-            if (!downloaded) {
-                return@withContext EpubParser.getNoticeBook(
-                    book.title,
-                    "Error al descargar el libro desde el servidor Calibre-Web. Verifica tu conexión de red o permisos."
-                )
-            }
-        }
-
-        return@withContext EpubParser.parseEpubToBook(cacheFile, book.title)
+        return@withContext EpubParser.parseEpubToBook(file, book.title)
     }
 
     suspend fun loadBookSpreads(
@@ -390,15 +455,11 @@ class BookRepository(private val context: Context) {
     }
 
     suspend fun loadComic(book: Book): ComicParser.ParsedComic = withContext(Dispatchers.IO) {
-        val cacheFile = File(context.cacheDir, "book_${book.id.hashCode()}.cbz")
-        if (!cacheFile.exists() || cacheFile.length() == 0L) {
-            val url = book.epubUrl ?: return@withContext ComicParser.ParsedComic(book.title, emptyList())
-            val downloaded = downloadEpub(url, cacheFile)
-            if (!downloaded) {
-                return@withContext ComicParser.ParsedComic(book.title, emptyList())
-            }
+        val file = resolveBookFile(book)
+        if (file == null || !file.exists() || file.length() == 0L) {
+            return@withContext ComicParser.ParsedComic(book.title, emptyList())
         }
-        ComicParser.parseCbz(cacheFile, context.cacheDir)
+        ComicParser.parseCbz(file, context.cacheDir)
     }
 
     private fun downloadEpub(epubUrl: String, destFile: File): Boolean {
