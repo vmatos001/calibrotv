@@ -411,4 +411,44 @@ class PreferencesManager(context: Context) {
             prefs.edit().putString("last_opened_book", obj.toString()).apply()
         } catch (_: Exception) {}
     }
+
+    fun getPiperTtsUrl(): String {
+        return prefs.getString("piper_tts_url", "http://192.168.1.89:5000") ?: "http://192.168.1.89:5000"
+    }
+
+    fun setPiperTtsUrl(url: String) {
+        prefs.edit().putString("piper_tts_url", url).apply()
+    }
+
+    fun getPiperTtsSecret(): String {
+        return prefs.getString("piper_tts_secret", "calibro_super_secret_token_change_me") ?: "calibro_super_secret_token_change_me"
+    }
+
+    fun setPiperTtsSecret(secret: String) {
+        prefs.edit().putString("piper_tts_secret", secret).apply()
+    }
+
+    fun isPiperTtsEnabled(): Boolean {
+        return prefs.getBoolean("piper_tts_enabled", true)
+    }
+
+    fun setPiperTtsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("piper_tts_enabled", enabled).apply()
+    }
+
+    fun getPiperVoice(): String {
+        return prefs.getString("piper_voice", "es_MX-claude-high") ?: "es_MX-claude-high"
+    }
+
+    fun setPiperVoice(voice: String) {
+        prefs.edit().putString("piper_voice", voice).apply()
+    }
+
+    fun getCmsServerUrl(): String {
+        return prefs.getString("cms_server_url", "http://192.168.1.89:4000") ?: "http://192.168.1.89:4000"
+    }
+
+    fun setCmsServerUrl(url: String) {
+        prefs.edit().putString("cms_server_url", url).apply()
+    }
 }

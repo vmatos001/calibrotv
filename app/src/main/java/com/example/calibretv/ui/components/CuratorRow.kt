@@ -79,6 +79,7 @@ fun CuratorRow(
         CuratorArchetype.DETECTIVE -> Icons.Default.Search
         CuratorArchetype.COSMIC -> Icons.Default.Explore
         CuratorArchetype.CLASSICS -> Icons.Default.AutoStories
+        else -> Icons.Default.AutoStories
     }
 
     Column(

@@ -227,6 +227,10 @@ fun ReaderScreen(
         }
     }
 
+    LaunchedEffect(isTtsPlaying) {
+        ambientManager.duck(isTtsPlaying)
+    }
+
     // Load parsed book once
     LaunchedEffect(book.id) {
         isLoading = true

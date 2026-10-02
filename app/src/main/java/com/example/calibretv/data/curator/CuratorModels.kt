@@ -3,7 +3,7 @@ package com.example.calibretv.data.curator
 import kotlinx.serialization.Serializable
 
 /**
- * Arquetipos estéticos de curaduría de BookSpread.
+ * Arquetipos estéticos de curaduría de BookSpread / CalibroTV.
  * Inspirados en la literatura clásica y figuras arquetípicas para evitar marcas registradas.
  */
 enum class CuratorArchetype(
@@ -35,6 +35,12 @@ enum class CuratorArchetype(
         subtitle = "Obras cumbre de la humanidad de descarga gratuita y libre acceso",
         iconName = "AutoStories",
         quote = "«Un libro clásico nunca termina de decir lo que tiene que decir.»"
+    ),
+    GENERAL(
+        title = "Curaduría Especial",
+        subtitle = "Selección literaria destacada",
+        iconName = "Book",
+        quote = "«Un buen libro es un amigo que nunca da la espalda.»"
     )
 }
 
@@ -56,7 +62,8 @@ data class CuratedBook(
     val publicDownloadUrl: String? = null,
     val approximatePrice: String? = null,
     val rating: Float = 4.8f,
-    val year: String? = null
+    val year: String? = null,
+    val difficultyLevel: Int = 1
 )
 
 /**
@@ -68,5 +75,23 @@ data class CuratorSection(
     val archetype: CuratorArchetype,
     val name: String,
     val tagline: String,
-    val books: List<CuratedBook>
+    val books: List<CuratedBook>,
+    val avatarUrl: String? = null,
+    val quote: String? = null
+)
+
+/**
+ * Hero Banner principal (Bestseller del Mes en 16:9).
+ */
+@Serializable
+data class HeroBanner(
+    val id: String,
+    val title: String,
+    val author: String,
+    val tagline: String,
+    val synopsis: String,
+    val backdropUrl: String,
+    val coverUrl: String,
+    val sampleEpubUrl: String? = null,
+    val affiliatePurchaseUrl: String? = null
 )

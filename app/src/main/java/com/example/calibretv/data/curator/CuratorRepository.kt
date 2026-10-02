@@ -21,12 +21,131 @@ object CuratorRepository {
 
     private const val TAG = "CuratorRepository"
 
+    private var cachedCmsSections: List<CuratorSection>? = null
+    private var cachedHeroBanner: HeroBanner? = null
+
     /**
      * Retorna las secciones curadas para la pantalla principal.
-     * Funciona 100% offline con catálogo de alta calidad preconfigurado
-     * y prepara sincronización con Firestore cuando haya red disponible.
+     * Si el CMS está sincronizado, retorna el catálogo dinámico;
+     * de lo contrario, opera 100% offline con el catálogo local integrado.
      */
     fun getCuratedSections(): List<CuratorSection> {
+        val cms = cachedCmsSections
+        if (!cms.isNullOrEmpty()) {
+            return cms
+        }
+        return getOfflineCuratedSections()
+    }
+
+    suspend fun fetchHeroBanner(cmsUrl: String = "http://192.168.1.89:4000"): HeroBanner? = withContext(Dispatchers.IO) {
+        try {
+            val endpoint = if (cmsUrl.endsWith("/")) "${cmsUrl}api/v1/cartelera/home" else "$cmsUrl/api/v1/cartelera/home"
+            val conn = URL(endpoint).openConnection() as HttpURLConnection
+            conn.connectTimeout = 3000
+            conn.readTimeout = 5000
+            conn.requestMethod = "GET"
+            conn.connect()
+            if (conn.responseCode in 200..299) {
+                val json = org.json.JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+                val hero = json.optJSONObject("hero_banner") ?: return@withContext null
+                val banner = HeroBanner(
+                    id = hero.optString("id", "main_hero"),
+                    title = hero.optString("title", ""),
+                    author = hero.optString("author", ""),
+                    tagline = hero.optString("tagline", ""),
+                    synopsis = hero.optString("synopsis", ""),
+                    backdropUrl = hero.optString("backdrop_url", ""),
+                    coverUrl = hero.optString("cover_url", ""),
+                    sampleEpubUrl = hero.optString("sample_epub_url").takeIf { it.isNotBlank() },
+                    affiliatePurchaseUrl = hero.optString("affiliate_purchase_url").takeIf { it.isNotBlank() }
+                )
+                cachedHeroBanner = banner
+                banner
+            } else null
+        } catch (e: Exception) {
+            Log.d(TAG, "Hero banner fetch failed or offline: ${e.message}")
+            cachedHeroBanner
+        }
+    }
+
+    suspend fun syncWithCms(cmsUrl: String = "http://192.168.1.89:4000"): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val endpoint = if (cmsUrl.endsWith("/")) "${cmsUrl}api/v1/cartelera/shelves" else "$cmsUrl/api/v1/cartelera/shelves"
+            val conn = URL(endpoint).openConnection() as HttpURLConnection
+            conn.connectTimeout = 3000
+            conn.readTimeout = 6000
+            conn.requestMethod = "GET"
+            conn.connect()
+            if (conn.responseCode in 200..299) {
+                val json = org.json.JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+                val shelvesArr = json.optJSONArray("shelves") ?: return@withContext false
+                val sections = mutableListOf<CuratorSection>()
+
+                for (i in 0 until shelvesArr.length()) {
+                    val sObj = shelvesArr.getJSONObject(i)
+                    val sId = sObj.optString("shelf_id")
+                    val charName = sObj.optString("character_name")
+                    val avatarUrl = sObj.optString("avatar_url")
+                    val quote = sObj.optString("quote")
+
+                    val booksArr = sObj.optJSONArray("books")
+                    val booksList = mutableListOf<CuratedBook>()
+                    if (booksArr != null) {
+                        for (j in 0 until booksArr.length()) {
+                            val bObj = booksArr.getJSONObject(j)
+                            val isPub = bObj.optBoolean("is_public_domain", false)
+                            booksList.add(
+                                CuratedBook(
+                                    id = bObj.optString("book_id"),
+                                    title = bObj.optString("title"),
+                                    author = bObj.optString("author"),
+                                    coverUrl = bObj.optString("cover_url"),
+                                    summary = bObj.optString("synopsis"),
+                                    category = charName,
+                                    isPublicDomain = isPub,
+                                    affiliateQrUrl = bObj.optString("affiliate_url").takeIf { it.isNotBlank() },
+                                    publicDownloadUrl = bObj.optString("download_url").takeIf { it.isNotBlank() },
+                                    difficultyLevel = bObj.optInt("difficulty_level", 1)
+                                )
+                            )
+                        }
+                    }
+
+                    val archetype = when {
+                        sId.contains("prodigy") || sId.contains("lisa") || sId.contains("matilda") || sId.contains("hermione") -> CuratorArchetype.PRODIGY
+                        sId.contains("detective") || sId.contains("house") || sId.contains("holmes") || sId.contains("jane") -> CuratorArchetype.DETECTIVE
+                        sId.contains("cosmic") || sId.contains("dune") || sId.contains("stark") -> CuratorArchetype.COSMIC
+                        sId.contains("classic") || sId.contains("quijote") -> CuratorArchetype.CLASSICS
+                        else -> CuratorArchetype.GENERAL
+                    }
+
+                    sections.add(
+                        CuratorSection(
+                            id = sId,
+                            archetype = archetype,
+                            name = charName,
+                            tagline = quote.ifBlank { archetype.subtitle },
+                            books = booksList,
+                            avatarUrl = avatarUrl.takeIf { it.isNotBlank() },
+                            quote = quote.takeIf { it.isNotBlank() }
+                        )
+                    )
+                }
+
+                if (sections.isNotEmpty()) {
+                    cachedCmsSections = sections
+                    Log.d(TAG, "Successfully synced ${sections.size} shelves from CMS: $cmsUrl")
+                    return@withContext true
+                }
+            }
+            false
+        } catch (e: Exception) {
+            Log.d(TAG, "CMS sync offline or failed: ${e.message}")
+            false
+        }
+    }
+
+    fun getOfflineCuratedSections(): List<CuratorSection> {
         return listOf(
             CuratorSection(
                 id = "curator_classics",

@@ -1,15 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Permite HTTP solo para redes locales (servidor Calibre en casa) -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">192.168.0.0</domain>
-        <domain includeSubdomains="true">192.168.1.0</domain>
-        <domain includeSubdomains="true">10.0.0.0</domain>
-        <domain includeSubdomains="true">172.16.0.0</domain>
-        <domain includeSubdomains="true">localhost</domain>
-    </domain-config>
-    <!-- Todo el resto: HTTPS únicamente -->
-    <base-config cleartextTrafficPermitted="false">
+    <!-- Permite HTTP para redes locales (servidor Calibre, Piper TTS y CMS en casa) -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system"/>
             <certificates src="user"/>

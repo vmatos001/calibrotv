@@ -129,8 +129,8 @@ fun HomeScreen(
     var modalDescription by remember { mutableStateOf("") }
     val modalReadFocusRequester = remember { FocusRequester() }
 
-    // Cartelera dinámica y Curaduría por Personajes (Filtrada en Modo Kids)
-    val allCuratorSections = remember { CuratorRepository.getCuratedSections() }
+    // Cartelera dinámica y Curaduría por Personajes (Sincronizada con CMS o Catálogo Local)
+    var allCuratorSections by remember { mutableStateOf(CuratorRepository.getCuratedSections()) }
     val curatorSections = remember(allCuratorSections, activeProfile) {
         if (!activeProfile.isKidsMode) {
             allCuratorSections
@@ -138,12 +138,23 @@ fun HomeScreen(
             allCuratorSections.filter { sec ->
                 sec.name.contains("Prodigio", ignoreCase = true) ||
                 sec.name.contains("Universales", ignoreCase = true) ||
-                sec.name.contains("Infantil", ignoreCase = true)
+                sec.name.contains("Infantil", ignoreCase = true) ||
+                sec.name.contains("Matilda", ignoreCase = true) ||
+                sec.name.contains("Lisa", ignoreCase = true)
             }
         }
     }
     var selectedCuratedBook by remember { mutableStateOf<CuratedBook?>(null) }
     var isDownloadingCuratedBook by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val prefs = com.example.calibretv.data.storage.PreferencesManager(context)
+        val cmsUrl = prefs.getCmsServerUrl()
+        val synced = CuratorRepository.syncWithCms(cmsUrl)
+        if (synced) {
+            allCuratorSections = CuratorRepository.getCuratedSections()
+        }
+    }
 
     BackHandler(enabled = showDetailsModal || showUserProfilesModal || isDrawerOpen || selectedCuratedBook != null || pendingProtectedAction != null) {
         if (pendingProtectedAction != null) pendingProtectedAction = null
