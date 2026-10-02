@@ -22,14 +22,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,23 +62,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.calibretv.theme.AmberWarm
-import com.example.calibretv.theme.CyanElectric
 import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
-
-import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material.icons.filled.Storage
 
 enum class DrawerItem(val title: String, val icon: ImageVector) {
     HOME("Inicio", Icons.Default.Home),
     BIBLIOTECA("Biblioteca (Catálogo)", Icons.Default.AutoStories),
     TUS_LIBROS("Tus Libros (Memoria TV)", Icons.Default.Storage),
+    LECTOR_3D("Lector 3D", Icons.Default.MenuBook),
     IMPORTAR_WIFI("Importar por WiFi", Icons.Default.QrCodeScanner),
     USUARIOS("Usuarios", Icons.Default.Person),
-    LECTOR_3D("Lector 3D", Icons.Default.MenuBook),
-    AJUSTES("Ajustes", Icons.Default.Settings),
-    OPDS("Conexión Servidor", Icons.Default.CloudSync)
+    OPDS("Conexión Servidor", Icons.Default.CloudSync),
+    AJUSTES("Ajustes", Icons.Default.Settings)
 }
 
 @Composable
@@ -105,7 +105,7 @@ fun TvSideDrawer(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.65f))
+                .background(Color.Black.copy(alpha = 0.70f))
                 .clickable { onClose() }
                 .onKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown) {
@@ -116,7 +116,7 @@ fun TvSideDrawer(
                     } else false
                 }
         ) {
-            // Glassmorphic Drawer Panel
+            // Glassmorphic Drawer Panel (Compact & Elegant proportions inspired by ReadEra)
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
@@ -124,35 +124,35 @@ fun TvSideDrawer(
                     .background(
                         Brush.horizontalGradient(
                             colors = listOf(
-                                Color(0xFF101014),
-                                Color(0xFF16161C).copy(alpha = 0.98f)
+                                Color(0xFF0F0F13),
+                                Color(0xFF141419).copy(alpha = 0.98f)
                             )
                         )
                     )
                     .border(
                         width = 1.dp,
                         brush = Brush.horizontalGradient(
-                            colors = listOf(Color.Transparent, Color(0xFF2E2E36))
+                            colors = listOf(Color.Transparent, Color(0xFF282832))
                         ),
                         shape = androidx.compose.ui.graphics.RectangleShape
                     )
                     .clickable(enabled = false) {}
-                    .padding(horizontal = 24.dp, vertical = 32.dp)
+                    .padding(horizontal = 18.dp, vertical = 20.dp)
             ) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                        // Header: Logo + App Name
+                    // Header: Logo + App Name (compact)
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(8.dp))
                                     .background(AmberWarm),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -160,54 +160,95 @@ fun TvSideDrawer(
                                     imageVector = Icons.Default.MenuBook,
                                     contentDescription = null,
                                     tint = Color(0xFF131315),
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                             Column {
                                 Text(
                                     text = "CALIBRO TV",
                                     color = TextPrimary,
-                                    fontSize = 18.sp,
+                                    fontSize = 16.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 1.sp
+                                    letterSpacing = 0.8.sp
                                 )
                                 Text(
                                     text = "Lector 3D • Calibre-Web",
-                                    color = CyanElectric,
-                                    fontSize = 11.sp,
+                                    color = AmberWarm.copy(alpha = 0.85f),
+                                    fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Medium
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(Color(0xFF23232C))
+                        )
+                    }
 
-                        // Navigation Items List
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            DrawerItem.values().forEachIndexed { index, item ->
-                                val isFirst = index == 0
-                                DrawerMenuItem(
-                                    item = item,
-                                    isSelected = currentSelection == item,
-                                    modifier = if (isFirst) Modifier.focusRequester(firstItemFocusRequester) else Modifier,
-                                    onClick = {
-                                        onClose()
-                                        onItemSelected(item)
-                                    }
-                                )
-                            }
+                    // Main Navigation Items (with smooth scrolling to guarantee all items fit on any screen)
+                    val mainItems = listOf(
+                        DrawerItem.HOME,
+                        DrawerItem.BIBLIOTECA,
+                        DrawerItem.TUS_LIBROS,
+                        DrawerItem.LECTOR_3D,
+                        DrawerItem.IMPORTAR_WIFI,
+                        DrawerItem.USUARIOS,
+                        DrawerItem.OPDS
+                    )
+                    val scrollState = rememberScrollState()
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(scrollState)
+                            .padding(vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        mainItems.forEachIndexed { index, item ->
+                            val isFirst = index == 0
+                            DrawerMenuItem(
+                                item = item,
+                                isSelected = currentSelection == item,
+                                modifier = if (isFirst) Modifier.focusRequester(firstItemFocusRequester) else Modifier,
+                                onClick = {
+                                    onClose()
+                                    onItemSelected(item)
+                                }
+                            )
                         }
                     }
 
-                    // Bottom helper text
-                    Text(
-                        text = "› Derecha o [Atrás] para cerrar",
-                        color = TextMuted.copy(alpha = 0.6f),
-                        fontSize = 11.sp
-                    )
+                    // Pinned Bottom Section (Ajustes + Close Hint, inspired by ReadEra)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(Color(0xFF23232C))
+                        )
+
+                        DrawerMenuItem(
+                            item = DrawerItem.AJUSTES,
+                            isSelected = currentSelection == DrawerItem.AJUSTES,
+                            onClick = {
+                                onClose()
+                                onItemSelected(DrawerItem.AJUSTES)
+                            }
+                        )
+
+                        Text(
+                            text = "‹ [Atrás] o [Derecha] para cerrar",
+                            color = TextMuted.copy(alpha = 0.5f),
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(start = 14.dp, top = 2.dp)
+                        )
+                    }
                 }
             }
         }
@@ -225,27 +266,27 @@ private fun DrawerMenuItem(
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = modifier
             .fillMaxWidth()
-            .scale(if (isFocused) 1.04f else 1.0f)
-            .shadow(if (isFocused) 8.dp else 0.dp, RoundedCornerShape(10.dp), spotColor = CyanElectric)
-            .clip(RoundedCornerShape(10.dp))
+            .scale(if (isFocused) 1.03f else 1.0f)
+            .shadow(if (isFocused) 8.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = AmberWarm)
+            .clip(RoundedCornerShape(8.dp))
             .background(
                 when {
-                    isFocused -> CyanElectric.copy(alpha = 0.22f)
+                    isFocused -> AmberWarm.copy(alpha = 0.18f)
                     isSelected -> SurfaceContainerHigh
                     else -> Color.Transparent
                 }
             )
             .border(
-                width = if (isFocused) 2.dp else if (isSelected) 1.dp else 0.dp,
+                width = if (isFocused) 1.5.dp else if (isSelected) 1.dp else 0.dp,
                 color = when {
-                    isFocused -> CyanElectric
+                    isFocused -> AmberWarm
                     isSelected -> Color(0xFF33333E)
                     else -> Color.Transparent
                 },
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape(8.dp)
             )
             .onFocusChanged { isFocused = it.isFocused }
             .onKeyEvent { event ->
@@ -258,17 +299,17 @@ private fun DrawerMenuItem(
             }
             .focusable()
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 13.dp)
+            .padding(horizontal = 12.dp, vertical = 7.dp)
     ) {
         Icon(
             imageVector = item.icon,
             contentDescription = null,
             tint = when {
                 isFocused -> AmberWarm
-                isSelected -> CyanElectric
+                isSelected -> AmberWarm
                 else -> TextMuted
             },
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(19.dp)
         )
         Text(
             text = item.title,
@@ -277,7 +318,7 @@ private fun DrawerMenuItem(
                 isSelected -> TextPrimary
                 else -> TextMuted
             },
-            fontSize = 14.sp,
+            fontSize = 13.sp,
             fontWeight = if (isFocused || isSelected) FontWeight.Bold else FontWeight.Medium
         )
     }

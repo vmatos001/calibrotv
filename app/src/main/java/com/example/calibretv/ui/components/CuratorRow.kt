@@ -1,6 +1,5 @@
 package com.example.calibretv.ui.components
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,12 +20,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,10 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -49,7 +42,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,11 +54,8 @@ import com.example.calibretv.data.curator.CuratorSection
 import com.example.calibretv.data.image.rememberCoverImage
 import com.example.calibretv.theme.AccentGold
 import com.example.calibretv.theme.AntiqueIvory
-import com.example.calibretv.theme.StarGold
 import com.example.calibretv.theme.SurfaceContainerHigh
-import com.example.calibretv.theme.SurfaceRaised
 import com.example.calibretv.theme.TextMuted
-import com.example.calibretv.theme.TextPrimary
 import com.example.calibretv.theme.TextSecondary
 
 @Composable
@@ -85,9 +75,9 @@ fun CuratorRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp)
+            .padding(vertical = 12.dp)
     ) {
-        // Cabecera estilizada del personaje curador
+        // Cabecera estilizada del personaje curador con tipografía editorial estilo Apple Books
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -102,7 +92,7 @@ fun CuratorRow(
                 // Avatar circular del arquetipo con aro dorado
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
                         .background(SurfaceContainerHigh)
                         .border(1.5.dp, AccentGold, CircleShape),
@@ -112,7 +102,7 @@ fun CuratorRow(
                         imageVector = archetypeIcon,
                         contentDescription = null,
                         tint = AccentGold,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                 }
 
@@ -124,8 +114,10 @@ fun CuratorRow(
                         Text(
                             text = section.name,
                             color = AntiqueIvory,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 17.sp,
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.3.sp
                         )
                         Box(
                             modifier = Modifier
@@ -136,7 +128,7 @@ fun CuratorRow(
                             Text(
                                 text = "CARTELERA",
                                 color = AccentGold,
-                                fontSize = 9.sp,
+                                fontSize = 8.5.sp,
                                 fontWeight = FontWeight.ExtraBold
                             )
                         }
@@ -161,12 +153,12 @@ fun CuratorRow(
             )
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Fila horizontal de libros curados
+        // Fila horizontal de libros en 3D (sin tarjeta, con perspectiva y animación al foco)
         LazyRow(
             contentPadding = PaddingValues(horizontal = 36.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             itemsIndexed(section.books, key = { _, b -> b.id }) { index, book ->
                 CuratedBookCard(
@@ -193,15 +185,6 @@ private fun CuratedBookCard(
     Column(
         modifier = Modifier
             .width(116.dp)
-            .scale(if (isFocused) 1.08f else 1.0f)
-            .shadow(if (isFocused) 14.dp else 2.dp, RoundedCornerShape(8.dp), spotColor = AccentGold)
-            .clip(RoundedCornerShape(8.dp))
-            .background(SurfaceRaised)
-            .border(
-                width = if (isFocused) 2.5.dp else 1.dp,
-                color = if (isFocused) AccentGold else Color(0xFF242428),
-                shape = RoundedCornerShape(8.dp)
-            )
             .onFocusChanged { isFocused = it.isFocused }
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
@@ -223,110 +206,34 @@ private fun CuratedBookCard(
             .focusable()
             .clickable { onClick() }
     ) {
-        // Portada
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(152.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color(0xFF22222A), Color(0xFF131316))
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            if (coverBmp != null) {
-                Image(
-                    bitmap = coverBmp,
-                    contentDescription = book.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.MenuBook,
-                        contentDescription = null,
-                        tint = AccentGold,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        text = book.title,
-                        color = TextPrimary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
+        Book3DView(
+            coverBitmap = coverBmp,
+            title = book.title,
+            width = 116.dp,
+            height = 164.dp,
+            isFocused = isFocused,
+            badgeText = if (book.isPublicDomain) "GRATIS" else "QR COMPRA",
+            badgeColor = if (book.isPublicDomain) Color(0xFF34D399) else AccentGold
+        )
 
-            // Badge superior: "Libre" o "QR"
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(4.dp)
-                    .background(
-                        if (book.isPublicDomain) Color(0xFF064E3B).copy(alpha = 0.90f) else Color(0xFF423419).copy(alpha = 0.90f),
-                        RoundedCornerShape(4.dp)
-                    )
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = if (book.isPublicDomain) "GRATIS" else "QR COMPRA",
-                    color = if (book.isPublicDomain) Color(0xFF34D399) else AccentGold,
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
-            }
-        }
+        Spacer(modifier = Modifier.height(4.dp))
 
-        // Título y autor
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 5.dp)
-        ) {
-            Text(
-                text = book.title,
-                color = AntiqueIvory,
-                fontSize = 10.5.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+        Text(
+            text = book.title,
+            color = if (isFocused) AccentGold else AntiqueIvory,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
 
-            Text(
-                text = book.author,
-                color = TextSecondary,
-                fontSize = 9.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = null,
-                    tint = StarGold,
-                    modifier = Modifier.size(10.dp)
-                )
-                Text(
-                    text = "${book.rating}",
-                    color = AccentGold,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
+        Text(
+            text = book.author,
+            color = TextSecondary,
+            fontSize = 9.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

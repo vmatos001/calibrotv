@@ -70,10 +70,12 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.calibretv.ui.components.Book3DView
 import com.example.calibretv.data.BookRepository
 import com.example.calibretv.data.curator.BookOffer
 import com.example.calibretv.data.curator.CuratedBook
@@ -182,12 +184,13 @@ fun HomeScreen(
         }
     }
 
-    BackHandler(enabled = showDetailsModal || showUserProfilesModal || isDrawerOpen || selectedCuratedBook != null || pendingProtectedAction != null) {
+    BackHandler(enabled = true) {
         if (pendingProtectedAction != null) pendingProtectedAction = null
         else if (selectedCuratedBook != null) selectedCuratedBook = null
         else if (showDetailsModal) showDetailsModal = false
         else if (showUserProfilesModal) showUserProfilesModal = false
         else if (isDrawerOpen) isDrawerOpen = false
+        else isDrawerOpen = true
     }
 
     LaunchedEffect(showDetailsModal) {
@@ -276,7 +279,7 @@ fun HomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(0.40f)
+                    .fillMaxHeight(0.44f)
                     .background(BackgroundDark)
             ) {
                 // 1. Dynamic 16:9 Backdrop Image from CMS
@@ -406,42 +409,11 @@ fun HomeScreen(
                     }
                 }
 
-                // 5. BRANDING OFICIAL CALIBROTV & BOTÓN DEL MENÚ LATERAL
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 36.dp, top = 16.dp)
-                        .clickable { isDrawerOpen = true },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Menu,
-                        contentDescription = "Menú Lateral",
-                        tint = AmberWarm,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Text(
-                        text = "CALIBRO",
-                        color = TextPrimary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.sp
-                    )
-                    Text(
-                        text = "TV",
-                        color = AmberWarm,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.sp
-                    )
-                }
-
-                // 6. HERO SPOTLIGHT: Portada, Sinopsis y Botones de Acción Inmediata
+                // HERO SPOTLIGHT: Portada 3D, Sinopsis Editorial y Botones (Espacio Completo)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = 44.dp)
+                        .padding(top = 8.dp)
                 ) {
                     HomeHeroBanner(
                         heroBanner = heroBanner,
@@ -1070,19 +1042,21 @@ private fun HomeShelf(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     tint = AmberWarm,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(17.dp)
                 )
                 Text(
                     text = sectionTitle,
                     color = TextPrimary,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 17.sp,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.3.sp
                 )
             }
 
@@ -1134,10 +1108,10 @@ private fun HomeShelf(
             }
         }
 
-        // Horizontal Carousel of Compact Cards (~30% screen height, fitting 8-9 books)
+        // Horizontal Carousel of 3D Books (Tilted in standby, face-forward on focus)
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(horizontal = 36.dp, vertical = 6.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = 36.dp, vertical = 8.dp)
         ) {
             itemsIndexed(books) { index, book ->
                 val isFirst = index == 0
@@ -1156,8 +1130,8 @@ private fun HomeShelf(
 }
 
 /**
- * Compact book card: Reduced to ~30% height (width 108dp, height 142dp for cover)
- * Fits 8-9 items horizontally with perfect clarity.
+ * 3D Book Cover: Physical book presentation without card background,
+ * tilted in standby and rotating forward upon remote selection.
  */
 @Composable
 private fun CompactCoverCard(
@@ -1174,16 +1148,7 @@ private fun CompactCoverCard(
 
     Column(
         modifier = Modifier
-            .width(108.dp)
-            .scale(if (isFocused && isInteractive) 1.08f else 1.0f)
-            .shadow(if (isFocused && isInteractive) 14.dp else 2.dp, RoundedCornerShape(8.dp), spotColor = AccentGold)
-            .clip(RoundedCornerShape(8.dp))
-            .background(SurfaceRaised)
-            .border(
-                width = if (isFocused && isInteractive) 2.5.dp else 1.dp,
-                color = if (isFocused && isInteractive) AccentGold else Color(0xFF242428),
-                shape = RoundedCornerShape(8.dp)
-            )
+            .width(114.dp)
             .onFocusChanged {
                 if (isInteractive) {
                     isFocused = it.isFocused
@@ -1212,106 +1177,55 @@ private fun CompactCoverCard(
             .focusable(enabled = isInteractive)
             .clickable(enabled = isInteractive) { onSelected() }
     ) {
-        // Complete Poster Cover Art
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(142.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color(0xFF22222A), Color(0xFF131316))
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            if (coverBmp != null) {
-                Image(
-                    bitmap = coverBmp,
-                    contentDescription = book.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MenuBook,
-                        contentDescription = null,
-                        tint = AmberWarm,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        text = book.title,
-                        color = TextPrimary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
+        Book3DView(
+            coverBitmap = coverBmp,
+            title = book.title,
+            width = 114.dp,
+            height = 162.dp,
+            isFocused = isFocused,
+            badgeText = if (book.progressPercent > 0) "${book.progressPercent}%" else null,
+            badgeColor = AmberWarm
+        )
 
-            // Real Reading Progress percentage badge (Section E)
-            if (book.progressPercent > 0) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp)
-                        .background(Color(0xFF09090B).copy(alpha = 0.90f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "${book.progressPercent}%",
-                        color = AccentGold,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
-        }
+        Spacer(modifier = Modifier.height(4.dp))
 
         // Title and reading bar
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 5.dp)
+                .padding(horizontal = 2.dp)
         ) {
             Text(
                 text = book.title,
-                color = TextPrimary,
-                fontSize = 10.sp,
+                color = if (isFocused) AmberWarm else TextPrimary,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
-            if (book.shelves.isNotEmpty()) {
-                Text(
-                    text = "🏷 ${book.shelves.first()}",
-                    color = AmberWarm,
-                    fontSize = 8.5.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Text(
+                text = book.author.ifBlank { "Biblioteca" },
+                color = TextMuted,
+                fontSize = 9.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
 
-            Spacer(modifier = Modifier.height(3.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.5.dp)
-                    .background(Color(0xFF26262A), RoundedCornerShape(1.dp))
-            ) {
-                if (book.progressPercent > 0) {
+            if (book.progressPercent > 0) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.5.dp)
+                        .background(Color(0xFF26262A), RoundedCornerShape(1.dp))
+                ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(book.progressPercent / 100f)
                             .height(2.5.dp)
-                            .background(AccentGold, RoundedCornerShape(1.dp))
+                            .background(AmberWarm, RoundedCornerShape(1.dp))
                     )
                 }
             }
@@ -1652,77 +1566,85 @@ private fun HomeHeroBanner(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 36.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(32.dp),
+            .padding(horizontal = 40.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(36.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Columna izquierda: Información del Bestseller y Acciones
+        // LADO IZQUIERDO: Portada en 3D (Hardcover Mockup con relieve y sombra)
+        Book3DView(
+            coverBitmap = coverBmp,
+            title = heroBanner.title,
+            width = 158.dp,
+            height = 226.dp,
+            isFocused = false,
+            enable3DStandby = true,
+            badgeText = "BESTSELLER",
+            badgeColor = AmberWarm
+        )
+
+        // LADO DERECHO: Título, Autor, Cita / Sinopsis y Botones de Acción Inmediata
         Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
             verticalArrangement = Arrangement.Center
         ) {
-            // Badge Destacado
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(AmberWarm.copy(alpha = 0.2f))
-                    .border(1.dp, AmberWarm.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = "★ BESTSELLER DESTACADO DEL MES",
-                    color = AmberWarm,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.8.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Título Principal
+            // Título Principal en tipografía Editorial Serif (Estilo Apple Books)
             Text(
                 text = heroBanner.title,
                 color = Color.White,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.ExtraBold,
+                fontSize = 28.sp,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.4.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Autor y Tagline
+            // Autor
             Text(
-                text = heroBanner.author.ifBlank { "Autor Recomendado" },
+                text = heroBanner.author.ifBlank { "Tatiana Tibuleac" },
                 color = AmberWarm,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(top = 2.dp)
             )
 
-            if (heroBanner.tagline.isNotBlank()) {
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Cita / Sinopsis editorial con comillas decorativas estilo Apple Books
+            Row(
+                modifier = Modifier.fillMaxWidth(0.92f),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.Top
+            ) {
                 Text(
-                    text = heroBanner.tagline,
-                    color = TextPrimary.copy(alpha = 0.85f),
-                    fontSize = 13.sp,
+                    text = "“",
+                    color = AmberWarm.copy(alpha = 0.75f),
+                    fontSize = 24.sp,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 24.sp
+                )
+                Text(
+                    text = heroBanner.synopsis.ifBlank { heroBanner.tagline },
+                    color = Color(0xFFD6D3D1),
+                    fontSize = 12.5.sp,
+                    lineHeight = 17.5.sp,
                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                    maxLines = 1,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = "”",
+                    color = AmberWarm.copy(alpha = 0.75f),
+                    fontSize = 24.sp,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 24.sp
                 )
             }
-
-            // Sinopsis concisa
-            Text(
-                text = heroBanner.synopsis,
-                color = TextMuted,
-                fontSize = 12.sp,
-                lineHeight = 16.sp,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 8.dp)
-            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -1833,34 +1755,6 @@ private fun HomeHeroBanner(
                 }
             }
         }
-
-        // Portada a la derecha con estilo 3D y sombra
-        Box(
-            modifier = Modifier
-                .width(130.dp)
-                .height(185.dp)
-                .shadow(16.dp, RoundedCornerShape(10.dp), spotColor = Color.Black)
-                .clip(RoundedCornerShape(10.dp))
-                .background(SurfaceRaised)
-                .border(1.5.dp, AmberWarm.copy(alpha = 0.5f), RoundedCornerShape(10.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (coverBmp != null) {
-                Image(
-                    bitmap = coverBmp,
-                    contentDescription = heroBanner.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.MenuBook,
-                    contentDescription = null,
-                    tint = AmberWarm,
-                    modifier = Modifier.size(48.dp)
-                )
-            }
-        }
     }
 }
 
@@ -1902,7 +1796,9 @@ private fun HomeOffersRow(
                     text = "Ofertas y Descuentos Destacados",
                     color = TextPrimary,
                     fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.3.sp
                 )
                 Text(
                     text = "Descuentos de cartelera válidos por tiempo limitado con entrega digital",
@@ -1916,8 +1812,8 @@ private fun HomeOffersRow(
 
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 36.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            contentPadding = PaddingValues(horizontal = 36.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             itemsIndexed(offers, key = { _, o -> o.id }) { index, offer ->
                 HomeOfferCard(
@@ -1944,15 +1840,6 @@ private fun HomeOfferCard(
     Column(
         modifier = Modifier
             .width(116.dp)
-            .scale(if (isFocused) 1.08f else 1.0f)
-            .shadow(if (isFocused) 14.dp else 2.dp, RoundedCornerShape(8.dp), spotColor = AmberWarm)
-            .clip(RoundedCornerShape(8.dp))
-            .background(SurfaceRaised)
-            .border(
-                width = if (isFocused) 2.5.dp else 1.dp,
-                color = if (isFocused) AmberWarm else Color(0xFF242428),
-                shape = RoundedCornerShape(8.dp)
-            )
             .onFocusChanged { isFocused = it.isFocused }
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
@@ -1974,91 +1861,35 @@ private fun HomeOfferCard(
             .focusable()
             .clickable { onClick() }
     ) {
-        // Portada con Badge de Descuento Superpuesto
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(152.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color(0xFF22222A), Color(0xFF131316))
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            if (coverBmp != null) {
-                Image(
-                    bitmap = coverBmp,
-                    contentDescription = offer.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Sell,
-                        contentDescription = null,
-                        tint = AmberWarm,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        text = offer.title,
-                        color = TextPrimary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
+        Book3DView(
+            coverBitmap = coverBmp,
+            title = offer.title,
+            width = 116.dp,
+            height = 164.dp,
+            isFocused = isFocused,
+            badgeText = offer.discountTag.ifBlank { null },
+            badgeColor = Color(0xFFFF5252)
+        )
 
-            // Badge de descuento (ej. -45%)
-            if (offer.discountTag.isNotBlank()) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(5.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color(0xFFE53935))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = offer.discountTag,
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
-        }
+        Spacer(modifier = Modifier.height(4.dp))
 
-        // Título y Autor
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 7.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                text = offer.title,
-                color = if (isFocused) AmberWarm else TextPrimary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = offer.author,
-                color = TextMuted,
-                fontSize = 10.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        Text(
+            text = offer.title,
+            color = if (isFocused) AmberWarm else TextPrimary,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Text(
+            text = offer.author,
+            color = TextMuted,
+            fontSize = 9.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
