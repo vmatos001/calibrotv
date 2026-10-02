@@ -6,10 +6,11 @@
 
 ## 📅 Estado Actual del Proyecto (Actualizado: 01/10/2026)
 
-- **Versión Activa:** `v3.1` (Build `versionCode = 15`, `versionName = "3.1"`)
+- **Versión Activa:** `v3.2` (Plan Maestro de Arquitectura y Rediseño v3.0 culminado)
 - **Repositorio:** `https://github.com/vmatos001/calibrotv`
 - **Descarga Directa Downloader / TinyURL:** `https://tinyurl.com/29t27s6q`
 - **Keystore de Firma:** `app/keystore/calibrotv.keystore` (Firma unificada permanente para Debug y Release con Huella SHA256: `52:E8:ED:A7:6F:9C:CA:51:F5:55:6E:48:47:7C:20:C3:8F:AE:6B:4F:6C:AE:C3:D4:84:FB:98:17:7F:7E:F8:0C`).
+- **Artefacto Compilado:** `app/build/outputs/apk/release/app-release.apk` (~12.4 MB, R8 shrinker activado, 0 errores de compilación).
 
 ---
 
@@ -18,65 +19,92 @@
 Si en la TV aparece el mensaje:
 > **"app no instalada. Hay un conflicto de nombre con un paquete que ya existe."**
 
-**Causa:** La versión previa (v2.1 o anterior) instalada en la TV fue firmada con una clave temporal de debug de Android Studio. La v2.2 estandarizó la firma oficial del proyecto usando `app/keystore/calibrotv.keystore`.
+**Causa:** La versión previa (v2.1 o anterior) instalada en la TV fue firmada con una clave temporal de debug de Android Studio. A partir de v2.2 se estandarizó la firma oficial del proyecto usando `app/keystore/calibrotv.keystore`.
 
 **Solución por única vez:**
 1. Desinstalar la versión antigua de CalibroTV en la TV.
-2. Instalar **v2.2** utilizando el código de Downloader `https://tinyurl.com/29t27s6q`.
-3. A partir de **v2.2 en adelante** (v2.3, v2.4, v2.5, v2.6, v2.9, v3.1, etc.), todas las actualizaciones automáticas OTA o vía Downloader se instalarán **sin desinstalar nada**, ya que mantendrán la misma firma oficial.
+2. Instalar la nueva versión utilizando el código de Downloader `https://tinyurl.com/29t27s6q`.
+3. Todas las actualizaciones conservan el mismo keystore oficial para actualizar sin desinstalar.
 
 ---
 
-## 🏗️ Arquitectura y Componentes Principales
+## 🏗️ Arquitectura y Componentes Principales (v3.2)
 
-1. **Interfaz TV & Navegación D-Pad (16:9):**
-   - Diseñado específicamente para televisión con enfoque en control remoto (Filtro cian/ámbar de alto contraste, halo de enfoque vibrante).
-   - `LibraryGridScreen.kt`: Pantalla principal de biblioteca con Sección A (estanterías circulares estilo Netflix Kids) y Sección B (cuadrícula de libros).
-   - `HomeScreen.kt`: Pantalla de inicio con libros recientes, favoritos y recomendaciones.
-   - `SettingsScreen.kt`: Configuración de temas, fuentes, velocidad de hoja, sonidos ambientales y actualización OTA.
+### 1. Sistema Multi-Source Provider & Repositorio
+- `BookSourceProvider.kt`: Interfaz extensible para proveedores de libros.
+- `LocalRoomProvider.kt`: Proveedor de base de datos local SQLite con Room.
+- `DirectTransferProvider.kt`: Libros importados vía WiFi desde navegador móvil/PC.
+- `OpdsProvider.kt`: Conexión con catálogos OPDS remotos (Calibre-Web).
+- `CoverLoader.kt`: Carga downsampled segura en `RGB_565` para prevenir Out-Of-Memory en Smart TVs de bajos recursos (1GB/1.5GB RAM).
+- `AppDatabase.kt` (Room v3): Soporte integrado para notas de lectura (`book_notes`).
 
-2. **Estanterías de Calibre-Web & Niveles de Dificultad:**
-   - **Sección A:** Avatares circulares para Shelves de personajes (ej: Dr. House, Lisa Simpson, Matilda, Patrick Jane, Dune, etc.) con imágenes de estantes oficiales (`/personajes/api/shelves/<id>/image`) o portada de libro recortada en círculo y medallas circulares del 1 al 5 para Niveles de Dificultad.
-   - **Sección B:** Cuadrícula vertical de libros. Al presionar una estantería de personaje, se muestran los libros de esa estantería **ordenados estrictamente del Nivel 1 al 5**.
+### 2. Navegación TopBar de 5 Pestañas
+- `TvTopBar.kt` y `Navigation.kt`: Barra superior cinematográfica con 5 secciones D-Pad:
+  1. `[Inicio]`: Hero banner, libros recientes, cartelera dinámica y accesos directos.
+  2. `[Biblioteca]`: Estantes de personajes (Sección A) y cuadrícula completa (Sección B).
+  3. `[Tus Libros]`: Filtrado personal, favoritos y libros descargados localmente.
+  4. `[Lector 3D]`: Reanuda inmediatamente la última lectura activa.
+  5. `[Ajustes]`: Temas, audio ambiental, velocidad de paso de página, perfiles y OTA.
 
-3. **Lector 3D Inmersivo (Page Curl Engine):**
-   - `ReaderScreen.kt`: Visualizador EPUB con efecto de paso de página en 3D (pliego a pliego panorámico 16:9).
-   - `ComicReaderScreen.kt`: Lector de Cómics y Mangas (.cbz / .cbr).
-   - **Regla Intocable:** NO modificar los parámetros físicos de la animación 3D (`curlAnim`, `CubicBezierEasing`, `TransformOrigin`) sin autorización.
+### 3. Motores de Lectura (EPUB 3D + PDF Dual Spread + Cómics)
+- **Lector 3D Inmersivo (`ReaderScreen.kt`):**
+  - Efecto de paso de página en 3D con pliegos dobles panorámicos 16:9.
+  - **⚠️ REGLA INTOCABLE:** NUNCA modificar los parámetros de animación física 3D (`curlAnim`, `CubicBezierEasing`, `TransformOrigin`).
+- **Lector PDF Nativo Panorámico (`PdfReaderScreen.kt` & `PdfParser.kt`):**
+  - Renderizado nativo por pliegos dobles (página izquierda + página derecha).
+  - Mutex thread-safe sobre `PdfRenderer` de Android.
+  - Ventana deslizante de solo 3 pliegos en memoria para garantizar 0% de fallas OOM en TV.
+  - Salto de página rápido, creación de notas y cuestionarios integrados.
+- **Lector de Cómics (`ComicReaderScreen.kt`):**
+  - Soporte de archivos `.cbz` y `.cbr`.
 
-4. **Motor TTS (Lectura en Voz Alta & HUD de Controles):**
-   - `TtsController.kt`: Configurado con `AudioAttributes` (`USAGE_MEDIA`, `CONTENT_TYPE_SPEECH`), salida a `STREAM_MUSIC`, compatibilidad con Android 11+ / API 30+ y soporte para Tono/Pitch, Velocidad y Acento de Voz (España, México, Latino).
+### 4. Cartelera Dinámica de Personajes y Afiliados (Curator)
+- `CuratorRepository.kt` & `CuratorModels.kt`: 10 arquetipos literarios con medallas de dificultad (1 a 5).
+- Libros de dominio público con descarga directa y libros comerciales recomendados con código QR de afiliado para compra instantánea en smartphone.
+- `CuratorRow.kt` y `CuratedBookModal.kt`: Fila horizontal navegable con control remoto y modal interactivo.
 
-5. **Sonidos Ambientales y Foley:**
-   - Ubicados en `app/src/main/res/raw/` en formato OGG Vorbis liviano (lluvia, chimenea, bosque, océano, café murmur) y efecto de paso de hoja suave (`page_turn_*.wav`).
+### 5. Control Parental y Modo Infantil (Kids Mode)
+- Perfiles de usuario diferenciados con modo infantil (`isKidsMode`).
+- `PinPadDialog.kt`: Teclado numérico visual 3x4 optimizado para D-Pad con confirmación por PIN de 4 dígitos.
+- Filtrado estricto de catálogo y estantes en modo niños.
+- Sistema de estrellas de lectura (`starsCount`).
 
-6. **Sistema Global de Perfiles TV:**
-   - `UserProfilesDialog.kt`: Permite crear y gestionar perfiles de usuario con selector de color interactivo mediante D-Pad y soporte completo para campos de texto.
+### 6. Sistema Social & Companion WiFi
+- `WifiImportServer.kt`: Servidor HTTP nano embebido en TV con:
+  - Subida directa de archivos EPUB, PDF y CBZ desde el navegador del teléfono/PC.
+  - Endpoint `/note` para tomar notas con teclado de smartphone y verlas reflejadas en la TV.
+  - Endpoint `/quote_card.png` para descargar tarjetas de citas generadas en alta resolución.
+- `QuoteCardGenerator.kt`: Generador en Canvas de fichas editoriales de citas en 1080x1920 para compartir.
+- `QuizDialog.kt`: Cuestionarios interactivos de comprensión lectora.
+
+### 7. Audio Ducking y Foley Ambiental
+- `AmbientSoundManager.kt` y `AudioPlaybackService.kt`: Servicio en primer plano para audio ambiental.
+- **Audio Ducking:** Cuando el motor TTS comienza a leer en voz alta, el volumen ambiental se atenúa automáticamente al 20%, recuperando el 100% de manera suave cuando la lectura se detiene.
+
+### 8. Paleta Editorial "Noble Ink & Gold"
+- `Color.kt`: Nueva paleta premium basada en Deep Midnight Navy, Gold Ochre, Parchment Paper, Charcoal Ink y Sand Cream con retrocompatibilidad para los temas clásicos.
 
 ---
 
 ## 📋 Historial de Versiones
 
-### v3.1 (Versión Activa)
+### v3.2 (Versión Actual - Plan Maestro Completado)
+- **Fase 1:** Arquitectura Multi-Source Provider (`BookSourceProvider`), Room v3 con notas, `CoverLoader` RGB_565 anti-OOM, perfiles Kids con PIN.
+- **Fase 2:** Lector PDF nativo panorámico 16:9 (`PdfReaderScreen`), ventana deslizante de memoria (3 pliegos) y mutex seguro en `PdfRenderer`.
+- **Fase 3:** `WifiImportServer` enriquecido (EPUB, PDF, CBZ), notas QR y endpoint móvil, `QuoteCardGenerator` (1080x1920) y `QuizDialog`.
+- **Fase 4:** `AudioPlaybackService`, Audio Ducking automático en `AmbientSoundManager` ante lectura TTS, paleta editorial "Noble Ink & Gold".
+- **Fase 5:** Cartelera dinámica de personajes (`CuratorRepository`), soporte de libros comerciales con QR de afiliado, TopBar de 5 pestañas (`[Inicio]`, `[Biblioteca]`, `[Tus Libros]`, `[Lector 3D]`, `[Ajustes]`), diálogo de PIN 3x4 para modo niños.
+- **Fase 6:** Minificación R8 verificada, APK release firmado unificado (12.4 MB) y documentación completa.
+
+### v3.1
 - **Arquitectura de Biblioteca v2.6 Restaurada:** Carga directa y fluida de catálogo y estantes desde la API REST (`/personajes/api/books` y `/personajes/api/shelves`), preservando las etiquetas de estantes de personaje y nivel en los libros.
-- **Imágenes Oficiales de Estantes de la API REST:** Soporte completo para `has_image` e `image_url` (`/personajes/api/shelves/<id>/image`) mostrando las fotografías oficiales de personajes e insignias de nivel en la Sección A.
-- **Optimización de Peso (v2.7):** Compilación minificada con R8 y ProGuard (APK Release reducido a 11.75 MB).
+- **Imágenes Oficiales de Estantes de la API REST:** Soporte completo para `has_image` e `image_url` (`/personajes/api/shelves/<id>/image`).
+- **Optimización de Peso (v2.7):** Compilación minificada con R8 y ProGuard.
 - **Filtro de Libros en Inglés (v2.8):** Clasificación dinámica de libros en inglés sin incluir estantes nulos.
 - **Mejoras de Usabilidad y Lector 3D (v2.9):**
-  - **Modal de Detalles:** Salida inmediata con 1 sola pulsación de Atrás (`detailsBook = null`, `onKeyEvent`).
-  - **Botón Favoritos:** Texto limpio sin estrella duplicada (`En Favoritos` / `Añadir a Favoritos`).
-  - **HUD Lector TTS:** Opciones de Acento de Voz (España 🇪🇸, México 🇲🇽, Latino 🌐), Tono/Pitch (Grave, Normal, Agudo) y Velocidad (0.75x a 1.5x).
-  - **Fire TV Stick Banner:** Banner launcher en `mipmap-xhdpi/banner.png` y `mipmap-xxhdpi/banner.png`.
-
-### v2.5
-- **Foco de Navegación D-Pad:** Restauración precisa de foco al cerrar la ficha técnica de un libro; el cursor vuelve exactamente al libro seleccionado.
-- **Sinopsis Real OPDS:** Carga directa de descripciones de libros desde el feed individual del servidor Calibre-Web y almacenamiento en Room.
-- **Audio Ambiental Blindado:** Captura preventiva de errores en `MediaPlayer` para evitar cierres de la app.
-
-### v2.4 y v2.3
-- **Biblioteca estilo Netflix Kids:** Estanterías circulares de personajes y números 1-5.
-- **Lectura TTS:** Corrección de compatibilidad en Android TV para lectura continua en voz alta.
-- **Firma Única Keystore:** Configuración de `calibrotv.keystore` unificado.
+  - Modal de Detalles: Salida inmediata con 1 pulsación de Atrás.
+  - HUD Lector TTS: Acento de Voz (España 🇪🇸, México 🇲🇽, Latino 🌐), Tono y Velocidad.
+  - Fire TV Stick Banner: Launcher banner adaptado en `mipmap-xhdpi` y `mipmap-xxhdpi`.
 
 ---
 
@@ -89,3 +117,4 @@ Al iniciar una nueva sesión sobre este proyecto:
    $env:JAVA_HOME = 'C:\Users\laura hart\AppData\Local\Programs\jdk-17\jdk-17.0.14+7'; .\gradlew.bat assembleRelease --no-daemon
    ```
 3. Todo APK producido debe generarse con el keystore ubicado en `app/keystore/calibrotv.keystore`.
+4. **Respetar la regla de oro:** La física de paso de página 3D de `ReaderScreen.kt` es intocable.
