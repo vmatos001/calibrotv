@@ -64,15 +64,17 @@ import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
 
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Storage
 
 enum class DrawerItem(val title: String, val icon: ImageVector) {
-    HOME("Home", Icons.Default.Home),
-    BIBLIOTECA("Biblioteca", Icons.Default.AutoStories),
+    HOME("Inicio", Icons.Default.Home),
+    BIBLIOTECA("Biblioteca (Catálogo)", Icons.Default.AutoStories),
+    TUS_LIBROS("Tus Libros (Memoria TV)", Icons.Default.Storage),
     IMPORTAR_WIFI("Importar por WiFi", Icons.Default.QrCodeScanner),
     USUARIOS("Usuarios", Icons.Default.Person),
     LECTOR_3D("Lector 3D", Icons.Default.MenuBook),
     AJUSTES("Ajustes", Icons.Default.Settings),
-    OPDS("Conexión OPDS", Icons.Default.CloudSync)
+    OPDS("Conexión Servidor", Icons.Default.CloudSync)
 }
 
 @Composable

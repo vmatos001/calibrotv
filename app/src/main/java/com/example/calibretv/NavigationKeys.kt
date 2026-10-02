@@ -22,6 +22,9 @@ data class LibraryNavKey(
 ) : NavKey
 
 @Serializable
+data object YourBooksNavKey : NavKey
+
+@Serializable
 data object SettingsNavKey : NavKey
 
 @Serializable

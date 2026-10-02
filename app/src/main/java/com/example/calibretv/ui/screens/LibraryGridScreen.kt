@@ -149,6 +149,7 @@ fun LibraryGridScreen(
     onNavigateToOpds: () -> Unit,
     onNavigateToReader: () -> Unit,
     onNavigateToWifiImport: () -> Unit = {},
+    onNavigateToYourBooks: () -> Unit = {},
     onBack: () -> Unit
 ) {
     var feedContent by remember { mutableStateOf<OpdsFeedContent?>(null) }
@@ -530,6 +531,7 @@ fun LibraryGridScreen(
                 when (item) {
                     DrawerItem.HOME -> onNavigateToHome()
                     DrawerItem.BIBLIOTECA -> { /* Already here */ }
+                    DrawerItem.TUS_LIBROS -> onNavigateToYourBooks()
                     DrawerItem.IMPORTAR_WIFI -> onNavigateToWifiImport()
                     DrawerItem.USUARIOS -> showUserProfilesModal = true
                     DrawerItem.LECTOR_3D -> onNavigateToReader()

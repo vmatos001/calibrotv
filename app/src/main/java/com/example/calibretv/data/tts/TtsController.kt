@@ -14,20 +14,25 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 /**
  * Controlador de Text-to-Speech híbrido para CalibroTV.
- * Soporta de manera prioritaria el motor neuronal Piper TTS (VITS Architecture en red local/VPS)
- * con fallback transparente e instantáneo al motor nativo de Android si el servidor no está disponible.
+ * Implementa una cola de precarga concurrente (Pipelined Prefetcher) para que mientras
+ * se reproduce una oración, las siguientes ya se estén sintetizando en paralelo en el servidor Piper TTS.
+ * Esto elimina los silencios de 8-10 segundos entre frases, logrando una locución fluida.
+ * Cuenta con fallback automático al motor nativo si el servidor no responde.
  */
 class TtsController(private val context: Context) : TextToSpeech.OnInitListener {
 
@@ -39,8 +44,13 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
 
     private val prefs = PreferencesManager(context)
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private var piperJob: Job? = null
+    private var producerJob: Job? = null
+    private var consumerJob: Job? = null
     private var piperPlayer: MediaPlayer? = null
+
+    // Caché concurrente en RAM para la precarga de oraciones
+    private val audioCache = ConcurrentHashMap<Int, ByteArray>()
+    private val failedIndices = ConcurrentHashMap.newKeySet<Int>()
 
     var onPageFinishedListener: (() -> Unit)? = null
 
@@ -134,19 +144,19 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
 
         val usePiper = prefs.isPiperTtsEnabled()
         if (usePiper) {
-            piperJob = scope.launch {
-                val serverUrl = prefs.getPiperTtsUrl()
-                val secret = prefs.getPiperTtsSecret()
-                val selectedVoice = PiperTtsClient.resolveVoiceId(localeCode, prefs.getPiperVoice())
-                
-                var piperSuccess = true
-                _isPlaying.value = true
+            audioCache.clear()
+            failedIndices.clear()
+            _isPlaying.value = true
 
+            val serverUrl = prefs.getPiperTtsUrl()
+            val secret = prefs.getPiperTtsSecret()
+            val selectedVoice = PiperTtsClient.resolveVoiceId(localeCode, prefs.getPiperVoice())
+
+            // 1. Productor en background: sintetiza oraciones de forma anticipada (Pipelining)
+            producerJob = scope.launch(Dispatchers.IO) {
                 for (idx in sentences.indices) {
+                    if (!isActive) break
                     val sentence = sentences[idx]
-                    _currentSentenceIndex.value = idx
-                    _currentSentenceText.value = sentence
-
                     val result = PiperTtsClient.synthesize(
                         text = sentence,
                         voice = selectedVoice,
@@ -154,26 +164,57 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
                         serverUrl = serverUrl,
                         secret = secret
                     )
+                    if (result.isSuccess && result.getOrNull() != null) {
+                        audioCache[idx] = result.getOrNull()!!
+                        Log.d(TAG, "Prefetched sentence $idx (${sentence.take(25)}...)")
+                    } else {
+                        Log.w(TAG, "Failed prefetching sentence $idx: ${result.exceptionOrNull()?.message}")
+                        failedIndices.add(idx)
+                    }
+                }
+            }
 
-                    if (result.isSuccess) {
-                        val audioBytes = result.getOrNull()
-                        if (audioBytes != null && audioBytes.isNotEmpty()) {
-                            val played = playWavBytes(audioBytes)
-                            if (!played) {
-                                piperSuccess = false
-                                break
-                            }
+            // 2. Consumidor: reproduce la cola sin silencios
+            consumerJob = scope.launch(Dispatchers.Main) {
+                var fallbackNeeded = false
+                var fallbackStartIndex = 0
+
+                for (idx in sentences.indices) {
+                    if (!isActive) break
+                    val sentence = sentences[idx]
+                    _currentSentenceIndex.value = idx
+                    _currentSentenceText.value = sentence
+
+                    // Esperar a que la oración esté sintetizada por el productor (más tiempo en la primera por arranque de inferencia en CPU)
+                    var waitTime = 0
+                    val maxWait = if (idx == 0) 14000 else 9000
+                    while (!audioCache.containsKey(idx) && !failedIndices.contains(idx) && waitTime < maxWait && isActive) {
+                        delay(50)
+                        waitTime += 50
+                    }
+
+                    val audioBytes = audioCache[idx]
+                    if (audioBytes != null && audioBytes.isNotEmpty()) {
+                        val played = playWavBytes(audioBytes, idx)
+                        audioCache.remove(idx) // Liberar memoria RAM de inmediato
+                        if (!played) {
+                            fallbackNeeded = true
+                            fallbackStartIndex = idx
+                            break
                         }
                     } else {
-                        Log.w(TAG, "Piper TTS failed for sentence $idx, falling back to native TTS: ${result.exceptionOrNull()?.message}")
-                        piperSuccess = false
+                        Log.w(TAG, "Timeout or error on Piper sentence $idx. Falling back to native TTS.")
+                        fallbackNeeded = true
+                        fallbackStartIndex = idx
                         break
                     }
                 }
 
-                if (!piperSuccess) {
-                    // Fallback transparente al motor nativo para el resto del texto
-                    readPageNative(text, speedRate, pitch, localeCode)
+                if (fallbackNeeded) {
+                    val remainingText = sentences.drop(fallbackStartIndex).joinToString(" ")
+                    if (remainingText.isNotBlank()) {
+                        readPageNative(remainingText, speedRate, pitch, localeCode)
+                    }
                 } else {
                     _isPlaying.value = false
                     _currentSentenceIndex.value = -1
@@ -186,9 +227,9 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
         }
     }
 
-    private suspend fun playWavBytes(bytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
+    private suspend fun playWavBytes(bytes: ByteArray, sentenceIdx: Int): Boolean = withContext(Dispatchers.IO) {
+        val tempFile = File(context.cacheDir, "piper_tts_$sentenceIdx.wav")
         try {
-            val tempFile = File(context.cacheDir, "piper_tts_temp.wav")
             FileOutputStream(tempFile).use { fos ->
                 fos.write(bytes)
                 fos.flush()
@@ -196,6 +237,7 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
 
             suspendCoroutine { cont ->
                 try {
+                    piperPlayer?.stop()
                     piperPlayer?.release()
                     piperPlayer = MediaPlayer().apply {
                         setAudioAttributes(
@@ -209,7 +251,7 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
                             cont.resume(true)
                         }
                         setOnErrorListener { _, what, extra ->
-                            Log.e(TAG, "MediaPlayer error playing Piper audio: what=$what, extra=$extra")
+                            Log.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
                             cont.resume(false)
                             true
                         }
@@ -217,13 +259,15 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
                         start()
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error initializing MediaPlayer for Piper TTS", e)
+                    Log.e(TAG, "Error playing audio via MediaPlayer", e)
                     cont.resume(false)
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error writing temporary Piper audio file", e)
+            Log.e(TAG, "Error writing temporary audio file", e)
             false
+        } finally {
+            try { tempFile.delete() } catch (_: Exception) {}
         }
     }
 
@@ -272,7 +316,7 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
                 }
 
                 override fun onError(utteranceId: String, errorCode: Int) {
-                    Log.e(TAG, "TTS Utterance error on $utteranceId, code: $errorCode")
+                    Log.e(TAG, "Native TTS Utterance error on $utteranceId, code: $errorCode")
                     _isPlaying.value = false
                     _currentSentenceIndex.value = -1
                     _currentSentenceText.value = ""
@@ -293,8 +337,13 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
     }
 
     fun stop() {
-        piperJob?.cancel()
-        piperJob = null
+        producerJob?.cancel()
+        producerJob = null
+        consumerJob?.cancel()
+        consumerJob = null
+        audioCache.clear()
+        failedIndices.clear()
+
         try {
             piperPlayer?.stop()
             piperPlayer?.release()

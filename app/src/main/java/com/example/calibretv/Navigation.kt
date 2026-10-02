@@ -18,6 +18,7 @@ import com.example.calibretv.ui.screens.ServerScreen
 import com.example.calibretv.ui.screens.SettingsScreen
 import com.example.calibretv.ui.screens.SplashScreen
 import com.example.calibretv.ui.screens.SetupWizardScreen
+import com.example.calibretv.ui.screens.YourBooksScreen
 
 @Composable
 fun MainNavigation() {
@@ -91,8 +92,8 @@ fun MainNavigation() {
                 }
             }
             TvNavTab.TUS_LIBROS -> {
-                if (backStack.lastOrNull() !is LibraryNavKey) {
-                    backStack.add(LibraryNavKey(subfeedUrl = "local_storage", title = "Tus Libros"))
+                if (backStack.lastOrNull() !is YourBooksNavKey) {
+                    backStack.add(YourBooksNavKey)
                 }
             }
             TvNavTab.LECTOR_3D -> navigateToReaderForLastBook()
@@ -137,6 +138,11 @@ fun MainNavigation() {
                             backStack.add(LibraryNavKey())
                         }
                     },
+                    onNavigateToYourBooks = {
+                        if (backStack.lastOrNull() !is YourBooksNavKey) {
+                            backStack.add(YourBooksNavKey)
+                        }
+                    },
                     onNavigateToSettings = {
                         if (backStack.lastOrNull() !is SettingsNavKey) {
                             backStack.add(SettingsNavKey)
@@ -164,6 +170,11 @@ fun MainNavigation() {
                             backStack.add(HomeNavKey)
                         }
                     },
+                    onNavigateToYourBooks = {
+                        if (backStack.lastOrNull() !is YourBooksNavKey) {
+                            backStack.add(YourBooksNavKey)
+                        }
+                    },
                     onNavigateToSettings = {
                         if (backStack.lastOrNull() !is SettingsNavKey) {
                             backStack.add(SettingsNavKey)
@@ -181,6 +192,21 @@ fun MainNavigation() {
                         }
                     },
                     onBack = { backStack.removeLastOrNull() }
+                )
+            }
+            entry<YourBooksNavKey> {
+                YourBooksScreen(
+                    repository = repository,
+                    onBookSelected = ::openBook,
+                    onNavigateToHome = { navigateToTab(TvNavTab.HOME) },
+                    onNavigateToLibrary = { navigateToTab(TvNavTab.BIBLIOTECA) },
+                    onNavigateToReader = ::navigateToReaderForLastBook,
+                    onNavigateToSettings = { navigateToTab(TvNavTab.AJUSTES) },
+                    onNavigateToWifiImport = {
+                        if (backStack.lastOrNull() !is WifiImportNavKey) {
+                            backStack.add(WifiImportNavKey)
+                        }
+                    }
                 )
             }
             entry<ServerNavKey> {

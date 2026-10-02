@@ -107,6 +107,13 @@ import com.example.calibretv.ui.components.TvNavTab
 import com.example.calibretv.ui.components.TvTopBar
 import kotlinx.coroutines.launch
 
+enum class ReaderHudCategory(val title: String, val icon: ImageVector) {
+    APARIENCIA("Apariencia", Icons.Default.Palette),
+    VOZ_TTS("Voz TTS", Icons.Filled.RecordVoiceOver),
+    AMBIENTE("Ambiente", Icons.Filled.MusicNote),
+    HERRAMIENTAS("Herramientas", Icons.Default.MenuBook)
+}
+
 @Composable
 fun ReaderScreen(
     book: Book,
@@ -133,6 +140,7 @@ fun ReaderScreen(
     // Navigation and HUD visibility
     var showBottomHud by remember { mutableStateOf(false) } // Triggered by DPAD_DOWN
     var showTopBar by remember { mutableStateOf(false) }    // Triggered by DPAD_UP
+    var selectedHudCategory by remember { mutableStateOf(ReaderHudCategory.APARIENCIA) }
 
     val curlAnim = remember { Animatable(0f) }
     val readerFocusRequester = remember { FocusRequester() }
@@ -779,254 +787,311 @@ fun ReaderScreen(
                         )
                     }
 
-                    // Bottom Row: barra única con scroll horizontal — todos los botones en una línea
-                    LazyRow(
+                    // 1. Selector jerárquico de 4 categorías (Plan Maestro v3.0 Sección 5)
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        contentPadding = PaddingValues(horizontal = 4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        item {
-                            StitchHudButton(
-                                title = "‹ Anterior",
-                                icon = Icons.Default.ChevronLeft,
-                                isPrimary = false,
-                                modifier = Modifier.focusRequester(hudInitialFocusRequester),
-                                onClick = { turnPage(forward = false) }
-                            )
-                        }
-                        item {
-                            StitchHudButton(
-                                title = "Salto de Página",
-                                icon = Icons.Default.MenuBook,
-                                isPrimary = true,
-                                onClick = {
-                                    val jumpIdx = (currentSpreadIndex + 5).coerceAtMost(spreads.size - 1)
-                                    currentSpreadIndex = jumpIdx
-                                    repository.saveBookProgress(book.id, jumpIdx)
-                                }
-                            )
-                        }
-                        item {
-                            StitchHudButton(
-                                title = "Siguiente ›",
-                                icon = Icons.Default.ChevronRight,
-                                isPrimary = false,
-                                onClick = { turnPage(forward = true) }
-                            )
-                        }
-                        item { Spacer(Modifier.width(12.dp)) }
-                        item {
-                            StitchHudButton(
-                                title = "Fuente (${settings.fontSizeSp}sp)",
-                                icon = Icons.Default.FormatSize,
-                                isPrimary = false,
-                                onClick = {
-                                    val nextSize = when (settings.fontSizeSp) {
-                                        16 -> 18
-                                        18 -> 20
-                                        20 -> 22
-                                        22 -> 24
-                                        else -> 16
-                                    }
-                                    settings = settings.copy(fontSizeSp = nextSize)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
-                        }
-                        item {
-                            val themeName = when (settings.theme) {
-                                ReadingTheme.PERGAMINO -> "Pergamino"
-                                ReadingTheme.OLED_PURE -> "OLED Puro"
-                                ReadingTheme.SEPIA_CINE -> "Sepia"
-                                ReadingTheme.NIGHT_AMBER -> "Ámbar Noche"
-                                ReadingTheme.PROYECTOR_BLANCO -> "Proyector"
-                                ReadingTheme.CINE_OSCURO -> "Cine Oscuro"
+                        ReaderHudCategory.values().forEachIndexed { index, cat ->
+                            var isCatFocused by remember { mutableStateOf(false) }
+                            val isSelected = selectedHudCategory == cat
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = (if (index == 0) Modifier.focusRequester(hudInitialFocusRequester) else Modifier)
+                                    .scale(if (isCatFocused) 1.06f else 1.0f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        when {
+                                            isSelected -> AmberWarm
+                                            isCatFocused -> AmberWarm.copy(alpha = 0.30f)
+                                            else -> Color.White.copy(alpha = 0.08f)
+                                        }
+                                    )
+                                    .border(
+                                        width = if (isCatFocused) 1.5.dp else 1.dp,
+                                        color = when {
+                                            isCatFocused -> Color.White
+                                            isSelected -> AmberWarm
+                                            else -> Color.Transparent
+                                        },
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .onFocusChanged { isCatFocused = it.isFocused }
+                                    .focusable()
+                                    .clickable { selectedHudCategory = cat }
+                                    .padding(horizontal = 14.dp, vertical = 7.dp)
+                            ) {
+                                Icon(
+                                    imageVector = cat.icon,
+                                    contentDescription = null,
+                                    tint = if (isSelected) Color(0xFF131315) else if (isCatFocused) AmberWarm else TextMuted,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = cat.title,
+                                    color = if (isSelected) Color(0xFF131315) else if (isCatFocused) Color.White else TextMuted,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium
+                                )
                             }
-                            StitchHudButton(
-                                title = "Tema: $themeName",
-                                icon = Icons.Default.Palette,
-                                isPrimary = false,
-                                onClick = {
-                                    val nextTheme = when (settings.theme) {
-                                        ReadingTheme.PERGAMINO -> ReadingTheme.OLED_PURE
-                                        ReadingTheme.OLED_PURE -> ReadingTheme.SEPIA_CINE
-                                        ReadingTheme.SEPIA_CINE -> ReadingTheme.NIGHT_AMBER
-                                        ReadingTheme.NIGHT_AMBER -> ReadingTheme.PROYECTOR_BLANCO
-                                        ReadingTheme.PROYECTOR_BLANCO -> ReadingTheme.CINE_OSCURO
-                                        ReadingTheme.CINE_OSCURO -> ReadingTheme.PERGAMINO
-                                    }
-                                    settings = settings.copy(theme = nextTheme)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
                         }
-                        item {
-                            val marginPct = settings.overscanPercent
-                            StitchHudButton(
-                                title = "Márgenes: $marginPct%",
-                                icon = Icons.Default.AspectRatio,
-                                isPrimary = settings.overscanPercent > 0,
-                                onClick = {
-                                    val nextMargin = when (settings.overscanPercent) {
-                                        0 -> 4
-                                        4 -> 8
-                                        else -> 0
+                    }
+
+                    // 2. Fila contextual de controles según la categoría seleccionada
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        when (selectedHudCategory) {
+                            ReaderHudCategory.APARIENCIA -> {
+                                StitchHudButton(
+                                    title = "Fuente (${settings.fontSizeSp}sp)",
+                                    icon = Icons.Default.FormatSize,
+                                    isPrimary = false,
+                                    onClick = {
+                                        val nextSize = when (settings.fontSizeSp) {
+                                            16 -> 18
+                                            18 -> 20
+                                            20 -> 22
+                                            22 -> 24
+                                            else -> 16
+                                        }
+                                        settings = settings.copy(fontSizeSp = nextSize)
+                                        repository.saveReadingSettings(settings)
                                     }
-                                    settings = settings.copy(overscanPercent = nextMargin)
-                                    repository.saveReadingSettings(settings)
+                                )
+                                val themeName = when (settings.theme) {
+                                    ReadingTheme.PERGAMINO -> "Pergamino"
+                                    ReadingTheme.OLED_PURE -> "OLED Puro"
+                                    ReadingTheme.SEPIA_CINE -> "Sepia"
+                                    ReadingTheme.NIGHT_AMBER -> "Ámbar Noche"
+                                    ReadingTheme.PROYECTOR_BLANCO -> "Proyector"
+                                    ReadingTheme.CINE_OSCURO -> "Cine Oscuro"
                                 }
-                            )
-                        }
-                        item {
-                            val brightnessPercent = (settings.readerBrightness * 100).toInt()
-                            StitchHudButton(
-                                title = "☀ $brightnessPercent%",
-                                icon = Icons.Filled.Brightness4,
-                                isPrimary = settings.readerBrightness < 1.0f,
-                                onClick = {
-                                    val nextBrightness = when {
-                                        settings.readerBrightness > 0.85f -> 0.70f
-                                        settings.readerBrightness > 0.60f -> 0.50f
-                                        settings.readerBrightness > 0.40f -> 0.30f
-                                        else -> 1.0f
+                                StitchHudButton(
+                                    title = "Tema: $themeName",
+                                    icon = Icons.Default.Palette,
+                                    isPrimary = false,
+                                    onClick = {
+                                        val nextTheme = when (settings.theme) {
+                                            ReadingTheme.PERGAMINO -> ReadingTheme.OLED_PURE
+                                            ReadingTheme.OLED_PURE -> ReadingTheme.SEPIA_CINE
+                                            ReadingTheme.SEPIA_CINE -> ReadingTheme.NIGHT_AMBER
+                                            ReadingTheme.NIGHT_AMBER -> ReadingTheme.PROYECTOR_BLANCO
+                                            ReadingTheme.PROYECTOR_BLANCO -> ReadingTheme.CINE_OSCURO
+                                            ReadingTheme.CINE_OSCURO -> ReadingTheme.PERGAMINO
+                                        }
+                                        settings = settings.copy(theme = nextTheme)
+                                        repository.saveReadingSettings(settings)
                                     }
-                                    settings = settings.copy(readerBrightness = nextBrightness)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
-                        }
-                        item {
-                            val timerLabel = when {
-                                !isSleepTimerActive -> "⏱ Sleep"
-                                sleepTimerSecondsLeft > 60 -> "⏱ ${sleepTimerSecondsLeft / 60}m"
-                                else -> "⏱ ${sleepTimerSecondsLeft}s"
+                                )
+                                val marginPct = settings.overscanPercent
+                                StitchHudButton(
+                                    title = "Márgenes: $marginPct%",
+                                    icon = Icons.Default.AspectRatio,
+                                    isPrimary = settings.overscanPercent > 0,
+                                    onClick = {
+                                        val nextMargin = when (settings.overscanPercent) {
+                                            0 -> 4
+                                            4 -> 8
+                                            else -> 0
+                                        }
+                                        settings = settings.copy(overscanPercent = nextMargin)
+                                        repository.saveReadingSettings(settings)
+                                    }
+                                )
+                                val brightnessPercent = (settings.readerBrightness * 100).toInt()
+                                StitchHudButton(
+                                    title = "☀ Brillo: $brightnessPercent%",
+                                    icon = Icons.Filled.Brightness4,
+                                    isPrimary = settings.readerBrightness < 1.0f,
+                                    onClick = {
+                                        val nextBrightness = when {
+                                            settings.readerBrightness > 0.85f -> 0.70f
+                                            settings.readerBrightness > 0.60f -> 0.50f
+                                            settings.readerBrightness > 0.40f -> 0.30f
+                                            else -> 1.0f
+                                        }
+                                        settings = settings.copy(readerBrightness = nextBrightness)
+                                        repository.saveReadingSettings(settings)
+                                    }
+                                )
                             }
-                            StitchHudButton(
-                                title = timerLabel,
-                                icon = Icons.Filled.Timer,
-                                isPrimary = isSleepTimerActive,
-                                onClick = {
-                                    val nextMinutes = when (settings.sleepTimerMinutes) {
-                                        0 -> 15
-                                        15 -> 30
-                                        30 -> 45
-                                        45 -> 60
-                                        else -> 0
-                                    }
-                                    settings = settings.copy(sleepTimerMinutes = nextMinutes)
-                                    repository.saveReadingSettings(settings)
-                                    isSleepTimerActive = nextMinutes > 0
-                                }
-                            )
-                        }
-                        item {
-                            val isTtsEngineAvailable by ttsController.isEngineAvailable.collectAsState()
-                            StitchHudButton(
-                                title = if (isTtsPlaying) "⏸ Pausa" else "▶ Leer",
-                                icon = Icons.Filled.RecordVoiceOver,
-                                isPrimary = isTtsPlaying,
-                                onClick = {
-                                    if (!isTtsEngineAvailable) {
-                                        android.widget.Toast.makeText(context, "Lectura en voz alta no disponible en este dispositivo.", android.widget.Toast.LENGTH_LONG).show()
-                                    } else if (isTtsPlaying) {
-                                        ttsController.stop()
-                                    } else {
-                                        val leftText = currentSpread?.leftPage?.paragraphs?.joinToString(" ") ?: ""
-                                        val rightText = currentSpread?.rightPage?.paragraphs?.joinToString(" ") ?: ""
-                                        val pageText = listOf(leftText, rightText).filter { it.isNotBlank() }.joinToString(" ")
-                                        if (pageText.isNotBlank()) {
-                                            ttsController.readPage(pageText, settings.ttsSpeedRate, settings.ttsPitch, settings.ttsVoiceLocale)
+                            ReaderHudCategory.VOZ_TTS -> {
+                                val isTtsEngineAvailable by ttsController.isEngineAvailable.collectAsState()
+                                StitchHudButton(
+                                    title = if (isTtsPlaying) "⏸ Pausar" else "▶ Leer en Voz Alta",
+                                    icon = Icons.Filled.RecordVoiceOver,
+                                    isPrimary = isTtsPlaying,
+                                    onClick = {
+                                        if (!isTtsEngineAvailable) {
+                                            android.widget.Toast.makeText(context, "Lectura en voz alta no disponible en este dispositivo.", android.widget.Toast.LENGTH_LONG).show()
+                                        } else if (isTtsPlaying) {
+                                            ttsController.stop()
+                                        } else {
+                                            val leftText = currentSpread?.leftPage?.paragraphs?.joinToString(" ") ?: ""
+                                            val rightText = currentSpread?.rightPage?.paragraphs?.joinToString(" ") ?: ""
+                                            val pageText = listOf(leftText, rightText).filter { it.isNotBlank() }.joinToString(" ")
+                                            if (pageText.isNotBlank()) {
+                                                ttsController.readPage(pageText, settings.ttsSpeedRate, settings.ttsPitch, settings.ttsVoiceLocale)
+                                            }
                                         }
                                     }
+                                )
+                                val voiceName = when (settings.ttsVoiceLocale) {
+                                    "es-ES" -> "Voz: España 🇪🇸"
+                                    "es-MX" -> "Voz: México 🇲🇽"
+                                    else -> "Voz: Latino 🌐"
                                 }
-                            )
-                        }
-                        item {
-                            val voiceName = when (settings.ttsVoiceLocale) {
-                                "es-ES" -> "Voz: España 🇪🇸"
-                                "es-MX" -> "Voz: México 🇲🇽"
-                                else -> "Voz: Latino 🌐"
+                                StitchHudButton(
+                                    title = voiceName,
+                                    icon = Icons.Default.RecordVoiceOver,
+                                    isPrimary = false,
+                                    onClick = {
+                                        val nextLoc = when (settings.ttsVoiceLocale) {
+                                            "es-ES" -> "es-MX"
+                                            "es-MX" -> "es-US"
+                                            else -> "es-ES"
+                                        }
+                                        settings = settings.copy(ttsVoiceLocale = nextLoc)
+                                        repository.saveReadingSettings(settings)
+                                    }
+                                )
+                                StitchHudButton(
+                                    title = "Velocidad: ${settings.ttsSpeedRate}x",
+                                    icon = Icons.Default.Timer,
+                                    isPrimary = settings.ttsSpeedRate != 1.0f,
+                                    onClick = {
+                                        val nextSpeed = when (settings.ttsSpeedRate) {
+                                            1.0f -> 1.25f
+                                            1.25f -> 1.5f
+                                            1.5f -> 0.75f
+                                            else -> 1.0f
+                                        }
+                                        settings = settings.copy(ttsSpeedRate = nextSpeed)
+                                        repository.saveReadingSettings(settings)
+                                    }
+                                )
+                                val pitchName = when (settings.ttsPitch) {
+                                    0.8f -> "Tono: Grave"
+                                    1.2f -> "Tono: Agudo"
+                                    else -> "Tono: Normal"
+                                }
+                                StitchHudButton(
+                                    title = pitchName,
+                                    icon = Icons.Default.MusicNote,
+                                    isPrimary = false,
+                                    onClick = {
+                                        val nextPitch = when (settings.ttsPitch) {
+                                            1.0f -> 1.2f
+                                            1.2f -> 0.8f
+                                            else -> 1.0f
+                                        }
+                                        settings = settings.copy(ttsPitch = nextPitch)
+                                        repository.saveReadingSettings(settings)
+                                    }
+                                )
                             }
-                            StitchHudButton(
-                                title = voiceName,
-                                icon = Icons.Default.RecordVoiceOver,
-                                isPrimary = false,
-                                onClick = {
-                                    val nextLoc = when (settings.ttsVoiceLocale) {
-                                        "es-ES" -> "es-MX"
-                                        "es-MX" -> "es-US"
-                                        else -> "es-ES"
-                                    }
-                                    settings = settings.copy(ttsVoiceLocale = nextLoc)
-                                    repository.saveReadingSettings(settings)
+                            ReaderHudCategory.AMBIENTE -> {
+                                val ambientLabel = when (settings.ambientSound) {
+                                    AmbientSound.NONE -> "🔕 Silencio"
+                                    AmbientSound.RAIN -> "🌧 Lluvia"
+                                    AmbientSound.FIREPLACE -> "🔥 Chimenea"
+                                    AmbientSound.OCEAN -> "🌊 Mar"
+                                    AmbientSound.CAFE -> "☕ Café"
+                                    AmbientSound.FOREST -> "🌲 Bosque"
                                 }
-                            )
-                        }
-                        item {
-                            val pitchName = when (settings.ttsPitch) {
-                                0.8f -> "Tono: Grave"
-                                1.2f -> "Tono: Agudo"
-                                else -> "Tono: Normal"
+                                StitchHudButton(
+                                    title = "Ambiente: $ambientLabel",
+                                    icon = Icons.Filled.MusicNote,
+                                    isPrimary = settings.ambientSound != AmbientSound.NONE,
+                                    onClick = {
+                                        val nextSound = when (settings.ambientSound) {
+                                            AmbientSound.NONE -> AmbientSound.RAIN
+                                            AmbientSound.RAIN -> AmbientSound.FIREPLACE
+                                            AmbientSound.FIREPLACE -> AmbientSound.OCEAN
+                                            AmbientSound.OCEAN -> AmbientSound.CAFE
+                                            AmbientSound.CAFE -> AmbientSound.FOREST
+                                            AmbientSound.FOREST -> AmbientSound.NONE
+                                        }
+                                        settings = settings.copy(ambientSound = nextSound)
+                                        repository.saveReadingSettings(settings)
+                                    }
+                                )
+                                StitchHudButton(
+                                    title = "Volumen: ${(settings.ambientVolume * 100).toInt()}%",
+                                    icon = Icons.Default.MusicNote,
+                                    isPrimary = false,
+                                    onClick = {
+                                        val nextVol = when {
+                                            settings.ambientVolume < 0.35f -> 0.50f
+                                            settings.ambientVolume < 0.65f -> 0.80f
+                                            settings.ambientVolume < 0.95f -> 1.0f
+                                            else -> 0.20f
+                                        }
+                                        settings = settings.copy(ambientVolume = nextVol)
+                                        repository.saveReadingSettings(settings)
+                                    }
+                                )
+                                StitchHudButton(
+                                    title = "Paso Página: ${if (settings.pageSoundEnabled) "Activado 📖" else "Silenciado 🔇"}",
+                                    icon = Icons.Default.Flip,
+                                    isPrimary = settings.pageSoundEnabled,
+                                    onClick = {
+                                        settings = settings.copy(pageSoundEnabled = !settings.pageSoundEnabled)
+                                        repository.saveReadingSettings(settings)
+                                    }
+                                )
                             }
-                            StitchHudButton(
-                                title = pitchName,
-                                icon = Icons.Default.MusicNote,
-                                isPrimary = false,
-                                onClick = {
-                                    val nextPitch = when (settings.ttsPitch) {
-                                        1.0f -> 1.2f
-                                        1.2f -> 0.8f
-                                        else -> 1.0f
+                            ReaderHudCategory.HERRAMIENTAS -> {
+                                StitchHudButton(
+                                    title = "‹ Anterior",
+                                    icon = Icons.Default.ChevronLeft,
+                                    isPrimary = false,
+                                    onClick = { turnPage(forward = false) }
+                                )
+                                StitchHudButton(
+                                    title = "Salto (+5 Págs)",
+                                    icon = Icons.Default.MenuBook,
+                                    isPrimary = true,
+                                    onClick = {
+                                        val jumpIdx = (currentSpreadIndex + 5).coerceAtMost(spreads.size - 1)
+                                        currentSpreadIndex = jumpIdx
+                                        repository.saveBookProgress(book.id, jumpIdx)
                                     }
-                                    settings = settings.copy(ttsPitch = nextPitch)
-                                    repository.saveReadingSettings(settings)
+                                )
+                                StitchHudButton(
+                                    title = "Siguiente ›",
+                                    icon = Icons.Default.ChevronRight,
+                                    isPrimary = false,
+                                    onClick = { turnPage(forward = true) }
+                                )
+                                val timerLabel = when {
+                                    !isSleepTimerActive -> "⏱ Off"
+                                    sleepTimerSecondsLeft > 60 -> "⏱ ${sleepTimerSecondsLeft / 60}m"
+                                    else -> "⏱ ${sleepTimerSecondsLeft}s"
                                 }
-                            )
-                        }
-                        item {
-                            StitchHudButton(
-                                title = "Velocidad: ${settings.ttsSpeedRate}x",
-                                icon = Icons.Default.Timer,
-                                isPrimary = settings.ttsSpeedRate != 1.0f,
-                                onClick = {
-                                    val nextSpeed = when (settings.ttsSpeedRate) {
-                                        1.0f -> 1.25f
-                                        1.25f -> 1.5f
-                                        1.5f -> 0.75f
-                                        else -> 1.0f
+                                StitchHudButton(
+                                    title = "Sleep: $timerLabel",
+                                    icon = Icons.Filled.Timer,
+                                    isPrimary = isSleepTimerActive,
+                                    onClick = {
+                                        val nextMinutes = when (settings.sleepTimerMinutes) {
+                                            0 -> 15
+                                            15 -> 30
+                                            30 -> 45
+                                            45 -> 60
+                                            else -> 0
+                                        }
+                                        settings = settings.copy(sleepTimerMinutes = nextMinutes)
+                                        repository.saveReadingSettings(settings)
+                                        isSleepTimerActive = nextMinutes > 0
                                     }
-                                    settings = settings.copy(ttsSpeedRate = nextSpeed)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
-                        }
-                        item {
-                            val ambientLabel = when (settings.ambientSound) {
-                                AmbientSound.NONE -> "🔕 Ambiente"
-                                AmbientSound.RAIN -> "🌧 Lluvia"
-                                AmbientSound.FIREPLACE -> "🔥 Chimenea"
-                                AmbientSound.OCEAN -> "🌊 Mar"
-                                AmbientSound.CAFE -> "☕ Café"
-                                AmbientSound.FOREST -> "🌲 Bosque"
+                                )
                             }
-                            StitchHudButton(
-                                title = ambientLabel,
-                                icon = Icons.Filled.MusicNote,
-                                isPrimary = settings.ambientSound != AmbientSound.NONE,
-                                onClick = {
-                                    val nextSound = when (settings.ambientSound) {
-                                        AmbientSound.NONE -> AmbientSound.RAIN
-                                        AmbientSound.RAIN -> AmbientSound.FIREPLACE
-                                        AmbientSound.FIREPLACE -> AmbientSound.OCEAN
-                                        AmbientSound.OCEAN -> AmbientSound.CAFE
-                                        AmbientSound.CAFE -> AmbientSound.FOREST
-                                        AmbientSound.FOREST -> AmbientSound.NONE
-                                    }
-                                    settings = settings.copy(ambientSound = nextSound)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
                         }
                     }
                 }

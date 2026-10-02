@@ -1,5 +1,6 @@
 package com.example.calibretv.ui.screens
 
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -27,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
@@ -35,11 +37,11 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.CircularProgressIndicator
-import com.example.calibretv.ui.components.UserProfilesDialog
-import com.example.calibretv.ui.components.PinPadDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,33 +69,39 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.calibretv.data.BookRepository
+import com.example.calibretv.data.curator.BookOffer
+import com.example.calibretv.data.curator.CuratedBook
+import com.example.calibretv.data.curator.CuratorRepository
+import com.example.calibretv.data.curator.CuratorSection
+import com.example.calibretv.data.curator.HeroBanner
+import com.example.calibretv.data.curator.HomeCarteleraData
 import com.example.calibretv.data.image.CoverLoader
 import com.example.calibretv.data.image.rememberCoverImage
 import com.example.calibretv.data.model.Book
 import com.example.calibretv.data.opds.OpdsFeedContent
+import com.example.calibretv.data.storage.PreferencesManager
 import com.example.calibretv.theme.AccentGold
 import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.BackgroundDark
+import com.example.calibretv.theme.SurfaceCard
 import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.SurfaceContainerHighest
 import com.example.calibretv.theme.SurfaceRaised
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
-import com.example.calibretv.data.curator.CuratedBook
-import com.example.calibretv.data.curator.CuratorRepository
-import com.example.calibretv.data.curator.CuratorSection
 import com.example.calibretv.ui.components.CuratedBookModal
 import com.example.calibretv.ui.components.CuratorRow
 import com.example.calibretv.ui.components.DrawerItem
+import com.example.calibretv.ui.components.PinPadDialog
 import com.example.calibretv.ui.components.TvSideDrawer
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.LocalContext
+import com.example.calibretv.ui.components.UserProfilesDialog
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -103,6 +112,7 @@ fun HomeScreen(
     repository: BookRepository,
     onBookSelected: (Book) -> Unit,
     onNavigateToLibrary: () -> Unit,
+    onNavigateToYourBooks: () -> Unit = {},
     onNavigateToSettings: () -> Unit,
     onNavigateToOpds: () -> Unit,
     onNavigateToReader: () -> Unit,
@@ -112,8 +122,6 @@ fun HomeScreen(
     val coroutineScope = rememberCoroutineScope()
     var feedContent by remember { mutableStateOf<OpdsFeedContent?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var selectedCategory by remember { mutableStateOf("Todos") }
-    var focusedBook by remember { mutableStateOf<Book?>(null) }
     var activeProfile by remember { mutableStateOf(repository.getActiveProfile()) }
 
     var isDrawerOpen by remember { mutableStateOf(false) }
@@ -129,7 +137,10 @@ fun HomeScreen(
     var modalDescription by remember { mutableStateOf("") }
     val modalReadFocusRequester = remember { FocusRequester() }
 
-    // Cartelera dinámica y Curaduría por Personajes (Sincronizada con CMS o Catálogo Local)
+    // Cartelera Dinámica: Hero Banner 16:9 + Carrusel de Ofertas (CMS /api/v1/cartelera/home)
+    var homeCarteleraData by remember { mutableStateOf(CuratorRepository.getOfflineHomeData()) }
+
+    // Estanterías por Personajes / Arquetipos (CMS /api/v1/cartelera/shelves)
     var allCuratorSections by remember { mutableStateOf(CuratorRepository.getCuratedSections()) }
     val curatorSections = remember(allCuratorSections, activeProfile) {
         if (!activeProfile.isKidsMode) {
@@ -147,12 +158,27 @@ fun HomeScreen(
     var selectedCuratedBook by remember { mutableStateOf<CuratedBook?>(null) }
     var isDownloadingCuratedBook by remember { mutableStateOf(false) }
 
+    // Sincronización continua con CMS
     LaunchedEffect(Unit) {
-        val prefs = com.example.calibretv.data.storage.PreferencesManager(context)
+        val prefs = PreferencesManager(context)
         val cmsUrl = prefs.getCmsServerUrl()
-        val synced = CuratorRepository.syncWithCms(cmsUrl)
-        if (synced) {
-            allCuratorSections = CuratorRepository.getCuratedSections()
+        coroutineScope.launch {
+            try {
+                val data = CuratorRepository.fetchHomeCartelera(cmsUrl)
+                homeCarteleraData = data
+            } catch (e: Exception) {
+                Log.d("HomeScreen", "CMS Cartelera offline fallback: ${e.message}")
+            }
+        }
+        coroutineScope.launch {
+            try {
+                val synced = CuratorRepository.syncWithCms(cmsUrl)
+                if (synced) {
+                    allCuratorSections = CuratorRepository.getCuratedSections()
+                }
+            } catch (e: Exception) {
+                Log.d("HomeScreen", "CMS Shelves offline fallback: ${e.message}")
+            }
         }
     }
 
@@ -181,14 +207,11 @@ fun HomeScreen(
     val config = remember { repository.getServerConfig() }
     val authHeader = remember(config) { CoverLoader.buildBasicAuth(config.username, config.password) }
 
-    // Load catalog feed
+    // Load local/OPDS library feed
     LaunchedEffect(activeProfile) {
         isLoading = true
         val result = repository.getFeed()
         feedContent = result
-        if (result.books.isNotEmpty()) {
-            focusedBook = result.books.first()
-        }
         isLoading = false
     }
 
@@ -216,28 +239,7 @@ fun HomeScreen(
         }
     }
 
-    // Distinct tags
-    val filterTags = remember(allBooks) {
-        val extracted = allBooks.flatMap { it.tags.ifEmpty { listOf(it.category) } }
-            .distinct()
-            .filter { it.isNotBlank() && !it.equals("General", ignoreCase = true) }
-        listOf("Todos") + extracted
-    }
-
-    val filteredBooks = remember(allBooks, selectedCategory) {
-        if (selectedCategory == "Todos" || selectedCategory.isBlank()) allBooks
-        else allBooks.filter { b ->
-            b.category.equals(selectedCategory, ignoreCase = true) ||
-                    b.tags.any { it.equals(selectedCategory, ignoreCase = true) }
-        }
-    }
-
-    // Shelf 1: Biblioteca (Libros sincronizados recientes)
-    val recentBooks = remember(filteredBooks) {
-        filteredBooks.take(15)
-    }
-
-    // Shelf 2: Libros Favoritos del usuario activo
+    // Libros Favoritos del usuario activo
     var favoriteBooks by remember(activeProfile, allBooks) {
         mutableStateOf(repository.getFavoriteBooks())
     }
@@ -247,20 +249,19 @@ fun HomeScreen(
         favoriteBooks = repository.getFavoriteBooks()
     }
 
-    // Shelf 3: Libro que estás leyendo (con progreso)
+    // Libros que el usuario está leyendo actualmente (con progreso > 0)
     val continuingBooks = remember(allBooks, activeProfile) {
         allBooks.filter { it.progressPercent > 0 }
     }
 
-    // Dynamic background cover based on focused book
-    val backdropCoverBmp = rememberCoverImage(focusedBook?.coverUrl, authHeader)
-
-    // Current time
+    // Reloj en vivo
     var currentTime by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
         currentTime = sdf.format(Date())
     }
+
+    val heroBanner = homeCarteleraData.heroBanner ?: CuratorRepository.getOfflineHomeData().heroBanner!!
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -269,16 +270,17 @@ fun HomeScreen(
                 .background(BackgroundDark)
         ) {
             // ==========================================
-            // ZONA A: SUPERIOR CON BACKDROP Y DEGRADADO NEGRO
-            // SIN BARRA NEGRA DE TABS; SOLO RELOJ Y PERFIL FLOTANTE
+            // ZONA A: HERO BANNER 16:9 (BESTSELLER DEL MES)
+            // Branding oficial CalibroTV + Reloj + Perfil
             // ==========================================
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(0.38f)
+                    .fillMaxHeight(0.40f)
                     .background(BackgroundDark)
             ) {
-                // 1. Dynamic cover artwork backdrop
+                // 1. Dynamic 16:9 Backdrop Image from CMS
+                val backdropCoverBmp = rememberCoverImage(heroBanner.backdropUrl.ifBlank { heroBanner.coverUrl })
                 if (backdropCoverBmp != null) {
                     Image(
                         bitmap = backdropCoverBmp,
@@ -290,7 +292,7 @@ fun HomeScreen(
                     )
                 }
 
-                // 2. Black/Dark horizontal gradient overlay so text on left stays sharply legible
+                // 2. Horizontal gradient overlay (OLED black on left for sharp legibility)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -299,8 +301,8 @@ fun HomeScreen(
                                 colors = listOf(
                                     BackgroundDark,
                                     BackgroundDark.copy(alpha = 0.97f),
-                                    BackgroundDark.copy(alpha = 0.78f),
-                                    BackgroundDark.copy(alpha = 0.35f),
+                                    BackgroundDark.copy(alpha = 0.82f),
+                                    BackgroundDark.copy(alpha = 0.40f),
                                     Color.Transparent
                                 ),
                                 startX = 0f,
@@ -309,7 +311,7 @@ fun HomeScreen(
                         )
                 )
 
-                // 3. Black/Dark vertical gradient at bottom towards shelves
+                // 3. Vertical gradient towards shelves
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -324,7 +326,7 @@ fun HomeScreen(
                         )
                 )
 
-                // 4. FLOATING TOP-RIGHT OVERLAY: Clock & Profile on 100% Transparent Background (Section B)
+                // 4. FLOATING TOP-RIGHT OVERLAY: Reloj en vivo & Perfil de Usuario
                 Row(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -404,7 +406,7 @@ fun HomeScreen(
                     }
                 }
 
-                // 5. Drawer hint icon in top-left
+                // 5. BRANDING OFICIAL CALIBROTV & BOTÓN DEL MENÚ LATERAL
                 Row(
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -415,74 +417,92 @@ fun HomeScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Menu,
-                        contentDescription = "Menú",
+                        contentDescription = "Menú Lateral",
                         tint = AmberWarm,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                     Text(
-                        text = "BOOKSPREAD",
+                        text = "CALIBRO",
                         color = TextPrimary,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = "TV",
+                        color = AmberWarm,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Black,
                         letterSpacing = 1.sp
                     )
                 }
 
-                // 6. Hero Spotlight: Book info and Prominent Action Buttons (Section C)
+                // 6. HERO SPOTLIGHT: Portada, Sinopsis y Botones de Acción Inmediata
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = 40.dp)
+                        .padding(top = 44.dp)
                 ) {
-                    focusedBook?.let { book ->
-                        HomeHeroSection(
-                            book = book,
-                            authHeader = authHeader,
-                            isFavorite = repository.isFavorite(book.id),
-                            onToggleFavorite = { toggleFavorite(book) },
-                            onRead = { onBookSelected(book) },
-                            onDetails = {
-                                detailsBook = book
-                                showDetailsModal = true
+                    HomeHeroBanner(
+                        heroBanner = heroBanner,
+                        onReadSample = {
+                            val sampleUrl = heroBanner.sampleEpubUrl
+                            if (!sampleUrl.isNullOrBlank()) {
+                                isDownloadingCuratedBook = true
+                                coroutineScope.launch {
+                                    val heroCurated = CuratedBook(
+                                        id = heroBanner.id,
+                                        title = heroBanner.title,
+                                        author = heroBanner.author,
+                                        coverUrl = heroBanner.coverUrl,
+                                        summary = heroBanner.synopsis,
+                                        category = "Bestseller Destacado",
+                                        isPublicDomain = true,
+                                        publicDownloadUrl = sampleUrl
+                                    )
+                                    val res = CuratorRepository.downloadPublicDomainBook(context, heroCurated, repository)
+                                    isDownloadingCuratedBook = false
+                                    if (res.isSuccess && res.getOrNull() != null) {
+                                        onBookSelected(res.getOrNull()!!)
+                                    }
+                                }
+                            } else {
+                                selectedCuratedBook = CuratedBook(
+                                    id = heroBanner.id,
+                                    title = heroBanner.title,
+                                    author = heroBanner.author,
+                                    coverUrl = heroBanner.coverUrl,
+                                    summary = heroBanner.synopsis,
+                                    category = "Bestseller Destacado",
+                                    isPublicDomain = false,
+                                    affiliateQrUrl = heroBanner.affiliatePurchaseUrl
+                                )
                             }
-                        )
-                    }
+                        },
+                        onBuyQr = {
+                            selectedCuratedBook = CuratedBook(
+                                id = heroBanner.id,
+                                title = heroBanner.title,
+                                author = heroBanner.author,
+                                coverUrl = heroBanner.coverUrl,
+                                summary = heroBanner.synopsis,
+                                category = "Bestseller Destacado",
+                                isPublicDomain = false,
+                                affiliateQrUrl = heroBanner.affiliatePurchaseUrl
+                            )
+                        },
+                        onLeftAtBoundary = { isDrawerOpen = true }
+                    )
                 }
             }
 
             // ==========================================
-            // ZONA B: CHIPS / FILTROS COMPACTOS
-            // ==========================================
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(36.dp)
-                    .background(BackgroundDark)
-                    .padding(horizontal = 36.dp),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    itemsIndexed(filterTags) { index, tag ->
-                        val isFirst = index == 0
-                        HomeCapsuleChip(
-                            title = tag,
-                            icon = if (tag == "Todos") Icons.Default.Folder else Icons.Default.Sell,
-                            isSelected = selectedCategory == tag,
-                            isFirst = isFirst,
-                            onLeftAtBoundary = { isDrawerOpen = true },
-                            onClick = { selectedCategory = tag }
-                        )
-                    }
-                }
-            }
-
-            // ==========================================
-            // ZONA C: ESTANTERÍAS (SHELVES)
-            // FILA 1: LIBROS DE TU BIBLIOTECA (15 LIBROS + BOTÓN "VER MÁS")
-            // FILA 2: CONTINUAR LEYENDO (DEBAJO)
+            // ZONA B: CARRUSELES Y ESTANTERÍAS (SCROLL VERTICAL)
+            // 1. Continuar Leyendo (progreso activo)
+            // 2. Ofertas y Descuentos de Cartelera (con tags -45%, -30%)
+            // 3. Cartelera Dinámica por Personajes (CMS / Arquetipos)
+            // 4. Tus Libros Favoritos
+            // 5. Accesos Rápidos a Biblioteca y Memoria TV
             // ==========================================
             Box(
                 modifier = Modifier
@@ -499,66 +519,15 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(verticalScrollState)
-                            .padding(top = 4.dp, bottom = 80.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                            .padding(top = 8.dp, bottom = 60.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        if (allBooks.isEmpty()) {
-                            EmptyLibraryBanner(
-                                onNavigateToOpds = onNavigateToOpds,
-                                onLeftAtBoundary = { isDrawerOpen = true }
-                            )
-                        } else {
-                            // ----------------------------------------------------
-                            // Estantería 1: Biblioteca (15 títulos sincronizados) + Botón "Ver más"
-                            // ----------------------------------------------------
-                            HomeShelf(
-                                sectionTitle = "Biblioteca",
-                                icon = Icons.Default.MenuBook,
-                                books = recentBooks,
-                                authHeader = authHeader,
-                                showSeeMore = true,
-                                onSeeMore = onNavigateToLibrary,
-                                onLeftAtBoundary = { isDrawerOpen = true },
-                                isInteractive = !showDetailsModal && !showUserProfilesModal && !isDrawerOpen,
-                                onBookFocused = { focusedBook = it },
-                                onBookSelected = { book ->
-                                    detailsBook = book
-                                    showDetailsModal = true
-                                }
-                            )
-                        }
-
                         // ----------------------------------------------------
-                        // Estantería 2: Libros Favoritos del usuario activo
-                        // ----------------------------------------------------
-                        if (favoriteBooks.isNotEmpty()) {
-                            HomeShelf(
-                                sectionTitle = "Libros Favoritos",
-                                icon = Icons.Default.Star,
-                                books = favoriteBooks,
-                                authHeader = authHeader,
-                                showSeeMore = false,
-                                onSeeMore = {},
-                                onLeftAtBoundary = { isDrawerOpen = true },
-                                isInteractive = !showDetailsModal && !showUserProfilesModal && !isDrawerOpen,
-                                onBookFocused = { focusedBook = it },
-                                onBookSelected = { book ->
-                                    detailsBook = book
-                                    showDetailsModal = true
-                                }
-                            )
-                        } else {
-                            FavoriteEmptyShelf(
-                                onLeftAtBoundary = { isDrawerOpen = true }
-                            )
-                        }
-
-                        // ----------------------------------------------------
-                        // Estantería 3: Libro que estás leyendo (con progreso)
+                        // Carrusel 1: Continuar Leyendo (libros con progreso > 0)
                         // ----------------------------------------------------
                         if (continuingBooks.isNotEmpty()) {
                             HomeShelf(
-                                sectionTitle = "Libro que estás leyendo",
+                                sectionTitle = "Continuar Leyendo",
                                 icon = Icons.Default.History,
                                 books = continuingBooks,
                                 authHeader = authHeader,
@@ -566,16 +535,37 @@ fun HomeScreen(
                                 onSeeMore = {},
                                 onLeftAtBoundary = { isDrawerOpen = true },
                                 isInteractive = !showDetailsModal && !showUserProfilesModal && !isDrawerOpen,
-                                onBookFocused = { focusedBook = it },
+                                onBookFocused = {},
                                 onBookSelected = { book ->
-                                    detailsBook = book
-                                    showDetailsModal = true
+                                    onBookSelected(book)
                                 }
                             )
                         }
 
                         // ----------------------------------------------------
-                        // Cartelera Dinámica y Curaduría por Personajes
+                        // Carrusel 2: Ofertas y Descuentos Destacados (desde CMS)
+                        // ----------------------------------------------------
+                        if (homeCarteleraData.offers.isNotEmpty()) {
+                            HomeOffersRow(
+                                offers = homeCarteleraData.offers,
+                                onOfferSelected = { offer ->
+                                    selectedCuratedBook = CuratedBook(
+                                        id = offer.id,
+                                        title = offer.title,
+                                        author = offer.author,
+                                        coverUrl = offer.coverUrl,
+                                        summary = "Oferta especial de cartelera con descuento de ${offer.discountTag}.",
+                                        category = "Oferta ${offer.discountTag}",
+                                        isPublicDomain = false,
+                                        affiliateQrUrl = offer.affiliateUrl
+                                    )
+                                },
+                                onLeftAtBoundary = { isDrawerOpen = true }
+                            )
+                        }
+
+                        // ----------------------------------------------------
+                        // Carrusel 3: Cartelera Dinámica por Personajes / Arquetipos
                         // ----------------------------------------------------
                         curatorSections.forEach { section ->
                             CuratorRow(
@@ -584,6 +574,52 @@ fun HomeScreen(
                                     selectedCuratedBook = curatedBook
                                 },
                                 onLeftAtBoundary = { isDrawerOpen = true }
+                            )
+                        }
+
+                        // ----------------------------------------------------
+                        // Carrusel 4: Libros Favoritos del usuario activo
+                        // ----------------------------------------------------
+                        if (favoriteBooks.isNotEmpty()) {
+                            HomeShelf(
+                                sectionTitle = "Tus Libros Favoritos",
+                                icon = Icons.Default.Star,
+                                books = favoriteBooks,
+                                authHeader = authHeader,
+                                showSeeMore = false,
+                                onSeeMore = {},
+                                onLeftAtBoundary = { isDrawerOpen = true },
+                                isInteractive = !showDetailsModal && !showUserProfilesModal && !isDrawerOpen,
+                                onBookFocused = {},
+                                onBookSelected = { book ->
+                                    detailsBook = book
+                                    showDetailsModal = true
+                                }
+                            )
+                        }
+
+                        // ----------------------------------------------------
+                        // Accesos Rápidos: Explorar Catálogo Completo y Memoria TV
+                        // ----------------------------------------------------
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 36.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            HomeQuickAccessCard(
+                                title = "Explorar Biblioteca",
+                                subtitle = "Ver catálogo completo de libros con filtros y búsqueda",
+                                icon = Icons.Default.AutoStories,
+                                modifier = Modifier.weight(1f),
+                                onClick = onNavigateToLibrary
+                            )
+                            HomeQuickAccessCard(
+                                title = "Gestor de Memoria TV",
+                                subtitle = "Ver libros en almacenamiento de la TV y liberar espacio",
+                                icon = Icons.Default.Storage,
+                                modifier = Modifier.weight(1f),
+                                onClick = onNavigateToYourBooks
                             )
                         }
                     }
@@ -602,6 +638,7 @@ fun HomeScreen(
                 when (item) {
                     DrawerItem.HOME -> { /* Already here */ }
                     DrawerItem.BIBLIOTECA -> onNavigateToLibrary()
+                    DrawerItem.TUS_LIBROS -> onNavigateToYourBooks()
                     DrawerItem.IMPORTAR_WIFI -> onNavigateToWifiImport()
                     DrawerItem.USUARIOS -> showUserProfilesModal = true
                     DrawerItem.LECTOR_3D -> onNavigateToReader()
@@ -1571,7 +1608,7 @@ fun EmptyLibraryBanner(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = "Tu biblioteca BookSpread está lista",
+                        text = "Tu biblioteca CalibroTV está lista",
                         color = TextPrimary,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
@@ -1596,6 +1633,513 @@ fun EmptyLibraryBanner(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun HomeHeroBanner(
+    heroBanner: HeroBanner,
+    onReadSample: () -> Unit,
+    onBuyQr: () -> Unit,
+    onLeftAtBoundary: () -> Unit
+) {
+    val coverBmp = rememberCoverImage(heroBanner.coverUrl)
+    val readBtnFocusRequester = remember { FocusRequester() }
+    var isReadFocused by remember { mutableStateOf(false) }
+    var isBuyFocused by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 36.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(32.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Columna izquierda: Información del Bestseller y Acciones
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Badge Destacado
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(AmberWarm.copy(alpha = 0.2f))
+                    .border(1.dp, AmberWarm.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = "★ BESTSELLER DESTACADO DEL MES",
+                    color = AmberWarm,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Título Principal
+            Text(
+                text = heroBanner.title,
+                color = Color.White,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            // Autor y Tagline
+            Text(
+                text = heroBanner.author.ifBlank { "Autor Recomendado" },
+                color = AmberWarm,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+
+            if (heroBanner.tagline.isNotBlank()) {
+                Text(
+                    text = heroBanner.tagline,
+                    color = TextPrimary.copy(alpha = 0.85f),
+                    fontSize = 13.sp,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
+            // Sinopsis concisa
+            Text(
+                text = heroBanner.synopsis,
+                color = TextMuted,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Botones de acción rápida optimizados para D-pad de TV
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Botón 1: Muestra Gratis en 3D
+                Box(
+                    modifier = Modifier
+                        .focusRequester(readBtnFocusRequester)
+                        .scale(if (isReadFocused) 1.08f else 1.0f)
+                        .shadow(if (isReadFocused) 12.dp else 0.dp, RoundedCornerShape(10.dp), spotColor = AmberWarm)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isReadFocused) AmberWarm else SurfaceContainerHighest)
+                        .border(
+                            width = if (isReadFocused) 2.dp else 1.dp,
+                            color = if (isReadFocused) Color.White else AmberWarm.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .onFocusChanged { isReadFocused = it.isFocused }
+                        .onKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyDown) {
+                                when (event.key) {
+                                    Key.DirectionLeft -> {
+                                        onLeftAtBoundary()
+                                        true
+                                    }
+                                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                                        onReadSample()
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            } else false
+                        }
+                        .focusable()
+                        .clickable { onReadSample() }
+                        .padding(horizontal = 18.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoStories,
+                            contentDescription = null,
+                            tint = if (isReadFocused) Color(0xFF131315) else AmberWarm,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Muestra Gratis en 3D",
+                            color = if (isReadFocused) Color(0xFF131315) else TextPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Botón 2: Comprar en Móvil (QR)
+                Box(
+                    modifier = Modifier
+                        .scale(if (isBuyFocused) 1.08f else 1.0f)
+                        .shadow(if (isBuyFocused) 12.dp else 0.dp, RoundedCornerShape(10.dp), spotColor = AmberWarm)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isBuyFocused) AmberWarm else SurfaceContainer)
+                        .border(
+                            width = if (isBuyFocused) 2.dp else 1.dp,
+                            color = if (isBuyFocused) Color.White else Color(0xFF383842),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .onFocusChanged { isBuyFocused = it.isFocused }
+                        .onKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyDown) {
+                                when (event.key) {
+                                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                                        onBuyQr()
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            } else false
+                        }
+                        .focusable()
+                        .clickable { onBuyQr() }
+                        .padding(horizontal = 18.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.QrCodeScanner,
+                            contentDescription = null,
+                            tint = if (isBuyFocused) Color(0xFF131315) else TextPrimary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Comprar en Móvil (QR)",
+                            color = if (isBuyFocused) Color(0xFF131315) else TextPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        // Portada a la derecha con estilo 3D y sombra
+        Box(
+            modifier = Modifier
+                .width(130.dp)
+                .height(185.dp)
+                .shadow(16.dp, RoundedCornerShape(10.dp), spotColor = Color.Black)
+                .clip(RoundedCornerShape(10.dp))
+                .background(SurfaceRaised)
+                .border(1.5.dp, AmberWarm.copy(alpha = 0.5f), RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (coverBmp != null) {
+                Image(
+                    bitmap = coverBmp,
+                    contentDescription = heroBanner.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.MenuBook,
+                    contentDescription = null,
+                    tint = AmberWarm,
+                    modifier = Modifier.size(48.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeOffersRow(
+    offers: List<BookOffer>,
+    onOfferSelected: (BookOffer) -> Unit,
+    onLeftAtBoundary: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp)
+    ) {
+        // Cabecera de la fila de ofertas
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 36.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFE53935).copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Sell,
+                    contentDescription = null,
+                    tint = Color(0xFFFF5252),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Column {
+                Text(
+                    text = "Ofertas y Descuentos Destacados",
+                    color = TextPrimary,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Descuentos de cartelera válidos por tiempo limitado con entrega digital",
+                    color = TextMuted,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 36.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            itemsIndexed(offers, key = { _, o -> o.id }) { index, offer ->
+                HomeOfferCard(
+                    offer = offer,
+                    isFirst = index == 0,
+                    onClick = { onOfferSelected(offer) },
+                    onLeftAtBoundary = onLeftAtBoundary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeOfferCard(
+    offer: BookOffer,
+    isFirst: Boolean,
+    onClick: () -> Unit,
+    onLeftAtBoundary: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val coverBmp = rememberCoverImage(offer.coverUrl)
+
+    Column(
+        modifier = Modifier
+            .width(116.dp)
+            .scale(if (isFocused) 1.08f else 1.0f)
+            .shadow(if (isFocused) 14.dp else 2.dp, RoundedCornerShape(8.dp), spotColor = AmberWarm)
+            .clip(RoundedCornerShape(8.dp))
+            .background(SurfaceRaised)
+            .border(
+                width = if (isFocused) 2.5.dp else 1.dp,
+                color = if (isFocused) AmberWarm else Color(0xFF242428),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .onFocusChanged { isFocused = it.isFocused }
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    when (event.key) {
+                        Key.DirectionLeft -> {
+                            if (isFirst) {
+                                onLeftAtBoundary()
+                                true
+                            } else false
+                        }
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                            onClick()
+                            true
+                        }
+                        else -> false
+                    }
+                } else false
+            }
+            .focusable()
+            .clickable { onClick() }
+    ) {
+        // Portada con Badge de Descuento Superpuesto
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(152.dp)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color(0xFF22222A), Color(0xFF131316))
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (coverBmp != null) {
+                Image(
+                    bitmap = coverBmp,
+                    contentDescription = offer.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Sell,
+                        contentDescription = null,
+                        tint = AmberWarm,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = offer.title,
+                        color = TextPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // Badge de descuento (ej. -45%)
+            if (offer.discountTag.isNotBlank()) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(5.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color(0xFFE53935))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = offer.discountTag,
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+        }
+
+        // Título y Autor
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 7.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = offer.title,
+                color = if (isFocused) AmberWarm else TextPrimary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = offer.author,
+                color = TextMuted,
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeQuickAccessCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = modifier
+            .scale(if (isFocused) 1.03f else 1.0f)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (isFocused) SurfaceContainerHighest else SurfaceContainer)
+            .border(
+                width = if (isFocused) 2.dp else 1.dp,
+                color = if (isFocused) AmberWarm else Color(0xFF2E2E34),
+                shape = RoundedCornerShape(14.dp)
+            )
+            .onFocusChanged { isFocused = it.isFocused }
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    when (event.key) {
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                            onClick()
+                            true
+                        }
+                        else -> false
+                    }
+                } else false
+            }
+            .focusable()
+            .clickable { onClick() }
+            .padding(18.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(AmberWarm.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = AmberWarm,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = title,
+                    color = TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = subtitle,
+                    color = TextMuted,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ArrowForward,
+                contentDescription = null,
+                tint = if (isFocused) AmberWarm else TextMuted,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }

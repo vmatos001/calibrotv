@@ -95,3 +95,22 @@ data class HeroBanner(
     val sampleEpubUrl: String? = null,
     val affiliatePurchaseUrl: String? = null
 )
+
+/**
+ * Oferta comercial destacada en el carrusel de la Home.
+ */
+@Serializable
+data class BookOffer(
+    val id: String,
+    val title: String,
+    val author: String,
+    val coverUrl: String,
+    val discountTag: String,
+    val affiliateUrl: String
+)
+
+@Serializable
+data class HomeCarteleraData(
+    val heroBanner: HeroBanner? = null,
+    val offers: List<BookOffer> = emptyList()
+)

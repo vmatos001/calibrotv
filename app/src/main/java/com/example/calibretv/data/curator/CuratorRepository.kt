@@ -37,7 +37,9 @@ object CuratorRepository {
         return getOfflineCuratedSections()
     }
 
-    suspend fun fetchHeroBanner(cmsUrl: String = "http://192.168.1.89:4000"): HeroBanner? = withContext(Dispatchers.IO) {
+    private var cachedHomeData: HomeCarteleraData? = null
+
+    suspend fun fetchHomeCartelera(cmsUrl: String = "http://192.168.1.89:4000"): HomeCarteleraData = withContext(Dispatchers.IO) {
         try {
             val endpoint = if (cmsUrl.endsWith("/")) "${cmsUrl}api/v1/cartelera/home" else "$cmsUrl/api/v1/cartelera/home"
             val conn = URL(endpoint).openConnection() as HttpURLConnection
@@ -47,25 +49,87 @@ object CuratorRepository {
             conn.connect()
             if (conn.responseCode in 200..299) {
                 val json = org.json.JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
-                val hero = json.optJSONObject("hero_banner") ?: return@withContext null
-                val banner = HeroBanner(
-                    id = hero.optString("id", "main_hero"),
-                    title = hero.optString("title", ""),
-                    author = hero.optString("author", ""),
-                    tagline = hero.optString("tagline", ""),
-                    synopsis = hero.optString("synopsis", ""),
-                    backdropUrl = hero.optString("backdrop_url", ""),
-                    coverUrl = hero.optString("cover_url", ""),
-                    sampleEpubUrl = hero.optString("sample_epub_url").takeIf { it.isNotBlank() },
-                    affiliatePurchaseUrl = hero.optString("affiliate_purchase_url").takeIf { it.isNotBlank() }
-                )
-                cachedHeroBanner = banner
-                banner
-            } else null
+                val heroObj = json.optJSONObject("hero_banner")
+                val banner = if (heroObj != null) {
+                    HeroBanner(
+                        id = heroObj.optString("id", "main_hero"),
+                        title = heroObj.optString("title", ""),
+                        author = heroObj.optString("author", ""),
+                        tagline = heroObj.optString("tagline", ""),
+                        synopsis = heroObj.optString("synopsis", ""),
+                        backdropUrl = heroObj.optString("backdrop_url", ""),
+                        coverUrl = heroObj.optString("cover_url", ""),
+                        sampleEpubUrl = heroObj.optString("sample_epub_url").takeIf { it.isNotBlank() },
+                        affiliatePurchaseUrl = heroObj.optString("affiliate_purchase_url").takeIf { it.isNotBlank() }
+                    )
+                } else null
+
+                val offersList = mutableListOf<BookOffer>()
+                val offersArr = json.optJSONArray("offers_carousel")
+                if (offersArr != null) {
+                    for (i in 0 until offersArr.length()) {
+                        val o = offersArr.getJSONObject(i)
+                        offersList.add(
+                            BookOffer(
+                                id = o.optString("id", "offer_$i"),
+                                title = o.optString("title", ""),
+                                author = o.optString("author", ""),
+                                coverUrl = o.optString("cover_url", ""),
+                                discountTag = o.optString("discount_tag", "-30%"),
+                                affiliateUrl = o.optString("affiliate_url", "")
+                            )
+                        )
+                    }
+                }
+
+                val data = HomeCarteleraData(heroBanner = banner, offers = offersList)
+                cachedHomeData = data
+                data
+            } else {
+                cachedHomeData ?: getOfflineHomeData()
+            }
         } catch (e: Exception) {
-            Log.d(TAG, "Hero banner fetch failed or offline: ${e.message}")
-            cachedHeroBanner
+            Log.d(TAG, "Home cartelera fetch failed or offline: ${e.message}")
+            cachedHomeData ?: getOfflineHomeData()
         }
+    }
+
+    fun getOfflineHomeData(): HomeCarteleraData {
+        return HomeCarteleraData(
+            heroBanner = HeroBanner(
+                id = "main_hero_offline",
+                title = "El Problema de los Tres Cuerpos",
+                author = "Cixin Liu",
+                tagline = "El fenómeno mundial de la ciencia ficción que desafía las leyes del cosmos",
+                synopsis = "Durante la Revolución Cultural china, una señal militar secreta viaja al espacio exterior desatando una conspiración cuántica global sin precedentes.",
+                backdropUrl = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1920&auto=format&fit=crop",
+                coverUrl = "https://images-na.ssl-images-amazon.com/images/S/compressed.photo.goodreads.com/books/1415375420i/20518872.jpg",
+                sampleEpubUrl = "https://standardebooks.org/ebooks/h-g-wells/the-war-of-the-worlds/downloads/h-g-wells_the-war-of-the-worlds.epub",
+                affiliatePurchaseUrl = "https://www.amazon.es/dp/8466659730?tag=calibrotv-21"
+            ),
+            offers = listOf(
+                BookOffer(
+                    id = "off_1",
+                    title = "Dune (Edición Especial 60º Aniversario)",
+                    author = "Frank Herbert",
+                    coverUrl = "https://images-na.ssl-images-amazon.com/images/S/compressed.photo.goodreads.com/books/1555447414i/44767458.jpg",
+                    discountTag = "-45%",
+                    affiliateUrl = "https://www.amazon.es/dp/8401025553?tag=calibrotv-21"
+                ),
+                BookOffer(
+                    id = "off_2",
+                    title = "Klara y el Sol",
+                    author = "Kazuo Ishiguro",
+                    coverUrl = "https://images-na.ssl-images-amazon.com/images/S/compressed.photo.goodreads.com/books/1603206535i/54120408.jpg",
+                    discountTag = "-30%",
+                    affiliateUrl = "https://www.amazon.es/dp/8433999242?tag=calibrotv-21"
+                )
+            )
+        )
+    }
+
+    suspend fun fetchHeroBanner(cmsUrl: String = "http://192.168.1.89:4000"): HeroBanner? {
+        return fetchHomeCartelera(cmsUrl).heroBanner
     }
 
     suspend fun syncWithCms(cmsUrl: String = "http://192.168.1.89:4000"): Boolean = withContext(Dispatchers.IO) {
@@ -241,7 +305,7 @@ object CuratorRepository {
                         summary = "El tren más lujoso del mundo queda atrapado por la nieve. Un pasajero yace apuñalado y Hércules Poirot debe descubrir al culpable antes de que vuelva a actuar.",
                         category = "Novela Policial",
                         isPublicDomain = false,
-                        affiliateQrUrl = "https://www.amazon.es/dp/8467045437?tag=bookspread-21",
+                        affiliateQrUrl = "https://www.amazon.es/dp/8467045437?tag=calibrotv-21",
                         approximatePrice = "10,95 €",
                         year = "1934"
                     )
@@ -285,7 +349,7 @@ object CuratorRepository {
                         summary = "En el planeta desértico Arrakis, la codicia por la especia melange desata una guerra dinástica que forjará el destino del joven Paul Atreides.",
                         category = "Ciencia Ficción Épica",
                         isPublicDomain = false,
-                        affiliateQrUrl = "https://www.amazon.es/dp/8466353774?tag=bookspread-21",
+                        affiliateQrUrl = "https://www.amazon.es/dp/8466353774?tag=calibrotv-21",
                         approximatePrice = "12,95 €",
                         year = "1965"
                     )
@@ -329,7 +393,7 @@ object CuratorRepository {
                         summary = "Un recorrido magistral por la mente humana a través del Sistema 1 (rápido e intuitivo) y el Sistema 2 (lento y reflexivo) por el Premio Nobel de Economía.",
                         category = "Psicología y Decisión",
                         isPublicDomain = false,
-                        affiliateQrUrl = "https://www.amazon.es/dp/8483068613?tag=bookspread-21",
+                        affiliateQrUrl = "https://www.amazon.es/dp/8483068613?tag=calibrotv-21",
                         approximatePrice = "19,90 €",
                         year = "2011"
                     )
@@ -386,10 +450,10 @@ object CuratorRepository {
             if (!downloaded) {
                 val noticeBook = EpubParser.getNoticeBook(
                     bookTitle = book.title,
-                    message = "Obra maestra de dominio público («${book.title}» por ${book.author}). ${book.summary}\n\nDisfruta de esta edición especial en tu BookSpread."
+                    message = "Obra maestra de dominio público («${book.title}» por ${book.author}). ${book.summary}\n\nDisfruta de esta edición especial en tu CalibroTV."
                 )
                 // Guardar como marcador de posición
-                destFile.writeText("BookSpread Public Edition: ${book.title}\n${book.author}\n${book.summary}")
+                destFile.writeText("CalibroTV Public Edition: ${book.title}\n${book.author}\n${book.summary}")
             }
 
             val newBook = Book(
