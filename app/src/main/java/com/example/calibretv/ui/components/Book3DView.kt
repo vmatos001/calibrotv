@@ -44,15 +44,16 @@ import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.TextPrimary
 
 /**
- * Editorial 3D Book View inspired by Adobe Stock 3D hardcover mockup & Apple Books.
+ * Editorial 3D Book View based on physical closed-book mockup sketch:
  *
- * - Standby (!isFocused): Renders as a true 3D physical hardcover book:
- *   Visible rounded spine on the left edge with volume/lighting, and front cover angled
- *   in perspective (rotationY = -18f) with hinge reflection, page stack edge, and shelf drop shadow.
+ * - Standby (!isFocused): The book stands at a 3D perspective angle (rotationY = -14f).
+ *   The front cover preserves 100% of the downloaded artwork (no artificial spine crop).
+ *   Along the right edge, the physical closed book's page block is visible (fore-edge paper
+ *   pages between the front and back cover boards).
  * - Focused (isFocused): Smoothly animates into full forward-facing view (rotationY = 0f),
- *   spine folds away, front cover expands, scales gracefully (scale = 1.08f) with warm focus highlight.
- * - Safe for TV GPU: Avoids hardware elevation crashes on Fire TV OS by using clean Compose
- *   drawing primitives (gradients, borders, and scale) without RenderNode shadow bugs.
+ *   page block folds behind, scales up (1.08f) with elevated floor shadow.
+ * - Clean Selection: NO yellow selection outline around the book; the focused state is
+ *   indicated naturally by front-facing orientation, scale, and shelf elevation.
  */
 @Composable
 fun Book3DView(
@@ -66,18 +67,17 @@ fun Book3DView(
     badgeColor: Color = AmberWarm,
     enable3DStandby: Boolean = true
 ) {
-    // Proportional physical spine width in perspective (e.g. 14dp for 114dp book, 19dp for 158dp banner)
-    val baseSpineWidth = (width.value * 0.125f).dp.coerceIn(13.dp, 20.dp)
+    // Proportional closed-book page block width (stack of pages visible on the edge)
+    val basePageBlockWidth = (width.value * 0.09f).dp.coerceIn(9.dp, 15.dp)
 
-    // Animations with smooth easing
-    val spineWidth by animateDpAsState(
-        targetValue = if (isFocused || !enable3DStandby) 0.dp else baseSpineWidth,
+    val pageBlockWidth by animateDpAsState(
+        targetValue = if (isFocused || !enable3DStandby) 0.dp else basePageBlockWidth,
         animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-        label = "bookSpineWidth"
+        label = "pageBlockWidth"
     )
 
     val rotationY by animateFloatAsState(
-        targetValue = if (isFocused || !enable3DStandby) 0f else -18f,
+        targetValue = if (isFocused || !enable3DStandby) 0f else -14f,
         animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
         label = "bookRotationY"
     )
@@ -90,11 +90,11 @@ fun Book3DView(
 
     Box(
         modifier = modifier
-            .width(width)
+            .width(width + (if (enable3DStandby && !isFocused) basePageBlockWidth else 0.dp))
             .height(height + 10.dp),
         contentAlignment = Alignment.TopCenter
     ) {
-        // 1. Shelf Floor Drop Shadow (Soft oval contact shadow on the shelf)
+        // 1. Natural Shelf Floor Drop Shadow (Soft contact shadow under the book base)
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -103,134 +103,43 @@ fun Book3DView(
                 .offset(y = (-2).dp)
                 .graphicsLayer {
                     this.scaleX = scale
-                    this.alpha = if (isFocused) 0.90f else 0.55f
+                    this.alpha = if (isFocused) 0.85f else 0.50f
                 }
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
                             Color.Black.copy(alpha = 0.85f),
-                            Color.Black.copy(alpha = 0.35f),
+                            Color.Black.copy(alpha = 0.30f),
                             Color.Transparent
                         )
                     )
                 )
         )
 
-        // 2. Focused Ambient Warm Halo (Soft golden glow behind the book when selected)
-        if (isFocused) {
-            Box(
-                modifier = Modifier
-                    .width(width)
-                    .height(height)
-                    .graphicsLayer {
-                        this.scaleX = scale * 1.06f
-                        this.scaleY = scale * 1.06f
-                    }
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                AmberWarm.copy(alpha = 0.30f),
-                                Color.Transparent
-                            )
-                        ),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-            )
-        }
-
-        // 3. Physical 3D Book Assembly (Spine + Front Cover)
+        // 2. Physical 3D Book Assembly (Front Cover + Closed Pages Fore-edge)
         Row(
             modifier = Modifier
-                .width(width)
                 .height(height)
                 .graphicsLayer {
                     this.scaleX = scale
                     this.scaleY = scale
-                    // NO shadowElevation or clip=true here: prevents Fire OS 7 Mali GPU render crash
+                    this.rotationY = rotationY
+                    this.cameraDistance = 18f * density
+                    this.transformOrigin = TransformOrigin(0.08f, 0.5f)
                 },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // A. Physical 3D Hardcover Spine (Visible in standby perspective, folds away on focus)
-            if (spineWidth > 0.5.dp) {
-                Box(
-                    modifier = Modifier
-                        .width(spineWidth)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(topStart = 3.dp, bottomStart = 3.dp, topEnd = 0.dp, bottomEnd = 0.dp))
-                        .background(Color(0xFF141416))
-                ) {
-                    if (coverBitmap != null) {
-                        Image(
-                            bitmap = coverBitmap,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            alignment = Alignment.CenterStart,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0xFF221C16))
-                        )
-                    }
-
-                    // Cylindrical lighting overlay: curved round highlight + hinge crease
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(
-                                        Color.Black.copy(alpha = 0.55f), // Left edge curvature shadow
-                                        Color.White.copy(alpha = 0.30f), // Cylindrical highlight streak
-                                        Color.Black.copy(alpha = 0.22f), // Mid falloff
-                                        Color.Black.copy(alpha = 0.75f)  // Deep hinge groove seam
-                                    )
-                                )
-                            )
-                    )
-
-                    // Headband details (cabezada superior e inferior del libro)
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth()
-                            .height(2.5.dp)
-                            .background(Color(0xFFE8E5DD).copy(alpha = 0.45f))
-                    )
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(2.5.dp)
-                            .background(Color(0xFFE8E5DD).copy(alpha = 0.45f))
-                    )
-                }
-            }
-
-            // B. Front Cover (Rotates in 3D perspective, smoothly faces forward on focus)
-            val coverShape = if (spineWidth > 1.dp) {
-                RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = 5.dp, bottomEnd = 5.dp)
-            } else {
-                RoundedCornerShape(5.dp)
-            }
-
+            // A. Front Cover: 100% of cover art, completely uncropped
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .width(width)
                     .fillMaxHeight()
-                    .graphicsLayer {
-                        this.rotationY = rotationY
-                        this.cameraDistance = 16f * density
-                        this.transformOrigin = TransformOrigin(0f, 0.5f)
-                    }
-                    .clip(coverShape)
+                    .clip(RoundedCornerShape(3.dp))
                     .background(Color(0xFF18181D))
                     .border(
-                        width = if (isFocused) 2.dp else 0.5.dp,
-                        color = if (isFocused) AmberWarm else Color.White.copy(alpha = 0.16f),
-                        shape = coverShape
+                        width = 0.5.dp,
+                        color = Color.White.copy(alpha = if (isFocused) 0.18f else 0.08f),
+                        shape = RoundedCornerShape(3.dp)
                     )
             ) {
                 if (coverBitmap != null) {
@@ -241,7 +150,7 @@ fun Book3DView(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    // Elegant Editorial Fallback
+                    // Editorial Fallback Placeholder
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -277,43 +186,26 @@ fun Book3DView(
                     }
                 }
 
-                // Front Cover Hinge Lighting Reflection (Next to the spine crease)
+                // Left spine-hinge shadow overlay (creates the appearance of a bound spine on the left edge)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
                             Brush.horizontalGradient(
                                 colors = listOf(
-                                    Color.Black.copy(alpha = 0.35f),  // Hinge groove shade
-                                    Color.White.copy(alpha = 0.24f),  // Hinge highlight reflection
-                                    Color.Transparent,                // Smooth blend into cover art
+                                    Color.Black.copy(alpha = 0.35f), // Left crease
+                                    Color.White.copy(alpha = 0.12f), // Hinge highlight
                                     Color.Transparent,
-                                    Color.Black.copy(alpha = 0.20f)   // Right edge subtle vignette
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.15f)  // Soft right edge shade
                                 ),
                                 startX = 0f,
-                                endX = 160f
+                                endX = 120f
                             )
                         )
                 )
 
-                // Page Stack Edge (Right paper block thickness)
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .width(3.dp)
-                        .fillMaxHeight()
-                        .background(
-                            Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color(0xFFE8E5DD).copy(alpha = 0.25f),
-                                    Color(0xFFC8C4B8).copy(alpha = 0.40f)
-                                )
-                            )
-                        )
-                )
-
-                // Optional Badge (e.g. "GRATIS", "-45%", "BESTSELLER")
+                // Optional Discount / Bestseller Badge
                 if (!badgeText.isNullOrBlank()) {
                     Box(
                         modifier = Modifier
@@ -332,6 +224,74 @@ fun Book3DView(
                             letterSpacing = 0.5.sp
                         )
                     }
+                }
+            }
+
+            // B. Closed Pages Block (Visible in standby, tucks behind on focus)
+            if (pageBlockWidth > 0.5.dp) {
+                Box(
+                    modifier = Modifier
+                        .width(pageBlockWidth)
+                        .fillMaxHeight()
+                        .offset(x = (-1).dp)
+                ) {
+                    // Top hardcover board lip (ceja de la tapa)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .fillMaxWidth()
+                            .height(2.5.dp)
+                            .background(Color(0xFF26262B))
+                    )
+
+                    // Stack of closed paper pages (warm ivory paper block with page lines)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight()
+                            .padding(vertical = 2.5.dp)
+                            .clip(RoundedCornerShape(topEnd = 1.dp, bottomEnd = 1.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color(0xFFBAB5A8), // Inner shadow near the front cover board
+                                        Color(0xFFF7F4EB), // Warm paper sheen
+                                        Color(0xFFDFD9CB), // Page block body
+                                        Color(0xFF26262B)  // Back cover board rim
+                                    )
+                                )
+                            )
+                    ) {
+                        // Subtle horizontal paper sheet striations
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.07f),
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = 0.07f),
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = 0.07f),
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = 0.07f),
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = 0.07f)
+                                        )
+                                    )
+                                )
+                        )
+                    }
+
+                    // Bottom hardcover board lip (ceja inferior de la tapa)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .height(2.5.dp)
+                            .background(Color(0xFF26262B))
+                    )
                 }
             }
         }
