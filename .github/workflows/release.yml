@@ -45,7 +45,7 @@ jobs:
             TAG="v2.0"
           fi
           mkdir -p release_assets
-          cp app/build/outputs/apk/release/app-release-unsigned.apk "release_assets/CalibroTV-${TAG}.apk" || cp app/build/outputs/apk/release/*.apk "release_assets/CalibroTV-${TAG}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "release_assets/CalibroTV-${TAG}.apk" || cp app/build/outputs/apk/release/*.apk "release_assets/CalibroTV-${TAG}.apk"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
