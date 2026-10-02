@@ -228,6 +228,9 @@ fun MainNavigation() {
                     onOpenOpds = {
                         backStack.add(ServerNavKey)
                     },
+                    onRunSetupWizard = {
+                        backStack.add(SetupWizardNavKey)
+                    },
                     onSaved = {
                         backStack.removeLastOrNull()
                     }

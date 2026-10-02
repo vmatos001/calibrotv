@@ -41,6 +41,10 @@ class WifiImportServer(private val context: Context, private val repository: Boo
         private set
 
     @Volatile
+    var activePort: Int = 8080
+        private set
+
+    @Volatile
     var connectedClientsCount: Int = 0
         private set
 
@@ -60,51 +64,101 @@ class WifiImportServer(private val context: Context, private val repository: Boo
     }
 
     fun getLocalIpAddress(): String {
+        // 1. Prioridad: Consultar directamente WifiManager en Android
+        try {
+            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+            val ipInt = wifiManager?.connectionInfo?.ipAddress ?: 0
+            if (ipInt != 0) {
+                val ipStr = String.format(
+                    java.util.Locale.US,
+                    "%d.%d.%d.%d",
+                    (ipInt and 0xff),
+                    (ipInt shr 8 and 0xff),
+                    (ipInt shr 16 and 0xff),
+                    (ipInt shr 24 and 0xff)
+                )
+                if (!ipStr.startsWith("0.") && !ipStr.startsWith("127.") && !ipStr.startsWith("192.168.49.")) {
+                    return ipStr
+                }
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "WifiManager fallback: ${e.message}")
+        }
+
+        // 2. Escaneo inteligente de interfaces de red excluyendo subredes virtuales o p2p
         try {
             val interfaces = Collections.list(NetworkInterface.getNetworkInterfaces())
-            for (intf in interfaces) {
+            val prioritized = interfaces.sortedByDescending {
+                val name = it.name.lowercase()
+                when {
+                    name.startsWith("wlan") -> 3
+                    name.startsWith("eth") -> 2
+                    !name.contains("p2p") && !name.contains("dummy") && !name.contains("tun") -> 1
+                    else -> 0
+                }
+            }
+
+            for (intf in prioritized) {
+                val name = intf.name.lowercase()
+                if (name.contains("p2p") || name.contains("dummy") || name.contains("tun")) continue
+                if (!intf.isUp || intf.isLoopback) continue
+
                 val addrs = Collections.list(intf.inetAddresses)
                 for (addr in addrs) {
-                    if (!addr.isLoopbackAddress && addr is InetAddress) {
+                    if (addr is java.net.Inet4Address && !addr.isLoopbackAddress && !addr.isLinkLocalAddress) {
                         val host = addr.hostAddress ?: ""
-                        if (host.startsWith("192.168.") || host.startsWith("10.") || host.startsWith("172.")) {
+                        if (host.startsWith("192.168.49.")) continue // Omitir subred de Wi-Fi Direct
+                        if (host.isNotBlank() && !host.startsWith("127.")) {
                             return host
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error obtaining IP", e)
+            Log.e(TAG, "Error obtaining IP from NetworkInterfaces", e)
         }
         return "192.168.1.100"
     }
 
-    fun startServer(port: Int = 8080): Boolean {
-        if (isRunning) return true
-        return try {
-            serverSocket = ServerSocket(port)
-            isRunning = true
-            Log.d(TAG, "Socket Server started on port $port")
+    fun startServer(preferredPort: Int = 8080): Boolean {
+        if (isRunning && serverSocket != null && !serverSocket!!.isClosed) return true
+        stopServer()
 
-            CoroutineScope(Dispatchers.IO).launch {
-                while (isRunning) {
-                    try {
-                        val clientSocket = serverSocket?.accept() ?: break
-                        connectedClientsCount++
-                        launch {
-                            handleClient(clientSocket)
-                        }
-                    } catch (e: Exception) {
-                        if (!isRunning) break
+        val candidatePorts = linkedSetOf(preferredPort, 8080, 8088, 8888, 9090, 8081)
+        for (port in candidatePorts) {
+            try {
+                val socket = ServerSocket()
+                socket.reuseAddress = true
+                socket.bind(java.net.InetSocketAddress(port))
+                serverSocket = socket
+                activePort = port
+                isRunning = true
+                Log.d(TAG, "Socket Server started successfully on port $activePort")
+                break
+            } catch (e: Exception) {
+                Log.w(TAG, "Port $port unavailable: ${e.message}")
+            }
+        }
+
+        if (!isRunning || serverSocket == null) {
+            Log.e(TAG, "Failed to bind server on any candidate port")
+            return false
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            while (isRunning) {
+                try {
+                    val clientSocket = serverSocket?.accept() ?: break
+                    connectedClientsCount++
+                    launch {
+                        handleClient(clientSocket)
                     }
+                } catch (e: Exception) {
+                    if (!isRunning) break
                 }
             }
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Error starting ServerSocket", e)
-            isRunning = false
-            false
         }
+        return true
     }
 
     fun stopServer() {
@@ -120,10 +174,30 @@ class WifiImportServer(private val context: Context, private val repository: Boo
             socket.use { s ->
                 val input = s.getInputStream()
                 val output = s.getOutputStream()
-                val reader = BufferedReader(InputStreamReader(input, Charsets.UTF_8))
 
-                val requestLine = reader.readLine() ?: return@withContext
-                val tokens = requestLine.split(" ")
+                // Lectura byte-a-byte de cabeceras HTTP para NO perder ningún byte del cuerpo binario
+                val headerBytes = java.io.ByteArrayOutputStream()
+                var match = 0
+                while (true) {
+                    val b = input.read()
+                    if (b == -1) break
+                    headerBytes.write(b)
+                    if (b == '\r'.code && (match == 0 || match == 2)) {
+                        match++
+                    } else if (b == '\n'.code && (match == 1 || match == 3)) {
+                        match++
+                        if (match == 4) break
+                    } else {
+                        match = if (b == '\r'.code) 1 else 0
+                    }
+                    if (headerBytes.size() > 65536) break
+                }
+
+                val headerStr = headerBytes.toString("UTF-8")
+                val lines = headerStr.split("\r\n")
+                if (lines.isEmpty() || lines[0].isBlank()) return@withContext
+
+                val tokens = lines[0].split(" ")
                 if (tokens.size < 2) return@withContext
 
                 val method = tokens[0].uppercase()
@@ -133,13 +207,11 @@ class WifiImportServer(private val context: Context, private val repository: Boo
                 val queryParams = parseQueryParams(queryString)
 
                 val headers = mutableMapOf<String, String>()
-                var line: String?
-                while (reader.readLine().also { line = it } != null) {
-                    val headerLine = line ?: break
-                    if (headerLine.isBlank()) break
-                    val parts = headerLine.split(":", limit = 2)
-                    if (parts.size == 2) {
-                        headers[parts[0].trim().lowercase()] = parts[1].trim()
+                for (i in 1 until lines.size) {
+                    val hLine = lines[i]
+                    val idx = hLine.indexOf(":")
+                    if (idx > 0) {
+                        headers[hLine.substring(0, idx).trim().lowercase()] = hLine.substring(idx + 1).trim()
                     }
                 }
 
@@ -151,14 +223,14 @@ class WifiImportServer(private val context: Context, private val repository: Boo
                     }
                     (method == "POST") && (path == "/note" || path == "/api/note") -> {
                         val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
-                        val bodyChars = CharArray(contentLength)
+                        val bodyBytes = ByteArray(contentLength)
                         var readTotal = 0
                         while (readTotal < contentLength) {
-                            val r = reader.read(bodyChars, readTotal, contentLength - readTotal)
+                            val r = input.read(bodyBytes, readTotal, contentLength - readTotal)
                             if (r == -1) break
                             readTotal += r
                         }
-                        val body = String(bodyChars, 0, readTotal)
+                        val body = String(bodyBytes, 0, readTotal, Charsets.UTF_8)
                         val formParams = parseQueryParams(body)
                         val bookId = formParams["bookId"] ?: queryParams["bookId"] ?: ""
                         val profileId = formParams["profileId"] ?: queryParams["profileId"] ?: ""
@@ -180,7 +252,8 @@ class WifiImportServer(private val context: Context, private val repository: Boo
                     method == "POST" && path.startsWith("/upload") -> {
                         val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
                         val contentType = headers["content-type"] ?: ""
-                        handleFileUpload(input, output, contentLength, contentType)
+                        val filename = queryParams["filename"]
+                        handleFileUpload(input, output, contentLength, contentType, filename)
                     }
                     else -> {
                         serveMainPage(output)
@@ -537,38 +610,109 @@ class WifiImportServer(private val context: Context, private val repository: Boo
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>BookSpread — Importar Libro por WiFi</title>
+                <title>CalibroTV — Importador WiFi</title>
                 <style>
-                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0C0A09; color: #F7F4EE; text-align: center; padding: 24px; margin: 0; }
-                    .card { max-width: 480px; margin: 20px auto; background: #181513; border-radius: 16px; padding: 28px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); border: 1px solid #423419; }
-                    h1 { color: #C5A059; font-size: 24px; margin-bottom: 8px; letter-spacing: 1px; }
-                    p { color: #A8A29E; font-size: 14px; line-height: 1.5; }
-                    .drop-zone { border: 2px dashed #C5A059; border-radius: 12px; padding: 32px 16px; margin: 20px 0; background: rgba(197, 160, 89, 0.06); cursor: pointer; }
+                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0A0A0A; color: #F0F0F0; text-align: center; padding: 24px 16px; margin: 0; }
+                    .card { max-width: 480px; margin: 20px auto; background: #141416; border-radius: 16px; padding: 28px; box-shadow: 0 8px 30px rgba(0,0,0,0.8); border: 1.5px solid #FFA000; }
+                    .logo { font-size: 30px; font-weight: 900; color: #FFA000; letter-spacing: 1px; margin-bottom: 6px; }
+                    .tagline { color: #A0A0A0; font-size: 14px; margin-bottom: 24px; line-height: 1.4; }
+                    .drop-zone { border: 2px dashed #FFA000; border-radius: 14px; padding: 32px 16px; margin: 20px 0; background: rgba(255, 160, 0, 0.05); cursor: pointer; transition: 0.2s; }
+                    .drop-zone:hover { background: rgba(255, 160, 0, 0.12); }
                     input[type="file"] { display: none; }
-                    .btn { background: #C5A059; color: #0C0A09; border: none; padding: 14px 28px; font-size: 16px; font-weight: bold; border-radius: 24px; cursor: pointer; width: 100%; margin-top: 12px; }
-                    .btn:hover { background: #D4AF37; }
-                    .status { margin-top: 16px; font-weight: bold; color: #C5A059; }
+                    .btn { background: #FFA000; color: #101010; border: none; padding: 14px 28px; font-size: 16px; font-weight: bold; border-radius: 24px; cursor: pointer; width: 100%; margin-top: 12px; }
+                    .btn:hover { background: #FFB300; }
+                    .progress-box { display: none; margin-top: 20px; }
+                    .progress-bar-bg { width: 100%; height: 12px; background: #262626; border-radius: 6px; overflow: hidden; margin-top: 8px; }
+                    .progress-bar { width: 0%; height: 100%; background: #FFA000; transition: width 0.15s; }
+                    .status { margin-top: 16px; font-weight: bold; font-size: 14px; }
+                    .footer { margin-top: 24px; color: #666; font-size: 12px; }
                 </style>
             </head>
             <body>
                 <div class="card">
-                    <h1>📖 BookSpread</h1>
-                    <p>Sube libros (.epub, .pdf) o cómics (.cbz / .cbr) directamente a tu televisor.</p>
-                    <form action="/upload" method="post" enctype="multipart/form-data" id="uploadForm">
-                        <div class="drop-zone" onclick="document.getElementById('fileInput').click()">
-                            <p id="dropText">📁 Haz clic aquí para seleccionar tu archivo EPUB / PDF / CBZ</p>
-                            <input type="file" name="file" id="fileInput" accept=".epub,.pdf,.cbz,.cbr" onchange="fileSelected()">
-                        </div>
-                        <button type="submit" class="btn">🚀 Enviar a BookSpread</button>
-                    </form>
+                    <div class="logo">📖 CALIBROTV</div>
+                    <div class="tagline">Transfiere libros (.epub, .pdf) o cómics (.cbz, .cbr) directamente a tu televisor por WiFi local.</div>
+                    <div class="drop-zone" onclick="document.getElementById('fileInput').click()" id="dropZone">
+                        <p id="dropText">📁 Pulsa aquí para elegir tu archivo o arrástralo a este cuadro</p>
+                        <input type="file" id="fileInput" accept=".epub,.pdf,.cbz,.cbr">
+                    </div>
+                    <div class="progress-box" id="progressBox">
+                        <div id="progressText" style="color: #FFA000; font-size: 13px;">Subiendo... 0%</div>
+                        <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+                    </div>
+                    <button type="button" class="btn" id="uploadBtn" onclick="startUpload()">🚀 Enviar a CalibroTV</button>
                     <div class="status" id="statusMsg"></div>
+                    <div class="footer">Sincronización directa vía red local WiFi</div>
                 </div>
                 <script>
-                    function fileSelected() {
-                        const fi = document.getElementById('fileInput');
-                        if (fi.files.length > 0) {
-                            document.getElementById('dropText').innerText = "📄 " + fi.files[0].name;
+                    const fileInput = document.getElementById('fileInput');
+                    const dropText = document.getElementById('dropText');
+                    const dropZone = document.getElementById('dropZone');
+                    const progressBox = document.getElementById('progressBox');
+                    const progressBar = document.getElementById('progressBar');
+                    const progressText = document.getElementById('progressText');
+                    const statusMsg = document.getElementById('statusMsg');
+                    const uploadBtn = document.getElementById('uploadBtn');
+
+                    fileInput.addEventListener('change', () => {
+                        if (fileInput.files.length > 0) {
+                            dropText.innerText = "📄 " + fileInput.files[0].name;
                         }
+                    });
+
+                    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background = 'rgba(255,160,0,0.18)'; });
+                    dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.style.background = 'rgba(255,160,0,0.05)'; });
+                    dropZone.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        dropZone.style.background = 'rgba(255,160,0,0.05)';
+                        if (e.dataTransfer.files.length > 0) {
+                            fileInput.files = e.dataTransfer.files;
+                            dropText.innerText = "📄 " + fileInput.files[0].name;
+                        }
+                    });
+
+                    function startUpload() {
+                        if (!fileInput.files || fileInput.files.length === 0) {
+                            alert("Por favor selecciona primero un archivo EPUB, PDF o CBZ.");
+                            return;
+                        }
+                        const file = fileInput.files[0];
+                        uploadBtn.disabled = true;
+                        uploadBtn.style.opacity = '0.5';
+                        progressBox.style.display = 'block';
+                        statusMsg.innerHTML = "Enviando " + file.name + "...";
+
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', '/upload?filename=' + encodeURIComponent(file.name), true);
+                        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+
+                        xhr.upload.onprogress = (e) => {
+                            if (e.lengthComputable) {
+                                const pct = Math.round((e.loaded / e.total) * 100);
+                                progressBar.style.width = pct + '%';
+                                progressText.innerText = "Subiendo... " + pct + "%";
+                            }
+                        };
+
+                        xhr.onload = () => {
+                            uploadBtn.disabled = false;
+                            uploadBtn.style.opacity = '1';
+                            if (xhr.status === 200) {
+                                progressBar.style.width = '100%';
+                                progressText.innerText = "¡Completado 100%!";
+                                statusMsg.innerHTML = "<span style='color: #4CAF50;'>✅ ¡" + file.name + " transferido con éxito! Ya puedes abrirlo en tu TV.</span>";
+                            } else {
+                                statusMsg.innerHTML = "<span style='color: #FF5252;'>❌ Error del servidor al guardar el archivo.</span>";
+                            }
+                        };
+
+                        xhr.onerror = () => {
+                            uploadBtn.disabled = false;
+                            uploadBtn.style.opacity = '1';
+                            statusMsg.innerHTML = "<span style='color: #FF5252;'>❌ Error de conexión al televisor. Verifica que estés en la misma red Wi-Fi.</span>";
+                        };
+
+                        xhr.send(file);
                     }
                 </script>
             </body>
@@ -579,8 +723,7 @@ class WifiImportServer(private val context: Context, private val repository: Boo
         val response = "HTTP/1.1 200 OK\r\n" +
                 "Content-Type: text/html; charset=utf-8\r\n" +
                 "Content-Length: ${bytes.size}\r\n" +
-                "Connection: close\r\n" +
-                "\r\n"
+                "Connection: close\r\n\r\n"
         output.write(response.toByteArray(Charsets.UTF_8))
         output.write(bytes)
         output.flush()
@@ -590,46 +733,109 @@ class WifiImportServer(private val context: Context, private val repository: Boo
         input: java.io.InputStream,
         output: OutputStream,
         contentLength: Int,
-        contentType: String
+        contentType: String,
+        urlFilename: String? = null
     ) {
         val tempFile = File(context.cacheDir, "upload_${System.currentTimeMillis()}.tmp")
         try {
-            FileOutputStream(tempFile).use { out ->
-                val buffer = ByteArray(8192)
-                var bytesRead: Int
-                var totalRead = 0
-                while (totalRead < contentLength || contentLength == 0) {
-                    val toRead = if (contentLength > 0) minOf(buffer.size, contentLength - totalRead) else buffer.size
-                    if (toRead <= 0) break
-                    bytesRead = input.read(buffer, 0, toRead)
-                    if (bytesRead == -1) break
-                    out.write(buffer, 0, bytesRead)
-                    totalRead += bytesRead
+            var originalName = urlFilename ?: "libro_importado"
+
+            if (contentType.contains("multipart/form-data")) {
+                val boundaryMarker = contentType.substringAfter("boundary=", "").trim()
+                val partHeaderBytes = java.io.ByteArrayOutputStream()
+                var match = 0
+                while (true) {
+                    val b = input.read()
+                    if (b == -1) break
+                    partHeaderBytes.write(b)
+                    if (b == '\r'.code && (match == 0 || match == 2)) {
+                        match++
+                    } else if (b == '\n'.code && (match == 1 || match == 3)) {
+                        match++
+                        if (match == 4) break
+                    } else {
+                        match = if (b == '\r'.code) 1 else 0
+                    }
+                    if (partHeaderBytes.size() > 16384) break
+                }
+                val partHeaderStr = partHeaderBytes.toString("UTF-8")
+                val filenameRegex = Regex("""filename="([^"]+)"""")
+                filenameRegex.find(partHeaderStr)?.groupValues?.get(1)?.let {
+                    originalName = it
+                }
+
+                FileOutputStream(tempFile).use { out ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    var totalRead = partHeaderBytes.size()
+                    while (totalRead < contentLength || contentLength == 0) {
+                        val toRead = if (contentLength > 0) minOf(buffer.size, contentLength - totalRead) else buffer.size
+                        if (toRead <= 0) break
+                        bytesRead = input.read(buffer, 0, toRead)
+                        if (bytesRead == -1) break
+                        out.write(buffer, 0, bytesRead)
+                        totalRead += bytesRead
+                    }
+                }
+
+                if (boundaryMarker.isNotBlank() && tempFile.length() > boundaryMarker.length + 4) {
+                    val length = tempFile.length()
+                    val checkSize = minOf(length.toInt(), 512)
+                    val tail = ByteArray(checkSize)
+                    java.io.RandomAccessFile(tempFile, "rw").use { raf ->
+                        raf.seek(length - checkSize)
+                        raf.readFully(tail)
+                        val tailStr = String(tail, Charsets.ISO_8859_1)
+                        val bIndex = tailStr.lastIndexOf("--$boundaryMarker")
+                        if (bIndex != -1) {
+                            val newLength = (length - checkSize) + bIndex
+                            val cutPos = if (newLength >= 2 && tailStr.getOrNull(bIndex - 2) == '\r' && tailStr.getOrNull(bIndex - 1) == '\n') {
+                                newLength - 2
+                            } else newLength
+                            raf.setLength(cutPos.coerceAtLeast(0))
+                        }
+                    }
+                }
+            } else {
+                FileOutputStream(tempFile).use { out ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    var totalRead = 0
+                    while (totalRead < contentLength || contentLength == 0) {
+                        val toRead = if (contentLength > 0) minOf(buffer.size, contentLength - totalRead) else buffer.size
+                        if (toRead <= 0) break
+                        bytesRead = input.read(buffer, 0, toRead)
+                        if (bytesRead == -1) break
+                        out.write(buffer, 0, bytesRead)
+                        totalRead += bytesRead
+                    }
                 }
             }
 
             if (tempFile.exists() && tempFile.length() > 0) {
                 uploadedFilesCount++
-                processUploadedFile(tempFile, contentType)
+                processUploadedFile(tempFile, contentType, originalName)
 
                 val successHtml = """
                     <!DOCTYPE html>
-                    <html>
-                    <head><meta charset="UTF-8"><title>¡Enviado!</title>
+                    <html lang="es">
+                    <head><meta charset="UTF-8"><title>¡Enviado! • CalibroTV</title>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
                     <style>
-                        body { background: #121216; color: #fff; font-family: sans-serif; text-align: center; padding: 40px; }
-                        .box { background: #181513; border-radius: 16px; padding: 32px; max-width: 400px; margin: auto; border: 1px solid #C5A059; }
-                        h2 { color: #C5A059; }
-                        p { color: #A8A29E; }
-                        a { color: #C5A059; font-weight: bold; text-decoration: none; }
+                        body { background: #0A0A0A; color: #fff; font-family: sans-serif; text-align: center; padding: 40px 20px; }
+                        .box { background: #141416; border-radius: 16px; padding: 32px; max-width: 440px; margin: auto; border: 1.5px solid #FFA000; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+                        h2 { color: #FFA000; margin-top: 0; }
+                        p { color: #A0A0A0; line-height: 1.5; }
+                        .name { color: #fff; font-weight: bold; background: #222; padding: 8px 12px; border-radius: 8px; margin: 16px 0; word-break: break-all; }
+                        a.btn { display: inline-block; background: #FFA000; color: #111; font-weight: bold; text-decoration: none; padding: 12px 24px; border-radius: 24px; margin-top: 12px; }
                     </style>
                     </head>
                     <body>
                         <div class="box">
-                            <h2>✅ ¡Libro Enviado con Éxito!</h2>
-                            <p>El archivo ya está disponible en tu biblioteca de BookSpread.</p>
-                            <br>
-                            <a href="/">+ Subir otro libro</a>
+                            <h2>✅ ¡Libro Recibido con Éxito!</h2>
+                            <div class="name">📄 ${escapeHtml(originalName)}</div>
+                            <p>El libro ya se ha transferido y está disponible en tu televisor CalibroTV.</p>
+                            <a href="/" class="btn">+ Subir otro libro</a>
                         </div>
                     </body>
                     </html>
@@ -639,8 +845,7 @@ class WifiImportServer(private val context: Context, private val repository: Boo
                 val response = "HTTP/1.1 200 OK\r\n" +
                         "Content-Type: text/html; charset=utf-8\r\n" +
                         "Content-Length: ${bytes.size}\r\n" +
-                        "Connection: close\r\n" +
-                        "\r\n"
+                        "Connection: close\r\n\r\n"
                 output.write(response.toByteArray(Charsets.UTF_8))
                 output.write(bytes)
                 output.flush()
@@ -653,21 +858,27 @@ class WifiImportServer(private val context: Context, private val repository: Boo
         }
     }
 
-    private suspend fun processUploadedFile(tempFile: File, contentType: String) {
+    private suspend fun processUploadedFile(tempFile: File, contentType: String, originalFilename: String = "") {
         withContext(Dispatchers.IO) {
             try {
-                val isPdf = PdfParser.isPdfFile(tempFile) || contentType.contains("pdf")
-                val isComic = !isPdf && (ComicParser.isComicFile(tempFile) || contentType.contains("zip") || tempFile.name.endsWith(".cbz"))
+                val isPdf = originalFilename.endsWith(".pdf", ignoreCase = true) ||
+                        PdfParser.isPdfFile(tempFile) ||
+                        contentType.contains("pdf")
+                val isComic = !isPdf && (
+                        originalFilename.endsWith(".cbz", ignoreCase = true) ||
+                        originalFilename.endsWith(".cbr", ignoreCase = true) ||
+                        ComicParser.isComicFile(tempFile) ||
+                        contentType.contains("zip")
+                )
                 val bookId = "local_wifi_${System.currentTimeMillis()}"
 
-                var title = "Libro Importado WiFi"
+                var title = if (originalFilename.isNotBlank()) originalFilename.substringBeforeLast(".").replace('_', ' ') else "Libro Importado WiFi"
                 var author = "Importado por WiFi"
                 var summary = "Libro importado directamente desde tu dispositivo mediante WiFi."
                 var coverPath: String? = null
 
                 when {
                     isPdf -> {
-                        title = tempFile.nameWithoutExtension.replace('_', ' ')
                         author = "Documento PDF"
                         summary = "Documento PDF importado directamente por WiFi."
 
@@ -682,12 +893,11 @@ class WifiImportServer(private val context: Context, private val repository: Boo
                         }
                     }
                     isComic -> {
-                        title = tempFile.nameWithoutExtension
                         author = "Cómic"
                         summary = "Cómic importado directamente por WiFi."
                     }
                     else -> {
-                        val parsed = EpubParser.parseEpubToBook(tempFile, tempFile.nameWithoutExtension)
+                        val parsed = EpubParser.parseEpubToBook(tempFile, title)
                         if (parsed.title.isNotBlank()) title = parsed.title
                         val extractedDesc = EpubParser.extractDescription(tempFile)
                         if (!extractedDesc.isNullOrBlank()) summary = extractedDesc

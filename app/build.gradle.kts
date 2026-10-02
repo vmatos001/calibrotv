@@ -115,4 +115,7 @@ dependencies {
 
   // EncryptedSharedPreferences (seguridad)
   implementation(libs.androidx.security.crypto)
+
+  // QR Code Generator (ZXing core estándar para códigos QR escaneables)
+  implementation("com.google.zxing:core:3.5.3")
 }

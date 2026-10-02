@@ -74,10 +74,11 @@ fun WifiImportScreen(
     }
 
     LaunchedEffect(Unit) {
-        val ip = wifiServer.getLocalIpAddress()
-        serverUrl = "http://$ip:8080"
-        val success = wifiServer.startServer(8080)
+        val success = wifiServer.startServer()
         isServerRunning = success
+        val ip = wifiServer.getLocalIpAddress()
+        val port = wifiServer.activePort
+        serverUrl = "http://$ip:$port"
         if (success) {
             qrBitmap = QrCodeGenerator.generateQrBitmap(serverUrl, 360, 360)
         }
@@ -138,7 +139,7 @@ fun WifiImportScreen(
                 Spacer(modifier = Modifier.height(28.dp))
 
                 Text(
-                    text = "IP de Su Servidor:",
+                    text = "Dirección de tu Servidor en TV:",
                     color = TextMuted,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
@@ -146,7 +147,7 @@ fun WifiImportScreen(
 
                 Text(
                     text = if (isServerRunning) serverUrl else "Servidor Detenido",
-                    color = if (isServerRunning) CyanElectric else Color.Gray,
+                    color = if (isServerRunning) AmberWarm else Color.Gray,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
@@ -160,15 +161,18 @@ fun WifiImportScreen(
                             wifiServer.stopServer()
                             isServerRunning = false
                         } else {
-                            val success = wifiServer.startServer(8080)
+                            val success = wifiServer.startServer()
                             isServerRunning = success
+                            val ip = wifiServer.getLocalIpAddress()
+                            val port = wifiServer.activePort
+                            serverUrl = "http://$ip:$port"
                             if (success) {
                                 qrBitmap = QrCodeGenerator.generateQrBitmap(serverUrl, 360, 360)
                             }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isServerRunning) Color(0xFF00C853) else Color(0xFFD50000)
+                        containerColor = if (isServerRunning) Color(0xFF00C853) else AmberWarm
                     ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
@@ -230,7 +234,7 @@ fun WifiImportScreen(
                         .size(260.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color.White)
-                        .border(2.dp, CyanElectric, RoundedCornerShape(16.dp))
+                        .border(2.dp, AmberWarm, RoundedCornerShape(16.dp))
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {

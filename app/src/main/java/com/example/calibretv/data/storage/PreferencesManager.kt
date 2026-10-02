@@ -29,11 +29,11 @@ class PreferencesManager(context: Context) {
     }
 
     fun isSetupCompleted(): Boolean {
-        return prefs.getBoolean("setup_completed_v2", false)
+        return prefs.getBoolean("setup_completed_v3", false)
     }
 
     fun setSetupCompleted(completed: Boolean) {
-        prefs.edit().putBoolean("setup_completed_v2", completed).apply()
+        prefs.edit().putBoolean("setup_completed_v3", completed).apply()
     }
 
     fun getServerConfig(): ServerConfig {

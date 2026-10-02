@@ -93,6 +93,7 @@ fun SettingsScreen(
     repository: BookRepository,
     onTabSelected: (TvNavTab) -> Unit,
     onOpenOpds: () -> Unit = {},
+    onRunSetupWizard: () -> Unit = {},
     onSaved: () -> Unit
 ) {
     val context = LocalContext.current
@@ -832,6 +833,12 @@ fun SettingsScreen(
                 )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TvActionButton(
+                        title = "Asistente Inicial",
+                        icon = Icons.Default.Tune,
+                        isPrimary = false,
+                        onClick = onRunSetupWizard
+                    )
                     TvActionButton(
                         title = "Conexión OPDS",
                         icon = Icons.Default.Sync,
