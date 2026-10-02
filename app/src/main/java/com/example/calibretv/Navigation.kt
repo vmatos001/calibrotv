@@ -90,6 +90,11 @@ fun MainNavigation() {
                     backStack.add(LibraryNavKey())
                 }
             }
+            TvNavTab.TUS_LIBROS -> {
+                if (backStack.lastOrNull() !is LibraryNavKey) {
+                    backStack.add(LibraryNavKey(subfeedUrl = "local_storage", title = "Tus Libros"))
+                }
+            }
             TvNavTab.LECTOR_3D -> navigateToReaderForLastBook()
             TvNavTab.AJUSTES -> {
                 if (backStack.lastOrNull() !is SettingsNavKey) {

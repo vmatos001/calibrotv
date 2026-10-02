@@ -52,6 +52,7 @@ import com.example.calibretv.theme.TextPrimary
 enum class TvNavTab {
     HOME,
     BIBLIOTECA,
+    TUS_LIBROS,
     LECTOR_3D,
     AJUSTES
 }
@@ -90,20 +91,20 @@ fun TvTopBar(
                     modifier = Modifier.size(24.dp)
                 )
                 Text(
-                    text = "Calibre TV",
+                    text = "CalibroTV",
                     color = TextPrimary,
                     fontSize = 19.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
-            // Navigation Tabs (Home, Biblioteca, Lector 3D, Ajustes)
+            // Navigation Tabs (Home, Biblioteca, Tus Libros, Lector 3D, Ajustes)
             Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TvNavTabItem(
-                    title = "Home",
+                    title = "Inicio",
                     isSelected = currentTab == TvNavTab.HOME,
                     modifier = if (initialFocusRequester != null && currentTab == TvNavTab.HOME) {
                         Modifier.focusRequester(initialFocusRequester)
@@ -117,6 +118,14 @@ fun TvTopBar(
                         Modifier.focusRequester(initialFocusRequester)
                     } else Modifier,
                     onClick = { onTabSelected(TvNavTab.BIBLIOTECA) }
+                )
+                TvNavTabItem(
+                    title = "Tus Libros",
+                    isSelected = currentTab == TvNavTab.TUS_LIBROS,
+                    modifier = if (initialFocusRequester != null && currentTab == TvNavTab.TUS_LIBROS) {
+                        Modifier.focusRequester(initialFocusRequester)
+                    } else Modifier,
+                    onClick = { onTabSelected(TvNavTab.TUS_LIBROS) }
                 )
                 TvNavTabItem(
                     title = "Lector 3D",

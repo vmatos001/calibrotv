@@ -1,5 +1,6 @@
 package com.example.calibretv.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
@@ -31,6 +35,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -52,19 +59,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.calibretv.data.BookRepository
 import com.example.calibretv.data.model.UserProfile
-import com.example.calibretv.theme.AmberWarm
-import com.example.calibretv.theme.BackgroundDark
-import com.example.calibretv.theme.CyanElectric
+import com.example.calibretv.theme.AccentGold
 import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.SurfaceRaised
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
-
-import androidx.activity.compose.BackHandler
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.delay
 
 @Composable
@@ -77,15 +77,28 @@ fun UserProfilesDialog(
     var profiles by remember { mutableStateOf(repository.getProfiles()) }
     var currentActive by remember { mutableStateOf(activeProfile) }
     var showCreateField by remember { mutableStateOf(false) }
+
+    // New profile form state
     var newUserName by remember { mutableStateOf("") }
-    var selectedColorHex by remember { mutableStateOf("#FFA000") }
+    var selectedColorHex by remember { mutableStateOf("#C5A059") }
+    var isNewUserKidsMode by remember { mutableStateOf(false) }
+    var newUserPin by remember { mutableStateOf<String?>(null) }
 
-    val presetColors = listOf("#FFA000", "#38BDF8", "#4CAF50", "#AB47BC", "#FF5722", "#E91E63")
+    // PIN Pad states
+    var showPinPadForTargetProfile by remember { mutableStateOf<UserProfile?>(null) }
+    var showPinPadForCreatingPin by remember { mutableStateOf(false) }
 
+    val presetColors = listOf("#C5A059", "#38BDF8", "#4CAF50", "#AB47BC", "#FF5722", "#E91E63")
     val initialFocusRequester = remember { FocusRequester() }
 
     BackHandler {
-        onDismiss()
+        if (showPinPadForTargetProfile != null) {
+            showPinPadForTargetProfile = null
+        } else if (showPinPadForCreatingPin) {
+            showPinPadForCreatingPin = false
+        } else {
+            onDismiss()
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -93,6 +106,31 @@ fun UserProfilesDialog(
         try {
             initialFocusRequester.requestFocus()
         } catch (_: Exception) {}
+    }
+
+    fun applySwitchProfile(profile: UserProfile) {
+        repository.saveActiveProfile(profile)
+        currentActive = profile
+        onProfileChanged(profile)
+    }
+
+    fun handleProfileSelection(target: UserProfile) {
+        if (target.id == currentActive.id) return
+
+        // If target profile has a PIN, verify it first
+        if (target.parentalPin != null) {
+            showPinPadForTargetProfile = target
+        } else if (currentActive.isKidsMode) {
+            // Leaving Kids Mode to an unprotected profile: check if ANY profile in the house has a parental PIN to protect exit
+            val housePin = profiles.firstOrNull { it.parentalPin != null }?.parentalPin
+            if (housePin != null) {
+                showPinPadForTargetProfile = target.copy(parentalPin = housePin)
+            } else {
+                applySwitchProfile(target)
+            }
+        } else {
+            applySwitchProfile(target)
+        }
     }
 
     Box(
@@ -104,11 +142,11 @@ fun UserProfilesDialog(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth(0.72f)
-                .fillMaxHeight(0.78f)
-                .clip(RoundedCornerShape(20.dp))
+                .fillMaxWidth(0.78f)
+                .fillMaxHeight(0.85f)
+                .clip(RoundedCornerShape(24.dp))
                 .background(SurfaceContainer)
-                .border(1.5.dp, CyanElectric.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                .border(1.5.dp, AccentGold.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
                 .clickable(enabled = false) {}
                 .padding(32.dp)
         ) {
@@ -125,57 +163,65 @@ fun UserProfilesDialog(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(32.dp)
+                                    .size(36.dp)
                                     .clip(CircleShape)
-                                    .background(AmberWarm),
+                                    .background(AccentGold.copy(alpha = 0.2f))
+                                    .border(1.dp, AccentGold, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Person,
                                     contentDescription = null,
-                                    tint = Color(0xFF131315),
-                                    modifier = Modifier.size(20.dp)
+                                    tint = AccentGold,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
-                            Text(
-                                text = "GESTIONAR USUARIOS",
-                                color = TextPrimary,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 1.sp
-                            )
+                            Column {
+                                Text(
+                                    text = "PERFILES FAMILIARES",
+                                    color = TextPrimary,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.sp
+                                )
+                                Text(
+                                    text = "Progreso, favoritos, tamaño de letra y control parental independiente por lector",
+                                    color = TextMuted,
+                                    fontSize = 12.sp
+                                )
+                            }
                         }
 
                         // Current active badge
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(AmberWarm.copy(alpha = 0.15f))
-                                .border(1.dp, AmberWarm, RoundedCornerShape(12.dp))
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .background(AccentGold.copy(alpha = 0.15f))
+                                .border(1.dp, AccentGold, RoundedCornerShape(12.dp))
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
                         ) {
                             Text("Activo: ", color = TextMuted, fontSize = 12.sp)
-                            Text(currentActive.name, color = AmberWarm, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(currentActive.name, color = AccentGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            if (currentActive.isKidsMode) {
+                                Text("🎈", fontSize = 12.sp)
+                            }
+                            if (currentActive.starsCount > 0) {
+                                Text("⭐ ${currentActive.starsCount}", color = AccentGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
-
-                    Text(
-                        text = "Cada usuario tiene su propia lista de favoritos y progreso de lectura independiente.",
-                        color = TextMuted,
-                        fontSize = 12.sp
-                    )
                 }
 
                 // Middle: Profile Cards Row
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text(
-                        text = "Selecciona un perfil:",
+                        text = "Selecciona un lector:",
                         color = TextPrimary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
@@ -183,14 +229,14 @@ fun UserProfilesDialog(
 
                     if (profiles.isEmpty()) {
                         Text(
-                            text = "No hay perfiles creados aún. Pulsa 'Crear Nuevo Usuario' abajo para crear uno.",
+                            text = "No hay perfiles creados. Pulsa 'Crear Perfil' abajo para comenzar.",
                             color = TextMuted,
                             fontSize = 13.sp,
                             modifier = Modifier.padding(vertical = 12.dp)
                         )
                     } else {
                         LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             items(profiles) { profile ->
@@ -199,14 +245,14 @@ fun UserProfilesDialog(
                                 var isFocused by remember { mutableStateOf(false) }
 
                                 val cardModifier = Modifier
-                                    .width(140.dp)
-                                    .scale(if (isFocused) 1.08f else 1.0f)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(if (isActive) CyanElectric.copy(alpha = 0.20f) else SurfaceRaised)
+                                    .width(160.dp)
+                                    .scale(if (isFocused) 1.06f else 1.0f)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(if (isActive) AccentGold.copy(alpha = 0.15f) else SurfaceRaised)
                                     .border(
                                         width = if (isFocused) 2.5.dp else if (isActive) 1.5.dp else 1.dp,
-                                        color = if (isFocused) AmberWarm else if (isActive) CyanElectric else Color(0xFF2E2E36),
-                                        shape = RoundedCornerShape(14.dp)
+                                        color = if (isFocused) AccentGold else if (isActive) AccentGold.copy(alpha = 0.6f) else Color(0xFF2E2E36),
+                                        shape = RoundedCornerShape(18.dp)
                                     )
                                     .onFocusChanged { isFocused = it.isFocused }
                                     .then(if (shouldFocus) Modifier.focusRequester(initialFocusRequester) else Modifier)
@@ -214,232 +260,351 @@ fun UserProfilesDialog(
                                         if (event.type == KeyEventType.KeyDown &&
                                             (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                         ) {
-                                            repository.saveActiveProfile(profile)
-                                            currentActive = profile
-                                            onProfileChanged(profile)
+                                            handleProfileSelection(profile)
                                             true
                                         } else false
                                     }
                                     .focusable()
-                                    .clickable {
-                                        repository.saveActiveProfile(profile)
-                                        currentActive = profile
-                                        onProfileChanged(profile)
-                                    }
-                                    .padding(vertical = 16.dp, horizontal = 12.dp)
+                                    .clickable { handleProfileSelection(profile) }
+                                    .padding(vertical = 18.dp, horizontal = 12.dp)
 
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
                                     modifier = cardModifier
                                 ) {
-                                val profileColor = try {
-                                    Color(android.graphics.Color.parseColor(profile.avatarColorHex))
-                                } catch (_: Exception) {
-                                    AmberWarm
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .size(54.dp)
-                                        .clip(CircleShape)
-                                        .background(profileColor),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = profile.name.take(1).uppercase(),
-                                        color = Color(0xFF131315),
-                                        fontSize = 24.sp,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                }
-
-                                Text(
-                                    text = profile.name,
-                                    color = TextPrimary,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1
-                                )
-
-                                if (isActive) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(AmberWarm)
-                                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = null,
-                                            tint = Color(0xFF131315),
-                                            modifier = Modifier.size(11.dp)
-                                        )
-                                        Text("ACTIVO", color = Color(0xFF131315), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                                    val profileColor = try {
+                                        Color(android.graphics.Color.parseColor(profile.avatarColorHex))
+                                    } catch (_: Exception) {
+                                        AccentGold
                                     }
-                                } else {
+
+                                    // Avatar circle with initial or face
+                                    Box(
+                                        modifier = Modifier
+                                            .size(58.dp)
+                                            .clip(CircleShape)
+                                            .background(profileColor),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = profile.name.take(1).uppercase(),
+                                            color = Color(0xFF0C0A09),
+                                            fontSize = 24.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
+
+                                    // Profile Name
                                     Text(
-                                        text = "Cambiar",
-                                        color = TextMuted,
-                                        fontSize = 11.sp
+                                        text = profile.name,
+                                        color = TextPrimary,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1
                                     )
+
+                                    // Badges row: Kids, Stars, Pin Lock
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (profile.isKidsMode) {
+                                            Text(
+                                                text = "🎈 Kids",
+                                                color = Color(0xFF81C784),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        if (profile.starsCount > 0) {
+                                            Text(
+                                                text = "⭐ ${profile.starsCount}",
+                                                color = AccentGold,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        if (profile.parentalPin != null) {
+                                            Icon(
+                                                imageVector = Icons.Default.Lock,
+                                                contentDescription = "Protegido con PIN",
+                                                tint = Color(0xFFE0E0E0),
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+
+                                    if (isActive) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(AccentGold)
+                                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = Color(0xFF0C0A09),
+                                                modifier = Modifier.size(11.dp)
+                                            )
+                                            Text("ACTIVO", color = Color(0xFF0C0A09), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                                        }
+                                    } else {
+                                        Text(
+                                            text = if (profile.parentalPin != null) "🔒 Desbloquear" else "Seleccionar",
+                                            color = TextMuted,
+                                            fontSize = 11.sp
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                    // Create New User Form / Toggle
-                    if (showCreateField) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(SurfaceContainerHigh)
-                                .padding(14.dp)
+                // Create New User Form / Toggle
+                if (showCreateField) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(SurfaceContainerHigh)
+                            .padding(16.dp)
+                    ) {
+                        Text("Nuevo Perfil de Lectura:", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Nombre del nuevo usuario:", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                var isNameFieldFocused by remember { mutableStateOf(false) }
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(52.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (isNameFieldFocused) Color(0xFF1E2A35) else SurfaceContainerHigh)
-                                        .border(
-                                            width = if (isNameFieldFocused) 2.dp else 1.dp,
-                                            color = if (isNameFieldFocused) CyanElectric else Color(0xFF4A4A58),
-                                            shape = RoundedCornerShape(10.dp)
-                                        )
-                                        .onFocusChanged { isNameFieldFocused = it.isFocused }
-                                ) {
-                                    OutlinedTextField(
-                                        value = newUserName,
-                                        onValueChange = { newUserName = it },
-                                        placeholder = {
-                                            Text(
-                                                "Ej: Laura, Niños...",
-                                                color = if (isNameFieldFocused) TextMuted else Color(0xFF808090),
-                                                fontSize = 14.sp
-                                            )
-                                        },
-                                        singleLine = true,
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = Color.Transparent,
-                                            unfocusedBorderColor = Color.Transparent,
-                                            focusedTextColor = TextPrimary,
-                                            unfocusedTextColor = TextPrimary,
-                                            cursorColor = CyanElectric
-                                        ),
-                                        textStyle = androidx.compose.ui.text.TextStyle(
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Medium
-                                        ),
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(horizontal = 4.dp)
+                            var isNameFieldFocused by remember { mutableStateOf(false) }
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(50.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isNameFieldFocused) Color(0xFF262320) else SurfaceContainerHigh)
+                                    .border(
+                                        width = if (isNameFieldFocused) 2.dp else 1.dp,
+                                        color = if (isNameFieldFocused) AccentGold else Color(0xFF4A4A58),
+                                        shape = RoundedCornerShape(10.dp)
                                     )
-                                }
+                                    .onFocusChanged { isNameFieldFocused = it.isFocused }
+                            ) {
+                                OutlinedTextField(
+                                    value = newUserName,
+                                    onValueChange = { newUserName = it },
+                                    placeholder = {
+                                        Text(
+                                            "Ej: Mateo, Papá, Niños...",
+                                            color = TextMuted,
+                                            fontSize = 13.sp
+                                        )
+                                    },
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color.Transparent,
+                                        unfocusedBorderColor = Color.Transparent,
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary,
+                                        cursorColor = AccentGold
+                                    ),
+                                    textStyle = androidx.compose.ui.text.TextStyle(
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium
+                                    ),
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
 
-                                // Color selector — círculos grandes con foco D-Pad visible
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    presetColors.forEach { hex ->
-                                        val isColorSelected = selectedColorHex == hex
-                                        var isColorFocused by remember { mutableStateOf(false) }
-                                        val parsedColor = try { Color(android.graphics.Color.parseColor(hex)) } catch (_: Exception) { AmberWarm }
-
-                                        Box(
-                                            modifier = Modifier
-                                                .size(if (isColorFocused) 40.dp else 34.dp)
-                                                .shadow(
-                                                    elevation = if (isColorFocused) 10.dp else 0.dp,
-                                                    shape = CircleShape,
-                                                    spotColor = parsedColor
-                                                )
-                                                .clip(CircleShape)
-                                                .background(parsedColor)
-                                                .border(
-                                                    width = when {
-                                                        isColorFocused -> 3.dp
-                                                        isColorSelected -> 2.5.dp
-                                                        else -> 0.dp
-                                                    },
-                                                    color = when {
-                                                        isColorFocused -> Color.White
-                                                        isColorSelected -> Color.White
-                                                        else -> Color.Transparent
-                                                    },
-                                                    shape = CircleShape
-                                                )
-                                                .onFocusChanged { isColorFocused = it.isFocused }
-                                                .onKeyEvent { event ->
-                                                    if (event.type == KeyEventType.KeyDown &&
-                                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                                    ) {
-                                                        selectedColorHex = hex
-                                                        true
-                                                    } else false
-                                                }
-                                                .focusable()
-                                                .clickable { selectedColorHex = hex },
-                                            contentAlignment = Alignment.Center
+                            // Kids Mode Toggle Button
+                            var isKidsBtnFocused by remember { mutableStateOf(false) }
+                            Box(
+                                modifier = Modifier
+                                    .height(50.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        when {
+                                            isKidsBtnFocused -> AccentGold
+                                            isNewUserKidsMode -> Color(0xFF1B4D2E)
+                                            else -> SurfaceRaised
+                                        }
+                                    )
+                                    .border(
+                                        width = if (isKidsBtnFocused || isNewUserKidsMode) 1.5.dp else 1.dp,
+                                        color = if (isKidsBtnFocused) Color.White else if (isNewUserKidsMode) Color(0xFF4CAF50) else Color(0xFF383842),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .onFocusChanged { isKidsBtnFocused = it.isFocused }
+                                    .onKeyEvent { event ->
+                                        if (event.type == KeyEventType.KeyDown &&
+                                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                         ) {
-                                            if (isColorSelected) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = null,
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-                                        }
+                                            isNewUserKidsMode = !isNewUserKidsMode
+                                            true
+                                        } else false
                                     }
-                                }
+                                    .focusable()
+                                    .clickable { isNewUserKidsMode = !isNewUserKidsMode }
+                                    .padding(horizontal = 14.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (isNewUserKidsMode) "🎈 Modo Infantil: SÍ" else "🎈 Modo Infantil: NO",
+                                    color = if (isKidsBtnFocused) Color(0xFF0C0A09) else if (isNewUserKidsMode) Color(0xFFA5D6A7) else TextMuted,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
 
-                                var isSaveFocused by remember { mutableStateOf(false) }
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (isSaveFocused) AmberWarm else CyanElectric)
-                                        .onFocusChanged { isSaveFocused = it.isFocused }
-                                        .onKeyEvent { event ->
-                                            if (event.type == KeyEventType.KeyDown &&
-                                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                            ) {
-                                                if (newUserName.isNotBlank()) {
-                                                    val created = repository.createProfile(newUserName.trim(), selectedColorHex)
-                                                    profiles = repository.getProfiles()
-                                                    currentActive = created
-                                                    onProfileChanged(created)
-                                                    showCreateField = false
-                                                    newUserName = ""
-                                                }
-                                                true
-                                            } else false
+                            // Set PIN Toggle Button
+                            var isPinBtnFocused by remember { mutableStateOf(false) }
+                            Box(
+                                modifier = Modifier
+                                    .height(50.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        when {
+                                            isPinBtnFocused -> AccentGold
+                                            newUserPin != null -> Color(0xFF3E2723)
+                                            else -> SurfaceRaised
                                         }
-                                        .focusable()
-                                        .clickable {
+                                    )
+                                    .border(
+                                        width = if (isPinBtnFocused || newUserPin != null) 1.5.dp else 1.dp,
+                                        color = if (isPinBtnFocused) Color.White else if (newUserPin != null) AccentGold else Color(0xFF383842),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .onFocusChanged { isPinBtnFocused = it.isFocused }
+                                    .onKeyEvent { event ->
+                                        if (event.type == KeyEventType.KeyDown &&
+                                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                        ) {
+                                            if (newUserPin != null) newUserPin = null
+                                            else showPinPadForCreatingPin = true
+                                            true
+                                        } else false
+                                    }
+                                    .focusable()
+                                    .clickable {
+                                        if (newUserPin != null) newUserPin = null
+                                        else showPinPadForCreatingPin = true
+                                    }
+                                    .padding(horizontal = 14.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (newUserPin != null) "🔒 PIN Configurado" else "🔒 Añadir PIN",
+                                    color = if (isPinBtnFocused) Color(0xFF0C0A09) else if (newUserPin != null) AccentGold else TextMuted,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            // Save button
+                            var isSaveFocused by remember { mutableStateOf(false) }
+                            Box(
+                                modifier = Modifier
+                                    .height(50.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isSaveFocused) Color.White else AccentGold)
+                                    .onFocusChanged { isSaveFocused = it.isFocused }
+                                    .onKeyEvent { event ->
+                                        if (event.type == KeyEventType.KeyDown &&
+                                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                        ) {
                                             if (newUserName.isNotBlank()) {
-                                                val created = repository.createProfile(newUserName.trim(), selectedColorHex)
+                                                val created = repository.createProfile(
+                                                    name = newUserName.trim(),
+                                                    colorHex = selectedColorHex,
+                                                    isKidsMode = isNewUserKidsMode,
+                                                    parentalPin = newUserPin
+                                                )
                                                 profiles = repository.getProfiles()
                                                 currentActive = created
                                                 onProfileChanged(created)
                                                 showCreateField = false
                                                 newUserName = ""
+                                                isNewUserKidsMode = false
+                                                newUserPin = null
                                             }
+                                            true
+                                        } else false
+                                    }
+                                    .focusable()
+                                    .clickable {
+                                        if (newUserName.isNotBlank()) {
+                                            val created = repository.createProfile(
+                                                name = newUserName.trim(),
+                                                colorHex = selectedColorHex,
+                                                isKidsMode = isNewUserKidsMode,
+                                                parentalPin = newUserPin
+                                            )
+                                            profiles = repository.getProfiles()
+                                            currentActive = created
+                                            onProfileChanged(created)
+                                            showCreateField = false
+                                            newUserName = ""
+                                            isNewUserKidsMode = false
+                                            newUserPin = null
                                         }
-                                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                                    }
+                                    .padding(horizontal = 18.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Guardar", color = Color(0xFF0C0A09), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
+                            }
+                        }
+
+                        // Colors row
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Color:", color = TextMuted, fontSize = 11.sp)
+                            presetColors.forEach { hex ->
+                                val isColorSelected = selectedColorHex == hex
+                                var isColorFocused by remember { mutableStateOf(false) }
+                                val parsedColor = try { Color(android.graphics.Color.parseColor(hex)) } catch (_: Exception) { AccentGold }
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(if (isColorFocused) 36.dp else 28.dp)
+                                        .clip(CircleShape)
+                                        .background(parsedColor)
+                                        .border(
+                                            width = if (isColorFocused || isColorSelected) 2.5.dp else 0.dp,
+                                            color = Color.White,
+                                            shape = CircleShape
+                                        )
+                                        .onFocusChanged { isColorFocused = it.isFocused }
+                                        .onKeyEvent { event ->
+                                            if (event.type == KeyEventType.KeyDown &&
+                                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                            ) {
+                                                selectedColorHex = hex
+                                                true
+                                            } else false
+                                        }
+                                        .focusable()
+                                        .clickable { selectedColorHex = hex },
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Text("Guardar", color = Color(0xFF131315), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    if (isColorSelected) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -458,7 +623,7 @@ fun UserProfilesDialog(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
-                            .background(if (isAddFocused) AmberWarm else SurfaceContainerHigh)
+                            .background(if (isAddFocused) AccentGold else SurfaceContainerHigh)
                             .border(1.dp, if (isAddFocused) Color.White else Color(0xFF383842), RoundedCornerShape(12.dp))
                             .onFocusChanged { isAddFocused = it.isFocused }
                             .then(if (profiles.isEmpty()) Modifier.focusRequester(initialFocusRequester) else Modifier)
@@ -477,12 +642,12 @@ fun UserProfilesDialog(
                         Icon(
                             imageVector = Icons.Default.Add,
                             contentDescription = null,
-                            tint = if (isAddFocused) Color(0xFF131315) else AmberWarm,
+                            tint = if (isAddFocused) Color(0xFF0C0A09) else AccentGold,
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
-                            text = if (showCreateField) "Cancelar" else "Crear Nuevo Usuario",
-                            color = if (isAddFocused) Color(0xFF131315) else TextPrimary,
+                            text = if (showCreateField) "Cancelar" else "Crear Nuevo Perfil",
+                            color = if (isAddFocused) Color(0xFF0C0A09) else TextPrimary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -494,7 +659,7 @@ fun UserProfilesDialog(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
-                            .background(if (isCloseFocused) AmberWarm else SurfaceRaised)
+                            .background(if (isCloseFocused) AccentGold else SurfaceRaised)
                             .border(1.dp, if (isCloseFocused) Color.White else Color(0xFF383842), RoundedCornerShape(12.dp))
                             .onFocusChanged { isCloseFocused = it.isFocused }
                             .onKeyEvent { event ->
@@ -512,12 +677,12 @@ fun UserProfilesDialog(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = null,
-                            tint = if (isCloseFocused) Color(0xFF131315) else TextPrimary,
+                            tint = if (isCloseFocused) Color(0xFF0C0A09) else TextPrimary,
                             modifier = Modifier.size(15.dp)
                         )
                         Text(
                             text = "Listo",
-                            color = if (isCloseFocused) Color(0xFF131315) else TextPrimary,
+                            color = if (isCloseFocused) Color(0xFF0C0A09) else TextPrimary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -525,5 +690,38 @@ fun UserProfilesDialog(
                 }
             }
         }
+    }
+
+    // PIN Pad verification when switching to a protected profile
+    val targetProfile = showPinPadForTargetProfile
+    if (targetProfile != null) {
+        PinPadDialog(
+            title = "Acceso Protegido",
+            subtitle = "Introduce el PIN de 4 dígitos para acceder a ${targetProfile.name}",
+            targetPin = targetProfile.parentalPin,
+            onSuccess = {
+                showPinPadForTargetProfile = null
+                applySwitchProfile(targetProfile)
+            },
+            onDismiss = {
+                showPinPadForTargetProfile = null
+            }
+        )
+    }
+
+    // PIN Pad definition when creating a PIN for a new profile
+    if (showPinPadForCreatingPin) {
+        PinPadDialog(
+            title = "Definir PIN Parental",
+            subtitle = "Introduce 4 dígitos para proteger este perfil",
+            targetPin = null,
+            onSuccess = { pin ->
+                newUserPin = pin
+                showPinPadForCreatingPin = false
+            },
+            onDismiss = {
+                showPinPadForCreatingPin = false
+            }
+        )
     }
 }
