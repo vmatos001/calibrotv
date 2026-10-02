@@ -157,7 +157,7 @@ fun CuratorRow(
 
         // Fila horizontal de libros en 3D (sin tarjeta, con perspectiva y animación al foco)
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 36.dp),
+            contentPadding = PaddingValues(horizontal = 36.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             itemsIndexed(section.books, key = { _, b -> b.id }) { index, book ->
