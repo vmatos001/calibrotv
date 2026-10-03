@@ -143,38 +143,38 @@ fun TvSideDrawer(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Header: Logo + App Name (compact)
+                    // Header: Logo en recuadro blanco + Nombre de App (idéntico al mockup)
                     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(AmberWarm),
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color.White),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.MenuBook,
                                     contentDescription = null,
-                                    tint = Color(0xFF131315),
-                                    modifier = Modifier.size(20.dp)
+                                    tint = Color(0xFF101014),
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                             Column {
                                 Text(
-                                    text = "CALIBRO TV",
+                                    text = "CalibroTV",
                                     color = TextPrimary,
-                                    fontSize = 16.sp,
+                                    fontSize = 18.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 0.8.sp
+                                    letterSpacing = 0.5.sp
                                 )
                                 Text(
-                                    text = "Lector 3D • Calibre-Web",
+                                    text = "Lector 3D • Biblioteca TV",
                                     color = AmberWarm.copy(alpha = 0.85f),
-                                    fontSize = 10.5.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium
                                 )
                             }
@@ -205,7 +205,7 @@ fun TvSideDrawer(
                             .weight(1f)
                             .verticalScroll(scrollState)
                             .padding(vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         mainItems.forEachIndexed { index, item ->
                             val isFirst = index == 0
@@ -221,10 +221,10 @@ fun TvSideDrawer(
                         }
                     }
 
-                    // Pinned Bottom Section (Ajustes + Close Hint, inspired by ReadEra)
+                    // Pinned Bottom Section: Ajustes + Selector de Tema (Dark/Light pill)
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Box(
                             modifier = Modifier
@@ -241,6 +241,50 @@ fun TvSideDrawer(
                                 onItemSelected(DrawerItem.AJUSTES)
                             }
                         )
+
+                        // Pill Switch inferior Dark / Light (Mockup de referencia)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color(0xFF17171E))
+                                .border(1.dp, Color(0xFF2A2A34), RoundedCornerShape(20.dp))
+                                .padding(3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color(0xFF23232C))
+                                    .padding(vertical = 5.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "🌙 Dark",
+                                    color = TextPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(AmberWarm)
+                                    .padding(vertical = 5.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "☀️ Light",
+                                    color = Color(0xFF121216),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
 
                         Text(
                             text = "‹ [Atrás] o [Derecha] para cerrar",

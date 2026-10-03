@@ -182,7 +182,8 @@ fun SettingsScreen(
             currentTab = TvNavTab.AJUSTES,
             onTabSelected = onTabSelected,
             activeProfile = activeProfile,
-            onProfileClick = { showUserProfilesModal = true }
+            onProfileClick = { showUserProfilesModal = true },
+            onOpenOpds = onOpenOpds
         )
 
         Column(

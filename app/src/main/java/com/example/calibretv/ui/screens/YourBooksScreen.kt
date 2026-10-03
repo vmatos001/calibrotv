@@ -159,7 +159,9 @@ fun YourBooksScreen(
                     TvNavTab.AJUSTES -> onNavigateToSettings()
                 }
             },
-            onProfileClick = { showUserProfilesModal = true }
+            onProfileClick = { showUserProfilesModal = true },
+            onOpenWifiImport = onNavigateToWifiImport,
+            onOpenSettings = onNavigateToSettings
         )
 
         // Panel de información de memoria física en TV (10-Foot UI)

@@ -103,6 +103,7 @@ import com.example.calibretv.ui.components.CuratedBookModal
 import com.example.calibretv.ui.components.CuratorRow
 import com.example.calibretv.ui.components.DrawerItem
 import com.example.calibretv.ui.components.PinPadDialog
+import com.example.calibretv.ui.components.TvProfilePill
 import com.example.calibretv.ui.components.TvSideDrawer
 import com.example.calibretv.ui.components.UserProfilesDialog
 import kotlinx.coroutines.launch
@@ -345,69 +346,21 @@ fun HomeScreen(
                         fontWeight = FontWeight.Medium
                     )
 
-                    var isProfileFocused by remember { mutableStateOf(false) }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier
-                            .scale(if (isProfileFocused) 1.08f else 1.0f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(if (isProfileFocused) AmberWarm else Color.White.copy(alpha = 0.12f))
-                            .border(
-                                width = if (isProfileFocused) 1.5.dp else 1.dp,
-                                color = if (isProfileFocused) Color.White else Color(0xFF383842),
-                                shape = RoundedCornerShape(16.dp)
-                            )
-                            .onFocusChanged { isProfileFocused = it.isFocused }
-                            .onKeyEvent { event ->
-                                if (event.type == KeyEventType.KeyDown &&
-                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                ) {
-                                    showUserProfilesModal = true
-                                    true
-                                } else false
+                    TvProfilePill(
+                        profile = activeProfile,
+                        onOpenProfileSwitcher = { showUserProfilesModal = true },
+                        onOpenOpds = onNavigateToOpds,
+                        onOpenWifiImport = onNavigateToWifiImport,
+                        onOpenSettings = onNavigateToSettings,
+                        onQuickSync = {
+                            coroutineScope.launch {
+                                isLoading = true
+                                feedContent = repository.getFeed()
+                                isLoading = false
                             }
-                            .focusable()
-                            .clickable { showUserProfilesModal = true }
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
-                    ) {
-                        val profColor = try {
-                            Color(android.graphics.Color.parseColor(activeProfile.avatarColorHex))
-                        } catch (_: Exception) {
-                            AmberWarm
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clip(CircleShape)
-                                .background(if (isProfileFocused) Color(0xFF131315) else profColor),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = null,
-                                tint = if (isProfileFocused) AmberWarm else Color(0xFF131315),
-                                modifier = Modifier.size(11.dp)
-                            )
-                        }
-                        Text(
-                            text = activeProfile.name,
-                            color = if (isProfileFocused) Color(0xFF131315) else Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (activeProfile.isKidsMode) {
-                            Text("🎈", fontSize = 11.sp)
-                        }
-                        if (activeProfile.starsCount > 0) {
-                            Text(
-                                text = "⭐ ${activeProfile.starsCount}",
-                                color = if (isProfileFocused) Color(0xFF131315) else AmberWarm,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                        }
-                    }
+                        },
+                        onNotificationsClick = onNavigateToSettings
+                    )
                 }
 
                 // HERO SPOTLIGHT: Portada 3D, Sinopsis Editorial y Botones (Espacio Completo)

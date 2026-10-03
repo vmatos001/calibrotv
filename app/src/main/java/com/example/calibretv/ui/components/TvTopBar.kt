@@ -63,15 +63,19 @@ fun TvTopBar(
     onTabSelected: (TvNavTab) -> Unit,
     activeProfile: UserProfile = UserProfile("user_1", "Principal", "#FFA000"),
     onProfileClick: () -> Unit = {},
+    onOpenOpds: () -> Unit = {},
+    onOpenWifiImport: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+    onQuickSync: () -> Unit = {},
     initialFocusRequester: androidx.compose.ui.focus.FocusRequester? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(58.dp)
-            .background(BackgroundDark.copy(alpha = 0.95f))
-            .padding(horizontal = 36.dp),
+            .height(64.dp)
+            .background(BackgroundDark.copy(alpha = 0.96f))
+            .padding(horizontal = 32.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -79,22 +83,31 @@ fun TvTopBar(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Brand Logo
+            // Brand Logo estilizado idéntico al recuadro blanco de la referencia
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.MenuBook,
-                    contentDescription = null,
-                    tint = AmberWarm,
-                    modifier = Modifier.size(24.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(Color.White),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MenuBook,
+                        contentDescription = null,
+                        tint = Color(0xFF101014),
+                        modifier = Modifier.size(21.dp)
+                    )
+                }
                 Text(
                     text = "CalibroTV",
                     color = TextPrimary,
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.4.sp
                 )
             }
 
@@ -145,85 +158,37 @@ fun TvTopBar(
                 )
             }
 
-            // Status and User Profile Switcher
+            // Status and User Profile Pill (Nuevo diseño cápsula con acciones y avatar)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-            val formattedTime = remember {
-                try {
-                    val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-                    sdf.format(java.util.Date())
-                } catch (_: Exception) {
-                    "12:00"
+                val formattedTime = remember {
+                    try {
+                        val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                        sdf.format(java.util.Date())
+                    } catch (_: Exception) {
+                        "12:00"
+                    }
                 }
-            }
 
-            Text(
-                text = formattedTime,
-                color = TextMuted,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
+                Text(
+                    text = formattedTime,
+                    color = TextMuted,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
 
-                // Interactive User Profile Button (Requirement D)
-                UserProfileChip(
+                TvProfilePill(
                     profile = activeProfile,
-                    onClick = onProfileClick
+                    onOpenProfileSwitcher = onProfileClick,
+                    onOpenOpds = onOpenOpds,
+                    onOpenWifiImport = onOpenWifiImport,
+                    onOpenSettings = onOpenSettings,
+                    onQuickSync = onQuickSync
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun UserProfileChip(
-    profile: UserProfile,
-    onClick: () -> Unit
-) {
-    var isFocused by remember { mutableStateOf(false) }
-    val avatarBg = try {
-        Color(android.graphics.Color.parseColor(profile.avatarColorHex))
-    } catch (_: Exception) {
-        AmberWarm
-    }
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier
-            .scale(if (isFocused) 1.08f else 1.0f)
-            .shadow(if (isFocused) 10.dp else 0.dp, RoundedCornerShape(12.dp), spotColor = CyanElectric)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isFocused) SurfaceContainerHigh else Color(0xFF1A1A1E))
-            .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) CyanElectric else Color(0xFF333338),
-                shape = RoundedCornerShape(12.dp)
-            )
-            .onFocusChanged { isFocused = it.isFocused }
-            .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(24.dp)
-                .background(avatarBg, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = null,
-                tint = Color(0xFF131315),
-                modifier = Modifier.size(16.dp)
-            )
-        }
-        Text(
-            text = profile.name,
-            color = if (isFocused) CyanElectric else TextPrimary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold
-        )
     }
 }
 

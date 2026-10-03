@@ -40,12 +40,14 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import com.example.calibretv.ui.components.TvProfilePill
 import com.example.calibretv.ui.components.UserProfilesDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,6 +88,7 @@ import com.example.calibretv.ui.components.Book3DView
 import com.example.calibretv.ui.components.DrawerItem
 import com.example.calibretv.ui.components.TvSideDrawer
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -160,6 +163,7 @@ fun LibraryGridScreen(
 
     var isDrawerOpen by remember { mutableStateOf(false) }
     var showUserProfilesModal by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
     // Modal state for Book Details
     var showDetailsModal by remember { mutableStateOf(false) }
@@ -389,58 +393,21 @@ fun LibraryGridScreen(
                         fontWeight = FontWeight.Medium
                     )
 
-                    val profColor = try {
-                        Color(android.graphics.Color.parseColor(activeProfile.avatarColorHex))
-                    } catch (e: Exception) {
-                        AmberWarm
-                    }
-                    var isProfileFocused by remember { mutableStateOf(false) }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier
-                            .scale(if (isProfileFocused) 1.05f else 1.0f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(if (isProfileFocused) AmberWarm else Color.White.copy(alpha = 0.12f))
-                            .border(
-                                width = if (isProfileFocused) 2.dp else 0.dp,
-                                color = if (isProfileFocused) Color.White else Color.Transparent,
-                                shape = RoundedCornerShape(16.dp)
-                            )
-                            .onFocusChanged { isProfileFocused = it.isFocused }
-                            .onKeyEvent { event ->
-                                if (event.type == KeyEventType.KeyDown &&
-                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)) {
-                                    showUserProfilesModal = true
-                                    true
-                                } else false
+                    TvProfilePill(
+                        profile = activeProfile,
+                        onOpenProfileSwitcher = { showUserProfilesModal = true },
+                        onOpenOpds = onNavigateToOpds,
+                        onOpenWifiImport = onNavigateToWifiImport,
+                        onOpenSettings = onNavigateToSettings,
+                        onQuickSync = {
+                            coroutineScope.launch {
+                                isLoading = true
+                                feedContent = repository.getFeed()
+                                isLoading = false
                             }
-                            .focusable()
-                            .clickable { showUserProfilesModal = true }
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clip(CircleShape)
-                                .background(if (isProfileFocused) Color(0xFF131315) else profColor),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = null,
-                                tint = if (isProfileFocused) AmberWarm else Color(0xFF131315),
-                                modifier = Modifier.size(11.dp)
-                            )
-                        }
-                        Text(
-                            text = activeProfile.name,
-                            color = if (isProfileFocused) Color(0xFF131315) else Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                        },
+                        onNotificationsClick = onNavigateToSettings
+                    )
                 }
             }
 
