@@ -1110,8 +1110,8 @@ private fun HomeShelf(
 
         // Horizontal Carousel of 3D Books (Tilted in standby, face-forward on focus)
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 36.dp, vertical = 8.dp)
+            horizontalArrangement = Arrangement.spacedBy(28.dp),
+            contentPadding = PaddingValues(horizontal = 36.dp, vertical = 10.dp)
         ) {
             itemsIndexed(books) { index, book ->
                 val isFirst = index == 0
@@ -1148,7 +1148,7 @@ private fun CompactCoverCard(
 
     Column(
         modifier = Modifier
-            .width(114.dp)
+            .width(122.dp)
             .onFocusChanged {
                 if (isInteractive) {
                     isFocused = it.isFocused
@@ -1180,8 +1180,8 @@ private fun CompactCoverCard(
         Book3DView(
             coverBitmap = coverBmp,
             title = book.title,
-            width = 114.dp,
-            height = 162.dp,
+            width = 96.dp,
+            height = 142.dp,
             isFocused = isFocused,
             badgeText = if (book.progressPercent > 0) "${book.progressPercent}%" else null,
             badgeColor = AmberWarm
@@ -1570,14 +1570,14 @@ private fun HomeHeroBanner(
         horizontalArrangement = Arrangement.spacedBy(36.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // LADO IZQUIERDO: Portada en 3D (Hardcover Mockup con relieve y sombra)
+        // LADO IZQUIERDO: Portada destacada del banner (Presentación limpia y frontal)
         Book3DView(
             coverBitmap = coverBmp,
             title = heroBanner.title,
             width = 158.dp,
             height = 226.dp,
             isFocused = false,
-            enable3DStandby = true,
+            enable3DStandby = false,
             badgeText = "BESTSELLER",
             badgeColor = AmberWarm
         )
@@ -1812,8 +1812,8 @@ private fun HomeOffersRow(
 
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 36.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(horizontal = 36.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(28.dp)
         ) {
             itemsIndexed(offers, key = { _, o -> o.id }) { index, offer ->
                 HomeOfferCard(
@@ -1839,7 +1839,7 @@ private fun HomeOfferCard(
 
     Column(
         modifier = Modifier
-            .width(116.dp)
+            .width(122.dp)
             .onFocusChanged { isFocused = it.isFocused }
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
@@ -1864,8 +1864,8 @@ private fun HomeOfferCard(
         Book3DView(
             coverBitmap = coverBmp,
             title = offer.title,
-            width = 116.dp,
-            height = 164.dp,
+            width = 96.dp,
+            height = 142.dp,
             isFocused = isFocused,
             badgeText = offer.discountTag.ifBlank { null },
             badgeColor = Color(0xFFFF5252)

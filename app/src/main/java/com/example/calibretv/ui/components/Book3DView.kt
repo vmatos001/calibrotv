@@ -44,66 +44,69 @@ import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.TextPrimary
 
 /**
- * Editorial 3D Hardcover Book Mockup matching physical reference (e.g. Cixin Liu / Nova):
+ * Editorial 3D Hardcover Book Mockup matching physical reference (Nova / Cixin Liu):
  *
- * - Standby (!isFocused): The book stands at a realistic 3D perspective angle (rotationY = -18f).
- *   The front cover displays 100% of the downloaded artwork without any artificial spine crop.
+ * - Standby (!isFocused && enable3DStandby): The book stands in 3D perspective (rotationY = -20f).
+ *   The front cover preserves 100% of the downloaded artwork without any artificial spine crop.
  *   On the right side, the physical closed book's paper page block (bright white fore-edge
  *   with subtle sheet striations) and the back cover board are visible with hardcover lip overhang.
  * - Focused (isFocused): Smoothly animates into full forward-facing view (rotationY = 0f),
- *   page block folds away behind, scales up (1.08f) with elevated floor shadow.
+ *   page block folds away behind, scales up (1.10f) with elevated floor shadow.
  * - Clean Selection: NO yellow selection outline around the book; the focused state is
  *   indicated naturally by front-facing orientation, scale, and shelf elevation.
+ * - Banner Mode (enable3DStandby = false): Stays flat and prestigious without side page block.
  */
 @Composable
 fun Book3DView(
     coverBitmap: ImageBitmap?,
     title: String,
     modifier: Modifier = Modifier,
-    width: Dp = 114.dp,
-    height: Dp = 162.dp,
+    width: Dp = 96.dp,
+    height: Dp = 142.dp,
     isFocused: Boolean = false,
     badgeText: String? = null,
     badgeColor: Color = AmberWarm,
     enable3DStandby: Boolean = true
 ) {
     // Proportional closed-book page block width (matches reference mockup thickness)
-    val targetPageWidth = (width.value * 0.16f).dp.coerceIn(16.dp, 26.dp)
+    val targetPageWidth = (width.value * 0.17f).dp.coerceIn(14.dp, 24.dp)
 
     val pageBlockWidth by animateDpAsState(
         targetValue = if (isFocused || !enable3DStandby) 0.dp else targetPageWidth,
-        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
         label = "pageBlockWidth"
     )
 
     val rotationY by animateFloatAsState(
-        targetValue = if (isFocused || !enable3DStandby) 0f else -18f,
-        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+        targetValue = if (isFocused || !enable3DStandby) 0f else -20f,
+        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
         label = "bookRotationY"
     )
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.08f else 1.0f,
-        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+        targetValue = if (isFocused) 1.10f else 1.0f,
+        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
         label = "bookScale"
     )
 
+    val totalWidth = if (enable3DStandby && !isFocused) width + targetPageWidth else width
+
     Box(
         modifier = modifier
-            .width(width + (if (enable3DStandby && !isFocused) targetPageWidth else 0.dp))
-            .height(height + 12.dp),
-        contentAlignment = Alignment.TopCenter
+            .width(totalWidth)
+            .height(height + 14.dp),
+        contentAlignment = Alignment.Center
     ) {
-        // 1. Natural Shelf Floor Drop Shadow (Soft contact shadow cast to the right)
+        // 1. Natural Shelf Floor Drop Shadow (Soft contact shadow under the book base)
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth(0.96f)
                 .height(16.dp)
-                .offset(x = if (isFocused || !enable3DStandby) 0.dp else 4.dp, y = 1.dp)
+                .offset(x = if (isFocused || !enable3DStandby) 0.dp else 4.dp, y = 2.dp)
                 .graphicsLayer {
                     this.scaleX = scale
-                    this.alpha = if (isFocused) 0.85f else 0.55f
+                    this.alpha = if (isFocused) 0.85f else 0.50f
                 }
                 .background(
                     Brush.radialGradient(
@@ -125,7 +128,7 @@ fun Book3DView(
                     this.scaleY = scale
                     this.rotationY = rotationY
                     this.cameraDistance = 16f * density
-                    this.transformOrigin = TransformOrigin(0.06f, 0.5f)
+                    this.transformOrigin = TransformOrigin(0.5f, 0.5f)
                 },
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -138,7 +141,7 @@ fun Book3DView(
                     .background(Color(0xFF18181D))
                     .border(
                         width = 0.5.dp,
-                        color = Color.White.copy(alpha = if (isFocused) 0.18f else 0.08f),
+                        color = Color.White.copy(alpha = if (isFocused) 0.20f else 0.08f),
                         shape = RoundedCornerShape(topStart = 3.dp, bottomStart = 3.dp, topEnd = 1.dp, bottomEnd = 1.dp)
                     )
             ) {
@@ -167,13 +170,13 @@ fun Book3DView(
                             contentDescription = null,
                             tint = AmberWarm.copy(alpha = 0.8f),
                             modifier = Modifier
-                                .size(34.dp)
+                                .size(32.dp)
                                 .align(Alignment.Center)
                         )
                         Text(
                             text = title,
                             color = TextPrimary,
-                            fontSize = 10.5.sp,
+                            fontSize = 10.sp,
                             fontFamily = FontFamily.Serif,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
@@ -219,7 +222,7 @@ fun Book3DView(
                         Text(
                             text = badgeText,
                             color = badgeColor,
-                            fontSize = 8.5.sp,
+                            fontSize = 8.sp,
                             fontWeight = FontWeight.ExtraBold,
                             letterSpacing = 0.5.sp
                         )

@@ -157,8 +157,8 @@ fun CuratorRow(
 
         // Fila horizontal de libros en 3D (sin tarjeta, con perspectiva y animación al foco)
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 36.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(horizontal = 36.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(28.dp)
         ) {
             itemsIndexed(section.books, key = { _, b -> b.id }) { index, book ->
                 CuratedBookCard(
@@ -184,7 +184,7 @@ private fun CuratedBookCard(
 
     Column(
         modifier = Modifier
-            .width(116.dp)
+            .width(122.dp)
             .onFocusChanged { isFocused = it.isFocused }
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
@@ -209,8 +209,8 @@ private fun CuratedBookCard(
         Book3DView(
             coverBitmap = coverBmp,
             title = book.title,
-            width = 116.dp,
-            height = 164.dp,
+            width = 96.dp,
+            height = 142.dp,
             isFocused = isFocused,
             badgeText = if (book.isPublicDomain) "GRATIS" else "QR COMPRA",
             badgeColor = if (book.isPublicDomain) Color(0xFF34D399) else AccentGold
