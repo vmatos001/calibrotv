@@ -103,7 +103,7 @@ object CuratorRepository {
                 tagline = "El fenómeno mundial de la ciencia ficción que desafía las leyes del cosmos",
                 synopsis = "Durante la Revolución Cultural china, una señal militar secreta viaja al espacio exterior desatando una conspiración cuántica global sin precedentes.",
                 backdropUrl = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1920&auto=format&fit=crop",
-                coverUrl = "https://images-na.ssl-images-amazon.com/images/S/compressed.photo.goodreads.com/books/1415375420i/20518872.jpg",
+                coverUrl = "https://covers.openlibrary.org/b/isbn/9788466659734-L.jpg",
                 sampleEpubUrl = "https://standardebooks.org/ebooks/h-g-wells/the-war-of-the-worlds/downloads/h-g-wells_the-war-of-the-worlds.epub",
                 affiliatePurchaseUrl = "https://www.amazon.es/dp/8466659730?tag=calibrotv-21"
             ),

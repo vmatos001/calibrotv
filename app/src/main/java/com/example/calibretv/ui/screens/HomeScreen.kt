@@ -61,6 +61,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -1558,7 +1559,19 @@ private fun HomeHeroBanner(
     onBuyQr: () -> Unit,
     onLeftAtBoundary: () -> Unit
 ) {
-    val coverBmp = rememberCoverImage(heroBanner.coverUrl)
+    val context = LocalContext.current
+    val fallbackCoverBmp = remember {
+        try {
+            android.graphics.BitmapFactory.decodeResource(
+                context.resources,
+                com.example.calibretv.R.drawable.hero_tres_cuerpos
+            )?.asImageBitmap()
+        } catch (_: Exception) {
+            null
+        }
+    }
+    val downloadedCover = rememberCoverImage(heroBanner.coverUrl)
+    val coverBmp = downloadedCover ?: fallbackCoverBmp
     val readBtnFocusRequester = remember { FocusRequester() }
     var isReadFocused by remember { mutableStateOf(false) }
     var isBuyFocused by remember { mutableStateOf(false) }
