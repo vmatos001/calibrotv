@@ -701,45 +701,14 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(28.dp)
                     ) {
                         // Cover on the left
-                        Box(
-                            modifier = Modifier
-                                .width(190.dp)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(SurfaceContainerHigh)
-                                .border(1.dp, Color(0xFF333338), RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (modalCover != null) {
-                                Image(
-                                    bitmap = modalCover,
-                                    contentDescription = book.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.padding(16.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.MenuBook,
-                                        contentDescription = null,
-                                        tint = AmberWarm,
-                                        modifier = Modifier.size(48.dp)
-                                    )
-                                    Text(
-                                        text = book.title,
-                                        color = TextPrimary,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 3,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
+                        Book3DView(
+                            coverBitmap = modalCover,
+                            title = book.title,
+                            width = 180.dp,
+                            height = 265.dp,
+                            isFocused = false,
+                            enable3DStandby = false
+                        )
 
                         // Details & Actions on the right
                         Column(
@@ -1183,9 +1152,7 @@ private fun CompactCoverCard(
             title = book.title,
             width = 96.dp,
             height = 142.dp,
-            isFocused = isFocused,
-            badgeText = if (book.progressPercent > 0) "${book.progressPercent}%" else null,
-            badgeColor = AmberWarm
+            isFocused = isFocused
         )
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -1590,9 +1557,7 @@ private fun HomeHeroBanner(
             width = 158.dp,
             height = 226.dp,
             isFocused = false,
-            enable3DStandby = false,
-            badgeText = "BESTSELLER",
-            badgeColor = AmberWarm
+            enable3DStandby = false
         )
 
         // LADO DERECHO: Título, Autor, Cita / Sinopsis y Botones de Acción Inmediata
@@ -1879,9 +1844,7 @@ private fun HomeOfferCard(
             title = offer.title,
             width = 96.dp,
             height = 142.dp,
-            isFocused = isFocused,
-            badgeText = offer.discountTag.ifBlank { null },
-            badgeColor = Color(0xFFFF5252)
+            isFocused = isFocused
         )
 
         Spacer(modifier = Modifier.height(4.dp))

@@ -117,31 +117,14 @@ fun CuratedBookModal(
                 horizontalArrangement = Arrangement.spacedBy(28.dp)
             ) {
                 // Lado izquierdo: Portada del libro
-                Box(
-                    modifier = Modifier
-                        .width(190.dp)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(SurfaceContainerHigh)
-                        .border(1.dp, Color(0xFF38332E), RoundedCornerShape(12.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (coverBmp != null) {
-                        Image(
-                            bitmap = coverBmp,
-                            contentDescription = book.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.MenuBook,
-                            contentDescription = null,
-                            tint = AccentGold,
-                            modifier = Modifier.size(56.dp)
-                        )
-                    }
-                }
+                Book3DView(
+                    coverBitmap = coverBmp,
+                    title = book.title,
+                    width = 180.dp,
+                    height = 265.dp,
+                    isFocused = false,
+                    enable3DStandby = false
+                )
 
                 // Centro: Metadatos, sinopsis y ficha editorial
                 Column(

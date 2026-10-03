@@ -303,27 +303,6 @@ private fun Book3DPartA(
                     )
                 )
         )
-
-        // Etiqueta de descuento / porcentaje perfectamente contenida dentro de la tapa
-        if (!badgeText.isNullOrBlank()) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 6.dp, end = 6.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color.Black.copy(alpha = 0.85f))
-                    .border(0.5.dp, badgeColor, RoundedCornerShape(4.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = badgeText,
-                    color = badgeColor,
-                    fontSize = 8.5.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 0.5.sp
-                )
-            }
-        }
     }
 }
 

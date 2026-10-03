@@ -74,6 +74,7 @@ import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.SurfaceRaised
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
+import com.example.calibretv.ui.components.Book3DView
 import com.example.calibretv.ui.components.TvNavTab
 import com.example.calibretv.ui.components.TvTopBar
 
@@ -386,45 +387,14 @@ fun LibraryScreen(
                         horizontalArrangement = Arrangement.spacedBy(28.dp)
                     ) {
                         // Cover on the left
-                        Box(
-                            modifier = Modifier
-                                .width(200.dp)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(SurfaceContainerHigh)
-                                .border(1.dp, Color(0xFF333338), RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (modalCover != null) {
-                                Image(
-                                    bitmap = modalCover,
-                                    contentDescription = book.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.padding(16.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.MenuBook,
-                                        contentDescription = null,
-                                        tint = AmberWarm,
-                                        modifier = Modifier.size(48.dp)
-                                    )
-                                    Text(
-                                        text = book.title,
-                                        color = TextPrimary,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 3,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
+                        Book3DView(
+                            coverBitmap = modalCover,
+                            title = book.title,
+                            width = 180.dp,
+                            height = 265.dp,
+                            isFocused = false,
+                            enable3DStandby = false
+                        )
 
                         // Details & Actions on the right
                         Column(
@@ -550,31 +520,14 @@ private fun CompactHeroSection(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Thumbnail poster on the left of Zone A
-        Box(
-            modifier = Modifier
-                .width(85.dp)
-                .height(125.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(SurfaceContainerHigh)
-                .border(1.dp, Color(0xFF333338), RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (coverBmp != null) {
-                Image(
-                    bitmap = coverBmp,
-                    contentDescription = book.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.MenuBook,
-                    contentDescription = null,
-                    tint = AmberWarm,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-        }
+        Book3DView(
+            coverBitmap = coverBmp,
+            title = book.title,
+            width = 85.dp,
+            height = 125.dp,
+            isFocused = false,
+            enable3DStandby = false
+        )
 
         // Book details & prominent action buttons
         Column(
@@ -726,16 +679,7 @@ private fun FullCoverCard(
 
     Column(
         modifier = Modifier
-            .width(138.dp)
-            .scale(if (isFocused && isInteractive) 1.08f else 1.0f)
-            .shadow(if (isFocused && isInteractive) 16.dp else 2.dp, RoundedCornerShape(10.dp), spotColor = CyanElectric)
-            .clip(RoundedCornerShape(10.dp))
-            .background(SurfaceRaised)
-            .border(
-                width = if (isFocused && isInteractive) 2.5.dp else 1.dp,
-                color = if (isFocused && isInteractive) CyanElectric else Color(0xFF26262A),
-                shape = RoundedCornerShape(10.dp)
-            )
+            .width(122.dp)
             .onFocusChanged {
                 if (isInteractive) {
                     isFocused = it.isFocused
@@ -745,131 +689,51 @@ private fun FullCoverCard(
             .focusable(enabled = isInteractive)
             .clickable(enabled = isInteractive) { onSelected() }
     ) {
-        // Complete Poster Cover Art (Fully visible)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color(0xFF24242E), Color(0xFF141418))
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            if (coverBmp != null) {
-                Image(
-                    bitmap = coverBmp,
-                    contentDescription = book.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MenuBook,
-                        contentDescription = null,
-                        tint = AmberWarm,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Text(
-                        text = book.title,
-                        color = TextPrimary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = book.author,
-                        color = TextMuted,
-                        fontSize = 10.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
+        Book3DView(
+            coverBitmap = coverBmp,
+            title = book.title,
+            width = 96.dp,
+            height = 142.dp,
+            isFocused = isFocused
+        )
 
-            val isComic = book.epubUrl?.let { it.endsWith(".cbz", ignoreCase = true) || it.endsWith(".cbr", ignoreCase = true) } == true
-            val isManga = isComic && (book.title.contains("manga", ignoreCase = true) || book.tags.any { it.contains("manga", ignoreCase = true) } || book.category.contains("manga", ignoreCase = true))
-            if (isComic) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(5.dp)
-                        .background(Color(0xFF0A0A0C).copy(alpha = 0.88f), RoundedCornerShape(5.dp))
-                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = if (isManga) "🗾 Manga" else "📚 Cómic",
-                        color = AmberWarm,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            // Progress badge
-            if (book.progressPercent > 0) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(5.dp)
-                        .background(Color(0xFF0A0A0C).copy(alpha = 0.88f), RoundedCornerShape(5.dp))
-                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "${book.progressPercent}%",
-                        color = CyanElectric,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
+        Spacer(modifier = Modifier.height(4.dp))
 
         // Title and reading bar
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp)
+                .padding(horizontal = 2.dp)
         ) {
             Text(
                 text = book.title,
-                color = TextPrimary,
+                color = if (isFocused) AmberWarm else TextPrimary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
-            if (book.shelves.isNotEmpty()) {
-                Text(
-                    text = "🏷 ${book.shelves.first()}",
-                    color = AmberWarm,
-                    fontSize = 9.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Text(
+                text = book.author.ifBlank { "Biblioteca" },
+                color = TextMuted,
+                fontSize = 9.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .background(Color(0xFF26262A), RoundedCornerShape(2.dp))
-            ) {
-                if (book.progressPercent > 0) {
+            if (book.progressPercent > 0) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.5.dp)
+                        .background(Color(0xFF26262A), RoundedCornerShape(2.dp))
+                ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(book.progressPercent / 100f)
-                            .height(3.dp)
+                            .height(2.5.dp)
                             .background(AmberWarm, RoundedCornerShape(2.dp))
                     )
                 }

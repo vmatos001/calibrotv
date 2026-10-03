@@ -82,6 +82,7 @@ import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.SurfaceRaised
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
+import com.example.calibretv.ui.components.Book3DView
 import com.example.calibretv.ui.components.DrawerItem
 import com.example.calibretv.ui.components.TvSideDrawer
 import kotlinx.coroutines.Dispatchers
@@ -590,45 +591,14 @@ fun LibraryGridScreen(
                         horizontalArrangement = Arrangement.spacedBy(28.dp)
                     ) {
                         // Cover on the left
-                        Box(
-                            modifier = Modifier
-                                .width(190.dp)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(SurfaceContainerHigh)
-                                .border(1.dp, Color(0xFF333338), RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (modalCover != null) {
-                                Image(
-                                    bitmap = modalCover,
-                                    contentDescription = book.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.padding(16.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.MenuBook,
-                                        contentDescription = null,
-                                        tint = AmberWarm,
-                                        modifier = Modifier.size(48.dp)
-                                    )
-                                    Text(
-                                        text = book.title,
-                                        color = TextPrimary,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 3,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
+                        Book3DView(
+                            coverBitmap = modalCover,
+                            title = book.title,
+                            width = 180.dp,
+                            height = 265.dp,
+                            isFocused = false,
+                            enable3DStandby = false
+                        )
 
                         // Details & Actions on the right
                         Column(
@@ -783,15 +753,6 @@ private fun GridCoverCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .scale(if (isFocused && isInteractive) 1.08f else 1.0f)
-            .shadow(if (isFocused && isInteractive) 14.dp else 2.dp, RoundedCornerShape(8.dp), spotColor = CyanElectric)
-            .clip(RoundedCornerShape(8.dp))
-            .background(SurfaceRaised)
-            .border(
-                width = if (isFocused && isInteractive) 2.5.dp else 1.dp,
-                color = if (isFocused && isInteractive) CyanElectric else Color(0xFF242428),
-                shape = RoundedCornerShape(8.dp)
-            )
             .onFocusChanged {
                 if (isInteractive) {
                     isFocused = it.isFocused
@@ -817,122 +778,28 @@ private fun GridCoverCard(
                 } else false
             }
             .focusable(enabled = isInteractive)
-            .clickable(enabled = isInteractive) { onSelected() }
+            .clickable(enabled = isInteractive) { onSelected() },
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(142.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color(0xFF22222A), Color(0xFF131316))
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            if (coverBmp != null) {
-                Image(
-                    bitmap = coverBmp,
-                    contentDescription = book.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MenuBook,
-                        contentDescription = null,
-                        tint = AmberWarm,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        text = book.title,
-                        color = TextPrimary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
+        Book3DView(
+            coverBitmap = coverBmp,
+            title = book.title,
+            width = 96.dp,
+            height = 142.dp,
+            isFocused = isFocused
+        )
 
-            val isComic = book.epubUrl?.let { it.endsWith(".cbz", ignoreCase = true) || it.endsWith(".cbr", ignoreCase = true) } == true
-            val isManga = isComic && (book.title.contains("manga", ignoreCase = true) || book.tags.any { it.contains("manga", ignoreCase = true) } || book.category.contains("manga", ignoreCase = true))
-            if (isComic) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(4.dp)
-                        .background(Color(0xFF09090B).copy(alpha = 0.90f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = if (isManga) "🗾 Manga" else "📚 Cómic",
-                        color = AmberWarm,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
-
-            val cardLevel = remember(book) { getBookDifficultyLevel(book) }
-            if (cardLevel in 1..5) {
-                val badgeColor = when (cardLevel) {
-                    1 -> Color(0xFF00E676)
-                    2 -> Color(0xFF00B0FF)
-                    3 -> Color(0xFFFFAB00)
-                    4 -> Color(0xFFFF5722)
-                    5 -> Color(0xFFE040FB)
-                    else -> CyanElectric
-                }
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(4.dp)
-                        .background(Color(0xFF09090B).copy(alpha = 0.92f), RoundedCornerShape(4.dp))
-                        .border(0.8.dp, badgeColor.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "Nivel $cardLevel",
-                        color = badgeColor,
-                        fontSize = 8.5.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
-
-            if (book.progressPercent > 0) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp)
-                        .background(Color(0xFF09090B).copy(alpha = 0.90f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "${book.progressPercent}%",
-                        color = CyanElectric,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
-        }
+        Spacer(modifier = Modifier.height(4.dp))
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 5.dp)
+                .padding(horizontal = 4.dp)
         ) {
             Text(
                 text = book.title,
-                color = TextPrimary,
-                fontSize = 10.sp,
+                color = if (isFocused) AmberWarm else TextPrimary,
+                fontSize = 10.5.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -942,7 +809,7 @@ private fun GridCoverCard(
             if (shelfOrAuthor.isNotBlank()) {
                 Text(
                     text = shelfOrAuthor,
-                    color = AmberWarm,
+                    color = TextMuted,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -950,20 +817,19 @@ private fun GridCoverCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(3.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.5.dp)
-                    .background(Color(0xFF26262A), RoundedCornerShape(1.dp))
-            ) {
-                if (book.progressPercent > 0) {
+            if (book.progressPercent > 0) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(Color(0xFF26262A), RoundedCornerShape(1.dp))
+                ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(book.progressPercent / 100f)
-                            .height(2.5.dp)
-                            .background(CyanElectric, RoundedCornerShape(1.dp))
+                            .height(2.dp)
+                            .background(AmberWarm, RoundedCornerShape(1.dp))
                     )
                 }
             }

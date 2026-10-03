@@ -52,6 +52,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -67,6 +68,7 @@ import com.example.calibretv.theme.SurfaceRaised
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
 import com.example.calibretv.theme.TextSecondary
+import com.example.calibretv.ui.components.Book3DView
 import com.example.calibretv.ui.components.TvNavTab
 import com.example.calibretv.ui.components.TvTopBar
 import com.example.calibretv.ui.components.UserProfilesDialog
@@ -410,111 +412,42 @@ private fun YourBookItemCard(
     onDeleteClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.06f else 1.0f,
-        animationSpec = tween(150),
-        label = "card_scale"
-    )
-
     val coverBmp = rememberCoverImage(book.coverUrl, null)
-    val isPdf = book.epubUrl?.endsWith(".pdf", ignoreCase = true) == true
-    val isCbz = book.epubUrl?.let { it.endsWith(".cbz", true) || it.endsWith(".cbr", true) } == true
-    val formatTag = when {
-        isPdf -> "PDF"
-        isCbz -> "CÓMIC"
-        else -> "EPUB"
-    }
 
     Column(
         modifier = Modifier
-            .scale(scale)
+            .width(122.dp)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
-            .clickable { onClick() }
-            .background(if (isFocused) SurfaceFocused else SurfaceCard, RoundedCornerShape(12.dp))
-            .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) AmberWarm else SurfaceRaised,
-                shape = RoundedCornerShape(12.dp)
-            )
-            .padding(8.dp)
+            .clickable { onClick() },
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(0.68f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color.DarkGray)
-        ) {
-            if (coverBmp != null) {
-                Image(
-                    bitmap = coverBmp,
-                    contentDescription = book.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MenuBook,
-                        contentDescription = null,
-                        tint = TextMuted,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-            }
+        Book3DView(
+            coverBitmap = coverBmp,
+            title = book.title,
+            width = 96.dp,
+            height = 142.dp,
+            isFocused = isFocused
+        )
 
-            // Etiqueta de formato
-            Box(
-                modifier = Modifier
-                    .padding(6.dp)
-                    .align(Alignment.TopStart)
-                    .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = formatTag,
-                    color = AmberWarm,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            // Etiqueta de peso en megabytes
-            Box(
-                modifier = Modifier
-                    .padding(6.dp)
-                    .align(Alignment.BottomEnd)
-                    .background(Color.Black.copy(alpha = 0.85f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = formatBytes(sizeBytes),
-                    color = TextPrimary,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             text = book.title,
             color = if (isFocused) AmberWarm else TextPrimary,
-            fontSize = 13.sp,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Serif,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 2.dp)
         )
         Text(
-            text = book.author,
+            text = book.author.ifBlank { "Memoria TV" },
             color = TextSecondary,
-            fontSize = 11.sp,
+            fontSize = 9.5.sp,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 2.dp)
         )
     }
 }

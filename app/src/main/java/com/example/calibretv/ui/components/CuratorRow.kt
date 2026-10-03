@@ -211,9 +211,7 @@ private fun CuratedBookCard(
             title = book.title,
             width = 96.dp,
             height = 142.dp,
-            isFocused = isFocused,
-            badgeText = if (book.isPublicDomain) "GRATIS" else "QR COMPRA",
-            badgeColor = if (book.isPublicDomain) Color(0xFF34D399) else AccentGold
+            isFocused = isFocused
         )
 
         Spacer(modifier = Modifier.height(4.dp))
