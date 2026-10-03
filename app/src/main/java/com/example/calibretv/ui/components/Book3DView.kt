@@ -44,14 +44,14 @@ import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.TextPrimary
 
 /**
- * Editorial 3D Book View based on physical closed-book mockup sketch:
+ * Editorial 3D Hardcover Book Mockup matching physical reference (e.g. Cixin Liu / Nova):
  *
- * - Standby (!isFocused): The book stands at a 3D perspective angle (rotationY = -14f).
- *   The front cover preserves 100% of the downloaded artwork (no artificial spine crop).
- *   Along the right edge, the physical closed book's page block is visible (fore-edge paper
- *   pages between the front and back cover boards).
+ * - Standby (!isFocused): The book stands at a realistic 3D perspective angle (rotationY = -18f).
+ *   The front cover displays 100% of the downloaded artwork without any artificial spine crop.
+ *   On the right side, the physical closed book's paper page block (bright white fore-edge
+ *   with subtle sheet striations) and the back cover board are visible with hardcover lip overhang.
  * - Focused (isFocused): Smoothly animates into full forward-facing view (rotationY = 0f),
- *   page block folds behind, scales up (1.08f) with elevated floor shadow.
+ *   page block folds away behind, scales up (1.08f) with elevated floor shadow.
  * - Clean Selection: NO yellow selection outline around the book; the focused state is
  *   indicated naturally by front-facing orientation, scale, and shelf elevation.
  */
@@ -67,17 +67,17 @@ fun Book3DView(
     badgeColor: Color = AmberWarm,
     enable3DStandby: Boolean = true
 ) {
-    // Proportional closed-book page block width (stack of pages visible on the edge)
-    val basePageBlockWidth = (width.value * 0.09f).dp.coerceIn(9.dp, 15.dp)
+    // Proportional closed-book page block width (matches reference mockup thickness)
+    val targetPageWidth = (width.value * 0.16f).dp.coerceIn(16.dp, 26.dp)
 
     val pageBlockWidth by animateDpAsState(
-        targetValue = if (isFocused || !enable3DStandby) 0.dp else basePageBlockWidth,
+        targetValue = if (isFocused || !enable3DStandby) 0.dp else targetPageWidth,
         animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
         label = "pageBlockWidth"
     )
 
     val rotationY by animateFloatAsState(
-        targetValue = if (isFocused || !enable3DStandby) 0f else -14f,
+        targetValue = if (isFocused || !enable3DStandby) 0f else -18f,
         animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
         label = "bookRotationY"
     )
@@ -90,33 +90,33 @@ fun Book3DView(
 
     Box(
         modifier = modifier
-            .width(width + (if (enable3DStandby && !isFocused) basePageBlockWidth else 0.dp))
-            .height(height + 10.dp),
+            .width(width + (if (enable3DStandby && !isFocused) targetPageWidth else 0.dp))
+            .height(height + 12.dp),
         contentAlignment = Alignment.TopCenter
     ) {
-        // 1. Natural Shelf Floor Drop Shadow (Soft contact shadow under the book base)
+        // 1. Natural Shelf Floor Drop Shadow (Soft contact shadow cast to the right)
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth(0.92f)
-                .height(14.dp)
-                .offset(y = (-2).dp)
+                .fillMaxWidth(0.96f)
+                .height(16.dp)
+                .offset(x = if (isFocused || !enable3DStandby) 0.dp else 4.dp, y = 1.dp)
                 .graphicsLayer {
                     this.scaleX = scale
-                    this.alpha = if (isFocused) 0.85f else 0.50f
+                    this.alpha = if (isFocused) 0.85f else 0.55f
                 }
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
                             Color.Black.copy(alpha = 0.85f),
-                            Color.Black.copy(alpha = 0.30f),
+                            Color.Black.copy(alpha = 0.35f),
                             Color.Transparent
                         )
                     )
                 )
         )
 
-        // 2. Physical 3D Book Assembly (Front Cover + Closed Pages Fore-edge)
+        // 2. Physical 3D Hardcover Book Assembly (Front Cover + White Page Block + Back Board)
         Row(
             modifier = Modifier
                 .height(height)
@@ -124,8 +124,8 @@ fun Book3DView(
                     this.scaleX = scale
                     this.scaleY = scale
                     this.rotationY = rotationY
-                    this.cameraDistance = 18f * density
-                    this.transformOrigin = TransformOrigin(0.08f, 0.5f)
+                    this.cameraDistance = 16f * density
+                    this.transformOrigin = TransformOrigin(0.06f, 0.5f)
                 },
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -134,12 +134,12 @@ fun Book3DView(
                 modifier = Modifier
                     .width(width)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(3.dp))
+                    .clip(RoundedCornerShape(topStart = 3.dp, bottomStart = 3.dp, topEnd = 1.dp, bottomEnd = 1.dp))
                     .background(Color(0xFF18181D))
                     .border(
                         width = 0.5.dp,
                         color = Color.White.copy(alpha = if (isFocused) 0.18f else 0.08f),
-                        shape = RoundedCornerShape(3.dp)
+                        shape = RoundedCornerShape(topStart = 3.dp, bottomStart = 3.dp, topEnd = 1.dp, bottomEnd = 1.dp)
                     )
             ) {
                 if (coverBitmap != null) {
@@ -186,21 +186,21 @@ fun Book3DView(
                     }
                 }
 
-                // Left spine-hinge shadow overlay (creates the appearance of a bound spine on the left edge)
+                // Left spine-hinge volume lighting (simulates the rounded hardcover spine edge on the left)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
                             Brush.horizontalGradient(
                                 colors = listOf(
-                                    Color.Black.copy(alpha = 0.35f), // Left crease
-                                    Color.White.copy(alpha = 0.12f), // Hinge highlight
+                                    Color.Black.copy(alpha = 0.35f), // Left edge shadow
+                                    Color.White.copy(alpha = 0.15f), // Cylindrical highlight
                                     Color.Transparent,
                                     Color.Transparent,
-                                    Color.Black.copy(alpha = 0.15f)  // Soft right edge shade
+                                    Color.Black.copy(alpha = 0.12f)  // Soft right edge vignette
                                 ),
                                 startX = 0f,
-                                endX = 120f
+                                endX = 140f
                             )
                         )
                 )
@@ -227,70 +227,86 @@ fun Book3DView(
                 }
             }
 
-            // B. Closed Pages Block (Visible in standby, tucks behind on focus)
+            // B. 3D Closed Page Block & Back Cover Board (As seen in the Nova reference mockup)
             if (pageBlockWidth > 0.5.dp) {
-                Box(
+                Row(
                     modifier = Modifier
                         .width(pageBlockWidth)
                         .fillMaxHeight()
-                        .offset(x = (-1).dp)
+                        .offset(x = (-1).dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Top hardcover board lip (ceja de la tapa)
+                    // White Paper Block with Hardcover Overhang (Ceja)
                     Box(
                         modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .fillMaxWidth()
-                            .height(2.5.dp)
-                            .background(Color(0xFF26262B))
-                    )
-
-                    // Stack of closed paper pages (warm ivory paper block with page lines)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
+                            .weight(1f)
                             .fillMaxHeight()
-                            .padding(vertical = 2.5.dp)
-                            .clip(RoundedCornerShape(topEnd = 1.dp, bottomEnd = 1.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(
-                                        Color(0xFFBAB5A8), // Inner shadow near the front cover board
-                                        Color(0xFFF7F4EB), // Warm paper sheen
-                                        Color(0xFFDFD9CB), // Page block body
-                                        Color(0xFF26262B)  // Back cover board rim
-                                    )
-                                )
-                            )
                     ) {
-                        // Subtle horizontal paper sheet striations
+                        // Top hardcover board lip (ceja superior)
                         Box(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .align(Alignment.TopStart)
+                                .fillMaxWidth()
+                                .height(2.5.dp)
+                                .background(Color(0xFF222026))
+                        )
+
+                        // Clean White Paper Stack
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight()
+                                .padding(vertical = 2.5.dp)
                                 .background(
-                                    Brush.verticalGradient(
+                                    Brush.horizontalGradient(
                                         colors = listOf(
-                                            Color.Black.copy(alpha = 0.07f),
-                                            Color.Transparent,
-                                            Color.Black.copy(alpha = 0.07f),
-                                            Color.Transparent,
-                                            Color.Black.copy(alpha = 0.07f),
-                                            Color.Transparent,
-                                            Color.Black.copy(alpha = 0.07f),
-                                            Color.Transparent,
-                                            Color.Black.copy(alpha = 0.07f)
+                                            Color(0xFFC8C4B8), // Inner shadow where pages meet front board
+                                            Color(0xFFFAF8F2), // Crisp white paper sheen
+                                            Color(0xFFFFFFFF), // Bright center
+                                            Color(0xFFECE8DE)  // Shaded edge near back board
                                         )
                                     )
                                 )
+                        ) {
+                            // Subtle horizontal paper sheet striations
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Black.copy(alpha = 0.06f),
+                                                Color.Transparent,
+                                                Color.Black.copy(alpha = 0.06f),
+                                                Color.Transparent,
+                                                Color.Black.copy(alpha = 0.06f),
+                                                Color.Transparent,
+                                                Color.Black.copy(alpha = 0.06f),
+                                                Color.Transparent,
+                                                Color.Black.copy(alpha = 0.06f)
+                                            )
+                                        )
+                                    )
+                            )
+                        }
+
+                        // Bottom hardcover board lip (ceja inferior)
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .fillMaxWidth()
+                                .height(2.5.dp)
+                                .background(Color(0xFF222026))
                         )
                     }
 
-                    // Bottom hardcover board lip (ceja inferior de la tapa)
+                    // Back Cover Hardcover Board (La contratapa trasera que encierra las hojas)
                     Box(
                         modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .fillMaxWidth()
-                            .height(2.5.dp)
-                            .background(Color(0xFF26262B))
+                            .width(2.5.dp)
+                            .fillMaxHeight()
+                            .background(Color(0xFF222026))
+                            .border(0.3.dp, Color.White.copy(alpha = 0.15f))
                     )
                 }
             }
