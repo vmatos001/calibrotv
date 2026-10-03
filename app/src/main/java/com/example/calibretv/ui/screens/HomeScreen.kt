@@ -92,6 +92,7 @@ import com.example.calibretv.data.storage.PreferencesManager
 import com.example.calibretv.theme.AccentGold
 import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.BackgroundDark
+import com.example.calibretv.theme.CyanElectric
 import com.example.calibretv.theme.SurfaceCard
 import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceContainerHigh
@@ -103,8 +104,10 @@ import com.example.calibretv.ui.components.CuratedBookModal
 import com.example.calibretv.ui.components.CuratorRow
 import com.example.calibretv.ui.components.DrawerItem
 import com.example.calibretv.ui.components.PinPadDialog
+import com.example.calibretv.ui.components.TvNavTab
 import com.example.calibretv.ui.components.TvProfilePill
 import com.example.calibretv.ui.components.TvSideDrawer
+import com.example.calibretv.ui.components.TvSidebar
 import com.example.calibretv.ui.components.UserProfilesDialog
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -268,12 +271,41 @@ fun HomeScreen(
 
     val heroBanner = homeCarteleraData.heroBanner ?: CuratorRepository.getOfflineHomeData().heroBanner!!
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BackgroundDark)
+    ) {
+        // Rail de Navegación Lateral (Letra A: 68dp, Letra B al desplegar: 215dp)
+        TvSidebar(
+            currentTab = TvNavTab.HOME,
+            onTabSelected = { tab ->
+                when (tab) {
+                    TvNavTab.HOME -> {}
+                    TvNavTab.BIBLIOTECA -> onNavigateToLibrary()
+                    TvNavTab.TUS_LIBROS -> onNavigateToYourBooks()
+                    TvNavTab.LECTOR_3D -> onNavigateToReader()
+                    TvNavTab.AJUSTES -> {
+                        if (activeProfile.isKidsMode && householdPin != null) {
+                            pendingProtectedAction = { onNavigateToSettings() }
+                        } else {
+                            onNavigateToSettings()
+                        }
+                    }
+                }
+            }
+        )
+
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(BackgroundDark)
+                .weight(1f)
+                .fillMaxHeight()
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(BackgroundDark)
+            ) {
             // ==========================================
             // ZONA A: HERO BANNER 16:9 (BESTSELLER DEL MES)
             // Branding oficial CalibroTV + Reloj + Perfil
@@ -810,6 +842,7 @@ fun HomeScreen(
             )
         }
     }
+}
 }
 
 @Composable
@@ -1494,196 +1527,195 @@ private fun HomeHeroBanner(
     val coverBmp = downloadedCover ?: fallbackCoverBmp
     val readBtnFocusRequester = remember { FocusRequester() }
     var isReadFocused by remember { mutableStateOf(false) }
-    var isBuyFocused by remember { mutableStateOf(false) }
+
+    val qrBitmap = remember(heroBanner.affiliatePurchaseUrl) {
+        try {
+            val url = heroBanner.affiliatePurchaseUrl?.ifBlank { "https://amazon.es" } ?: "https://amazon.es"
+            com.example.calibretv.data.server.QrCodeGenerator.generateQrBitmap(url, 200, 200)
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 40.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(36.dp),
+            .padding(horizontal = 36.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // LADO IZQUIERDO: Portada destacada del banner (Presentación limpia y frontal)
+        // LADO IZQUIERDO: Portada del mismo tamaño que los libros de abajo (96dp x 142dp)
         Book3DView(
             coverBitmap = coverBmp,
             title = heroBanner.title,
-            width = 158.dp,
-            height = 226.dp,
+            width = 96.dp,
+            height = 142.dp,
             isFocused = false,
             enable3DStandby = false
         )
 
-        // LADO DERECHO: Título, Autor, Cita / Sinopsis y Botones de Acción Inmediata
+        // CENTRO: Badge, Título, Autor, Cita, Sinopsis y Botón de Muestra
         Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
             verticalArrangement = Arrangement.Center
         ) {
-            // Título Principal en tipografía Editorial Serif (Estilo Apple Books)
+            // Badge BESTSELLER DEL MES
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(0xFF003844).copy(alpha = 0.85f))
+                    .border(1.dp, CyanElectric.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = "BESTSELLER DEL MES",
+                    color = CyanElectric,
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.8.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Título Principal
             Text(
                 text = heroBanner.title,
                 color = Color.White,
-                fontSize = 28.sp,
+                fontSize = 22.sp,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 0.4.sp,
+                letterSpacing = 0.3.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
             // Autor
             Text(
-                text = heroBanner.author.ifBlank { "Tatiana Tibuleac" },
+                text = heroBanner.author.ifBlank { "Cixin Liu" },
                 color = AmberWarm,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 2.dp)
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Cita editorial destacada
+            Text(
+                text = "“${heroBanner.tagline.ifBlank { heroBanner.synopsis }}”",
+                color = Color(0xFF88D8E8),
+                fontSize = 11.sp,
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(3.dp))
+
+            // Sinopsis breve
+            Text(
+                text = heroBanner.synopsis.ifBlank { heroBanner.tagline },
+                color = Color(0xFFD6D3D1),
+                fontSize = 10.5.sp,
+                lineHeight = 14.5.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Cita / Sinopsis editorial con comillas decorativas estilo Apple Books
-            Row(
-                modifier = Modifier.fillMaxWidth(0.92f),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.Top
+            // Botón único de acción: Leer Muestra EPUB (Capítulo 1)
+            Box(
+                modifier = Modifier
+                    .focusRequester(readBtnFocusRequester)
+                    .scale(if (isReadFocused) 1.05f else 1.0f)
+                    .shadow(if (isReadFocused) 10.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = CyanElectric)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (isReadFocused) CyanElectric else Color(0xFF004D5A))
+                    .border(
+                        width = if (isReadFocused) 2.dp else 1.dp,
+                        color = if (isReadFocused) Color.White else CyanElectric.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .onFocusChanged { isReadFocused = it.isFocused }
+                    .onKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown) {
+                            when (event.key) {
+                                Key.DirectionLeft -> {
+                                    onLeftAtBoundary()
+                                    true
+                                }
+                                Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                                    onReadSample()
+                                    true
+                                }
+                                else -> false
+                            }
+                        } else false
+                    }
+                    .focusable()
+                    .clickable { onReadSample() }
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "“",
-                    color = AmberWarm.copy(alpha = 0.75f),
-                    fontSize = 24.sp,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
-                    lineHeight = 24.sp
-                )
-                Text(
-                    text = heroBanner.synopsis.ifBlank { heroBanner.tagline },
-                    color = Color(0xFFD6D3D1),
-                    fontSize = 12.5.sp,
-                    lineHeight = 17.5.sp,
-                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    text = "”",
-                    color = AmberWarm.copy(alpha = 0.75f),
-                    fontSize = 24.sp,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
-                    lineHeight = 24.sp
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MenuBook,
+                        contentDescription = null,
+                        tint = if (isReadFocused) Color(0xFF002228) else Color.White,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        text = "Leer Muestra EPUB (Capítulo 1)",
+                        color = if (isReadFocused) Color(0xFF002228) else Color.White,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
+        }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Botones de acción rápida optimizados para D-pad de TV
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+        // LADO DERECHO: Tarjeta con Código QR a la vista para comprar desde el móvil
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF0D141E).copy(alpha = 0.90f))
+                .border(1.dp, Color(0xFF1E2B3C), RoundedCornerShape(12.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Botón 1: Muestra Gratis en 3D
-                Box(
-                    modifier = Modifier
-                        .focusRequester(readBtnFocusRequester)
-                        .scale(if (isReadFocused) 1.08f else 1.0f)
-                        .shadow(if (isReadFocused) 12.dp else 0.dp, RoundedCornerShape(10.dp), spotColor = AmberWarm)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (isReadFocused) AmberWarm else SurfaceContainerHighest)
-                        .border(
-                            width = if (isReadFocused) 2.dp else 1.dp,
-                            color = if (isReadFocused) Color.White else AmberWarm.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .onFocusChanged { isReadFocused = it.isFocused }
-                        .onKeyEvent { event ->
-                            if (event.type == KeyEventType.KeyDown) {
-                                when (event.key) {
-                                    Key.DirectionLeft -> {
-                                        onLeftAtBoundary()
-                                        true
-                                    }
-                                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
-                                        onReadSample()
-                                        true
-                                    }
-                                    else -> false
-                                }
-                            } else false
-                        }
-                        .focusable()
-                        .clickable { onReadSample() }
-                        .padding(horizontal = 18.dp, vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                if (qrBitmap != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(76.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.White)
+                            .padding(4.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoStories,
-                            contentDescription = null,
-                            tint = if (isReadFocused) Color(0xFF131315) else AmberWarm,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "Muestra Gratis en 3D",
-                            color = if (isReadFocused) Color(0xFF131315) else TextPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
+                        Image(
+                            bitmap = qrBitmap.asImageBitmap(),
+                            contentDescription = "QR Compra en Móvil",
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
-
-                // Botón 2: Comprar en Móvil (QR)
-                Box(
-                    modifier = Modifier
-                        .scale(if (isBuyFocused) 1.08f else 1.0f)
-                        .shadow(if (isBuyFocused) 12.dp else 0.dp, RoundedCornerShape(10.dp), spotColor = AmberWarm)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (isBuyFocused) AmberWarm else SurfaceContainer)
-                        .border(
-                            width = if (isBuyFocused) 2.dp else 1.dp,
-                            color = if (isBuyFocused) Color.White else Color(0xFF383842),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .onFocusChanged { isBuyFocused = it.isFocused }
-                        .onKeyEvent { event ->
-                            if (event.type == KeyEventType.KeyDown) {
-                                when (event.key) {
-                                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
-                                        onBuyQr()
-                                        true
-                                    }
-                                    else -> false
-                                }
-                            } else false
-                        }
-                        .focusable()
-                        .clickable { onBuyQr() }
-                        .padding(horizontal = 18.dp, vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.QrCodeScanner,
-                            contentDescription = null,
-                            tint = if (isBuyFocused) Color(0xFF131315) else TextPrimary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "Comprar en Móvil (QR)",
-                            color = if (isBuyFocused) Color(0xFF131315) else TextPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
+                Text(
+                    text = "COMPRAR EN MÓVIL",
+                    color = Color(0xFF88D8E8),
+                    fontSize = 8.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.5.sp
+                )
             }
         }
     }

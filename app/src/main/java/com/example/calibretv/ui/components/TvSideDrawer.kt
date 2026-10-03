@@ -68,10 +68,10 @@ import com.example.calibretv.theme.TextPrimary
 
 enum class DrawerItem(val title: String, val icon: ImageVector) {
     HOME("Inicio", Icons.Default.Home),
-    BIBLIOTECA("Biblioteca (Catálogo)", Icons.Default.AutoStories),
-    TUS_LIBROS("Tus Libros (Memoria TV)", Icons.Default.Storage),
+    BIBLIOTECA("Biblioteca", Icons.Default.AutoStories),
+    TUS_LIBROS("Tus Libros", Icons.Default.Storage),
     LECTOR_3D("Lector 3D", Icons.Default.MenuBook),
-    IMPORTAR_WIFI("Importar por WiFi", Icons.Default.QrCodeScanner),
+    IMPORTAR_WIFI("Importar WiFi", Icons.Default.QrCodeScanner),
     USUARIOS("Usuarios", Icons.Default.Person),
     OPDS("Conexión Servidor", Icons.Default.CloudSync),
     AJUSTES("Ajustes", Icons.Default.Settings)
@@ -120,7 +120,7 @@ fun TvSideDrawer(
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(280.dp)
+                    .width(215.dp)
                     .background(
                         Brush.horizontalGradient(
                             colors = listOf(

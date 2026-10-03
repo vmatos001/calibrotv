@@ -86,7 +86,9 @@ import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
 import com.example.calibretv.ui.components.Book3DView
 import com.example.calibretv.ui.components.DrawerItem
+import com.example.calibretv.ui.components.TvNavTab
 import com.example.calibretv.ui.components.TvSideDrawer
+import com.example.calibretv.ui.components.TvSidebar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -322,38 +324,39 @@ fun LibraryGridScreen(
 
     val COLUMNS = 7
 
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundDark)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Header Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 36.dp, vertical = 14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { isDrawerOpen = true }
-                            .padding(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Menú",
-                            tint = AmberWarm,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
+        // Rail de Navegación Lateral (Letra A: 68dp, Letra B al desplegar: 215dp)
+        TvSidebar(
+            currentTab = TvNavTab.BIBLIOTECA,
+            onTabSelected = { tab ->
+                when (tab) {
+                    TvNavTab.HOME -> onNavigateToHome()
+                    TvNavTab.BIBLIOTECA -> {}
+                    TvNavTab.TUS_LIBROS -> onNavigateToYourBooks()
+                    TvNavTab.LECTOR_3D -> onNavigateToReader()
+                    TvNavTab.AJUSTES -> onNavigateToSettings()
+                }
+            }
+        )
 
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Header Bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, end = 36.dp, top = 14.dp, bottom = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Column {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -373,13 +376,7 @@ fun LibraryGridScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
-                        Text(
-                            text = "Presiona [Izquierda] en el primer libro para abrir el menú lateral",
-                            color = TextMuted,
-                            fontSize = 11.sp
-                        )
                     }
-                }
 
                 // Clock and profile
                 Row(
@@ -702,6 +699,7 @@ fun LibraryGridScreen(
             }
         }
     }
+}
 }
 
 @Composable

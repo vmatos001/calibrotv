@@ -85,19 +85,19 @@ fun TvProfilePill(
     }
 
     Box(modifier = modifier) {
-        // Encabezado Principal tipo Cápsula / Píldora
+        // Encabezado Principal tipo Cápsula / Píldora (Rediseñada -30% compacta, solo Avatar + Nombre)
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier
                 .scale(if (isPillFocused) 1.05f else 1.0f)
-                .shadow(if (isPillFocused) 14.dp else 4.dp, RoundedCornerShape(24.dp), spotColor = AmberWarm)
-                .clip(RoundedCornerShape(24.dp))
+                .shadow(if (isPillFocused) 12.dp else 2.dp, RoundedCornerShape(16.dp), spotColor = AmberWarm)
+                .clip(RoundedCornerShape(16.dp))
                 .background(Color(0xFF131317))
                 .border(
-                    width = if (isPillFocused) 2.dp else 1.dp,
+                    width = if (isPillFocused) 1.5.dp else 1.dp,
                     color = if (isPillFocused) AmberWarm else Color(0xFF2C2C34),
-                    shape = RoundedCornerShape(24.dp)
+                    shape = RoundedCornerShape(16.dp)
                 )
                 .onFocusChanged { isPillFocused = it.isFocused }
                 .focusable()
@@ -115,51 +115,26 @@ fun TvProfilePill(
                     } else false
                 }
                 .clickable { isExpandedMenuOpen = !isExpandedMenuOpen }
-                .padding(horizontal = 8.dp, vertical = 5.dp)
+                .padding(horizontal = 6.dp, vertical = 3.dp)
         ) {
-            // Botón 1: Acción Rápida (Sincronización OPDS)
-            CircleActionButton(
-                icon = Icons.Default.CloudSync,
-                contentDescription = "Sincronizar OPDS",
-                onClick = onQuickSync
-            )
-
-            // Botón 2: Acción Rápida (Notificaciones / Actualizaciones)
-            Box(contentAlignment = Alignment.Center) {
-                CircleActionButton(
-                    icon = Icons.Default.Notifications,
-                    contentDescription = "Notificaciones",
-                    onClick = onNotificationsClick
-                )
-                if (hasNotification) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .align(Alignment.TopEnd)
-                            .background(Color(0xFFFF3D00), CircleShape)
-                            .border(1.dp, Color(0xFF131317), CircleShape)
-                    )
-                }
-            }
-
-            // Avatar Circular de Usuario con marco
+            // Avatar Circular de Usuario con marco (-30% tamaño: 24dp)
             Box(
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(24.dp)
                     .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
                             colors = listOf(avatarColor, avatarColor.copy(alpha = 0.75f))
                         )
                     )
-                    .border(1.5.dp, Color.White.copy(alpha = 0.8f), CircleShape),
+                    .border(1.dp, Color.White.copy(alpha = 0.8f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 if (profile.name.isNotBlank()) {
                     Text(
                         text = profile.name.take(1).uppercase(),
                         color = Color.White,
-                        fontSize = 14.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
                 } else {
@@ -167,18 +142,18 @@ fun TvProfilePill(
                         imageVector = Icons.Default.Person,
                         contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(12.dp)
                     )
                 }
             }
 
-            // Saludo personalizado: "Hi, [Nombre]"
+            // Saludo personalizado: "Hi, [Nombre]" (-30% tamaño: 11sp)
             Text(
                 text = "Hi, ${profile.name}",
                 color = TextPrimary,
-                fontSize = 13.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 2.dp, end = 8.dp)
+                modifier = Modifier.padding(start = 1.dp, end = 5.dp)
             )
         }
 
@@ -186,7 +161,7 @@ fun TvProfilePill(
         if (isExpandedMenuOpen) {
             Popup(
                 alignment = Alignment.TopEnd,
-                offset = androidx.compose.ui.unit.IntOffset(0, 140),
+                offset = androidx.compose.ui.unit.IntOffset(0, 105),
                 onDismissRequest = { isExpandedMenuOpen = false },
                 properties = PopupProperties(focusable = true)
             ) {
@@ -215,37 +190,6 @@ fun TvProfilePill(
     }
 }
 
-@Composable
-private fun CircleActionButton(
-    icon: ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit
-) {
-    var isFocused by remember { mutableStateOf(false) }
-
-    Box(
-        modifier = Modifier
-            .size(30.dp)
-            .scale(if (isFocused) 1.15f else 1.0f)
-            .clip(CircleShape)
-            .background(if (isFocused) Color(0xFFFFB300) else AmberWarm)
-            .border(
-                width = if (isFocused) 1.5.dp else 0.dp,
-                color = if (isFocused) Color.White else Color.Transparent,
-                shape = CircleShape
-            )
-            .onFocusChanged { isFocused = it.isFocused }
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = Color(0xFF131315),
-            modifier = Modifier.size(17.dp)
-        )
-    }
-}
 
 @Composable
 private fun ProfileDropdownMenuCard(
