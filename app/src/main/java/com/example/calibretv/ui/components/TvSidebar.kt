@@ -43,6 +43,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -54,8 +56,10 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.calibretv.theme.AccentLime
 import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.CyanElectric
+import com.example.calibretv.theme.InkPrimary
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
 
@@ -65,6 +69,7 @@ fun TvSidebar(
     onTabSelected: (TvNavTab) -> Unit,
     isDarkTheme: Boolean = true,
     onToggleTheme: () -> Unit = {},
+    focusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier
 ) {
     var isSidebarFocused by remember { mutableStateOf(false) }
@@ -77,15 +82,28 @@ fun TvSidebar(
         label = "SidebarWidth"
     )
 
+    // Colores del Sidebar:
+    // - En Dark Mode (Invertido): Rail BLANCO puro (#FFFFFF) para alto contraste con fondo de cine
+    // - En Light Mode (Bento): Rail CARBÓN (#141619) tal como en la referencia de diseño
+    val sidebarBg = if (isDarkTheme) Color(0xFFFFFFFF) else Color(0xFF141619)
+    val sidebarBorder = if (isDarkTheme) Color(0xFFE2E6E2) else Color(0xFF22222A)
+    val logoBoxBg = if (isDarkTheme) Color(0xFF111317) else Color.White
+    val logoIconTint = if (isDarkTheme) Color.White else Color(0xFF101014)
+    val brandTitleColor = if (isDarkTheme) Color(0xFF111317) else Color.White
+
     Box(
         modifier = modifier
             .width(sidebarWidth)
             .fillMaxHeight()
             .padding(vertical = 12.dp, horizontal = 6.dp)
-            .shadow(16.dp, RoundedCornerShape(22.dp), spotColor = Color.Black)
+            .shadow(
+                elevation = 16.dp,
+                shape = RoundedCornerShape(22.dp),
+                spotColor = if (isDarkTheme) Color.Black.copy(alpha = 0.25f) else Color.Black
+            )
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF0D0D11)) // Fondo negro grafito idéntico a la imagen
-            .border(1.dp, Color(0xFF22222A), RoundedCornerShape(22.dp))
+            .background(sidebarBg)
+            .border(1.dp, sidebarBorder, RoundedCornerShape(22.dp))
             .onFocusChanged { isSidebarFocused = it.hasFocus }
     ) {
         Column(
@@ -96,7 +114,7 @@ fun TvSidebar(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             // ==========================================
-            // TOP: Logo de Marca (Recuadro blanco con ícono)
+            // TOP: Logo de Marca
             // ==========================================
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -110,13 +128,13 @@ fun TvSidebar(
                     modifier = Modifier
                         .size(38.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(Color.White),
+                        .background(logoBoxBg),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.AutoStories,
                         contentDescription = "CalibroTV Logo",
-                        tint = Color(0xFF101014),
+                        tint = logoIconTint,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -129,7 +147,7 @@ fun TvSidebar(
                     ) {
                         Text(
                             text = "CalibroTV",
-                            color = TextPrimary,
+                            color = brandTitleColor,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.ExtraBold,
                             letterSpacing = 0.5.sp
@@ -151,6 +169,8 @@ fun TvSidebar(
                     icon = Icons.Default.Dashboard,
                     isSelected = currentTab == TvNavTab.HOME,
                     isExpanded = isExpanded,
+                    isDarkTheme = isDarkTheme,
+                    focusRequester = if (currentTab == TvNavTab.HOME) focusRequester else null,
                     onClick = { onTabSelected(TvNavTab.HOME) }
                 )
 
@@ -159,6 +179,8 @@ fun TvSidebar(
                     icon = Icons.Default.MenuBook,
                     isSelected = currentTab == TvNavTab.BIBLIOTECA,
                     isExpanded = isExpanded,
+                    isDarkTheme = isDarkTheme,
+                    focusRequester = if (currentTab == TvNavTab.BIBLIOTECA) focusRequester else null,
                     onClick = { onTabSelected(TvNavTab.BIBLIOTECA) }
                 )
 
@@ -167,6 +189,8 @@ fun TvSidebar(
                     icon = Icons.Default.Bookmark,
                     isSelected = currentTab == TvNavTab.TUS_LIBROS,
                     isExpanded = isExpanded,
+                    isDarkTheme = isDarkTheme,
+                    focusRequester = if (currentTab == TvNavTab.TUS_LIBROS) focusRequester else null,
                     onClick = { onTabSelected(TvNavTab.TUS_LIBROS) }
                 )
 
@@ -175,6 +199,8 @@ fun TvSidebar(
                     icon = Icons.Default.ViewInAr,
                     isSelected = currentTab == TvNavTab.LECTOR_3D,
                     isExpanded = isExpanded,
+                    isDarkTheme = isDarkTheme,
+                    focusRequester = if (currentTab == TvNavTab.LECTOR_3D) focusRequester else null,
                     onClick = { onTabSelected(TvNavTab.LECTOR_3D) }
                 )
 
@@ -183,6 +209,8 @@ fun TvSidebar(
                     icon = Icons.Default.Settings,
                     isSelected = currentTab == TvNavTab.AJUSTES,
                     isExpanded = isExpanded,
+                    isDarkTheme = isDarkTheme,
+                    focusRequester = if (currentTab == TvNavTab.AJUSTES) focusRequester else null,
                     onClick = { onTabSelected(TvNavTab.AJUSTES) }
                 )
             }
@@ -211,29 +239,45 @@ private fun SidebarNavItem(
     icon: ImageVector,
     isSelected: Boolean,
     isExpanded: Boolean,
+    isDarkTheme: Boolean,
+    focusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+
+    val normalIconTint = if (isDarkTheme) Color(0xFF4B5563) else Color(0xFF9DA1AA)
+    val normalTextColor = if (isDarkTheme) Color(0xFF1F2937) else Color(0xFFD0D4DC)
+
+    val focusedBg = if (isDarkTheme) AmberWarm else AccentLime
+    val focusedContentColor = Color(0xFF111317)
+    val focusedBorderColor = if (isDarkTheme) Color(0xFF111317) else AccentLime
+
+    val selectedBg = if (isDarkTheme) AmberWarm.copy(alpha = 0.22f) else Color(0xFF22252C)
+    val selectedContentColor = if (isDarkTheme) Color(0xFFB45309) else AccentLime
+    val selectedBorderColor = if (isDarkTheme) AmberWarm else AccentLime.copy(alpha = 0.6f)
+
+    val baseModifier = Modifier
+        .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
 
     if (isExpanded) {
         // Modo Expandido: Icono + Texto
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier
+            modifier = baseModifier
                 .fillMaxWidth()
                 .scale(if (isFocused) 1.04f else 1.0f)
                 .clip(RoundedCornerShape(12.dp))
                 .background(
                     when {
-                        isFocused -> AmberWarm
-                        isSelected -> AmberWarm.copy(alpha = 0.22f)
+                        isFocused -> focusedBg
+                        isSelected -> selectedBg
                         else -> Color.Transparent
                     }
                 )
                 .border(
                     width = if (isFocused) 1.5.dp else if (isSelected) 1.dp else 0.dp,
-                    color = if (isFocused) CyanElectric else if (isSelected) AmberWarm else Color.Transparent,
+                    color = if (isFocused) focusedBorderColor else if (isSelected) selectedBorderColor else Color.Transparent,
                     shape = RoundedCornerShape(12.dp)
                 )
                 .onFocusChanged { isFocused = it.isFocused }
@@ -254,33 +298,46 @@ private fun SidebarNavItem(
             Icon(
                 imageVector = icon,
                 contentDescription = title,
-                tint = if (isFocused) Color(0xFF121216) else AmberWarm,
+                tint = when {
+                    isFocused -> focusedContentColor
+                    isSelected -> selectedContentColor
+                    else -> normalIconTint
+                },
                 modifier = Modifier.size(20.dp)
             )
             Text(
                 text = title,
-                color = if (isFocused) Color(0xFF121216) else if (isSelected) AmberWarm else TextPrimary,
+                color = when {
+                    isFocused -> focusedContentColor
+                    isSelected -> selectedContentColor
+                    else -> normalTextColor
+                },
                 fontSize = 13.sp,
                 fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Medium
             )
         }
     } else {
-        // Modo Colapsado (Rail): Icono centrado con pastilla ámbar en el activo
+        // Modo Colapsado (Rail): Icono centrado
+        val collapsedBg = when {
+            isFocused -> focusedBg
+            isSelected -> if (isDarkTheme) AmberWarm else AccentLime
+            else -> Color.Transparent
+        }
+        val collapsedTint = when {
+            isFocused -> focusedContentColor
+            isSelected -> focusedContentColor
+            else -> normalIconTint
+        }
+
         Box(
-            modifier = Modifier
+            modifier = baseModifier
                 .size(44.dp)
                 .scale(if (isFocused) 1.12f else 1.0f)
                 .clip(CircleShape)
-                .background(
-                    when {
-                        isFocused -> AmberWarm
-                        isSelected -> AmberWarm
-                        else -> Color.Transparent
-                    }
-                )
+                .background(collapsedBg)
                 .border(
                     width = if (isFocused) 2.dp else 0.dp,
-                    color = if (isFocused) CyanElectric else Color.Transparent,
+                    color = if (isFocused) focusedBorderColor else Color.Transparent,
                     shape = CircleShape
                 )
                 .onFocusChanged { isFocused = it.isFocused }
@@ -301,7 +358,7 @@ private fun SidebarNavItem(
             Icon(
                 imageVector = icon,
                 contentDescription = title,
-                tint = if (isSelected || isFocused) Color(0xFF121216) else AmberWarm,
+                tint = collapsedTint,
                 modifier = Modifier.size(21.dp)
             )
         }
@@ -315,15 +372,19 @@ private fun ThemePillToggleExpanded(
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
+    val containerBg = if (isDarkTheme) Color(0xFFF1F5F1) else Color(0xFF17171E)
+    val containerBorder = if (isDarkTheme) Color(0xFFD1D5DB) else Color(0xFF2C2C38)
+    val focusBorder = if (isDarkTheme) Color(0xFF111317) else CyanElectric
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .scale(if (isFocused) 1.03f else 1.0f)
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF17171E))
+            .background(containerBg)
             .border(
                 width = if (isFocused) 1.5.dp else 1.dp,
-                color = if (isFocused) CyanElectric else Color(0xFF2C2C38),
+                color = if (isFocused) focusBorder else containerBorder,
                 shape = RoundedCornerShape(20.dp)
             )
             .onFocusChanged { isFocused = it.isFocused }
@@ -341,11 +402,14 @@ private fun ThemePillToggleExpanded(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Lado Dark
+        val darkSideBg = if (isDarkTheme) Color(0xFF111317) else Color.Transparent
+        val darkSideTint = if (isDarkTheme) AmberWarm else (if (isDarkTheme) Color(0xFF4B5563) else Color(0xFF9DA1AA))
+
         Row(
             modifier = Modifier
                 .weight(1f)
                 .clip(RoundedCornerShape(16.dp))
-                .background(if (isDarkTheme) Color(0xFF23232C) else Color.Transparent)
+                .background(darkSideBg)
                 .padding(vertical = 6.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
@@ -353,24 +417,27 @@ private fun ThemePillToggleExpanded(
             Icon(
                 imageVector = Icons.Default.NightlightRound,
                 contentDescription = null,
-                tint = if (isDarkTheme) AmberWarm else TextMuted,
+                tint = darkSideTint,
                 modifier = Modifier.size(14.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = "Dark",
-                color = if (isDarkTheme) TextPrimary else TextMuted,
+                color = darkSideTint,
                 fontSize = 11.sp,
                 fontWeight = if (isDarkTheme) FontWeight.Bold else FontWeight.Normal
             )
         }
 
         // Lado Light
+        val lightSideBg = if (!isDarkTheme) AccentLime else Color.Transparent
+        val lightSideTint = if (!isDarkTheme) Color(0xFF111317) else Color(0xFF6B7280)
+
         Row(
             modifier = Modifier
                 .weight(1f)
                 .clip(RoundedCornerShape(16.dp))
-                .background(if (!isDarkTheme) AmberWarm else Color.Transparent)
+                .background(lightSideBg)
                 .padding(vertical = 6.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
@@ -378,13 +445,13 @@ private fun ThemePillToggleExpanded(
             Icon(
                 imageVector = Icons.Default.LightMode,
                 contentDescription = null,
-                tint = if (!isDarkTheme) Color(0xFF121216) else TextMuted,
+                tint = lightSideTint,
                 modifier = Modifier.size(14.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = "Light",
-                color = if (!isDarkTheme) Color(0xFF121216) else TextMuted,
+                color = lightSideTint,
                 fontSize = 11.sp,
                 fontWeight = if (!isDarkTheme) FontWeight.Bold else FontWeight.Normal
             )
@@ -399,15 +466,19 @@ private fun ThemePillToggleCollapsed(
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
+    val containerBg = if (isDarkTheme) Color(0xFFF1F5F1) else Color(0xFF17171E)
+    val containerBorder = if (isDarkTheme) Color(0xFFD1D5DB) else Color(0xFF2C2C38)
+    val focusBorder = if (isDarkTheme) Color(0xFF111317) else CyanElectric
+
     Column(
         modifier = Modifier
             .width(36.dp)
             .scale(if (isFocused) 1.1f else 1.0f)
             .clip(RoundedCornerShape(18.dp))
-            .background(Color(0xFF17171E))
+            .background(containerBg)
             .border(
                 width = if (isFocused) 1.5.dp else 1.dp,
-                color = if (isFocused) CyanElectric else Color(0xFF2C2C38),
+                color = if (isFocused) focusBorder else containerBorder,
                 shape = RoundedCornerShape(18.dp)
             )
             .onFocusChanged { isFocused = it.isFocused }
@@ -429,13 +500,13 @@ private fun ThemePillToggleCollapsed(
             modifier = Modifier
                 .size(26.dp)
                 .clip(CircleShape)
-                .background(if (isDarkTheme) AmberWarm else Color.Transparent),
+                .background(if (isDarkTheme) Color(0xFF111317) else Color.Transparent),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.NightlightRound,
                 contentDescription = "Modo Oscuro",
-                tint = if (isDarkTheme) Color(0xFF121216) else TextMuted,
+                tint = if (isDarkTheme) AmberWarm else (if (isDarkTheme) Color(0xFF4B5563) else Color(0xFF9DA1AA)),
                 modifier = Modifier.size(14.dp)
             )
         }
@@ -444,13 +515,13 @@ private fun ThemePillToggleCollapsed(
             modifier = Modifier
                 .size(26.dp)
                 .clip(CircleShape)
-                .background(if (!isDarkTheme) AmberWarm else Color.Transparent),
+                .background(if (!isDarkTheme) AccentLime else Color.Transparent),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.LightMode,
                 contentDescription = "Modo Claro",
-                tint = if (!isDarkTheme) Color(0xFF121216) else TextMuted,
+                tint = if (!isDarkTheme) Color(0xFF111317) else Color(0xFF6B7280),
                 modifier = Modifier.size(14.dp)
             )
         }

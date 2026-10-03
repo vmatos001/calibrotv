@@ -50,3 +50,23 @@ val OledBackground = Color(0xFF000000)
 val OledText = Color(0xFFE5E0D8)
 val NightBackground = Color(0xFF0A0A0A)
 val NightText = Color(0xFFFFA000)
+
+// ============================================================================
+// 🎨 Light Theme Edition (Design.md — Bento Grid & Editorial Day Mode)
+// ============================================================================
+val CanvasBackgroundLight = Color(0xFFEAEFEA)      // Fondo suave papel mate antirreflejo TV
+val CardBackgroundLight = Color(0xFFFFFFFF)        // Blanco puro para tarjetas Bento
+val CardBackgroundLightSoft = Color(0xFFF6F8F6)    // Blanco secundario
+val SidebarBackgroundLight = Color(0xFF141619)     // Rail carbón oscuro (en Light mode)
+val SidebarBackgroundDarkInv = Color(0xFFFFFFFF)   // Rail blanco puro (en Dark mode invertido)
+
+val InkPrimary = Color(0xFF111317)            // Texto principal / botones oscuros
+val InkSecondary = Color(0xFF636670)          // Textos secundarios
+val InkMuted = Color(0xFF9DA1AA)              // Bordes e iconos suaves
+
+val AccentLime = Color(0xFFE6FA53)            // Acento dinámico Cyber Lime
+val AccentLimeDark = Color(0xFFC7DC37)        // Hover/Pressed lima
+val AccentLimeText = Color(0xFF111317)        // Texto sobre fondo lima
+val PillInactiveLight = Color(0xFFE2E7E2)     // Cápsulas en reposo
+val FocusBorderDark = Color(0xFF111317)       // Borde de foco oscuro
+

@@ -36,6 +36,14 @@ class PreferencesManager(context: Context) {
         prefs.edit().putBoolean("setup_completed_v3", completed).apply()
     }
 
+    fun isDarkTheme(): Boolean {
+        return prefs.getBoolean("app_dark_theme", true)
+    }
+
+    fun setDarkTheme(isDark: Boolean) {
+        prefs.edit().putBoolean("app_dark_theme", isDark).apply()
+    }
+
     fun getServerConfig(): ServerConfig {
         return ServerConfig(
             serverUrl = prefs.getString("server_url", "") ?: "",

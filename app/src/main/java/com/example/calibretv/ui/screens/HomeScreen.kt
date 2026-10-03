@@ -102,11 +102,13 @@ import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
 import com.example.calibretv.ui.components.CuratedBookModal
 import com.example.calibretv.ui.components.CuratorRow
-import com.example.calibretv.ui.components.DrawerItem
+import com.example.calibretv.theme.CalibreTVTheme
+import com.example.calibretv.theme.CanvasBackgroundLight
+import com.example.calibretv.theme.InkPrimary
+import com.example.calibretv.theme.InkSecondary
 import com.example.calibretv.ui.components.PinPadDialog
 import com.example.calibretv.ui.components.TvNavTab
 import com.example.calibretv.ui.components.TvProfilePill
-import com.example.calibretv.ui.components.TvSideDrawer
 import com.example.calibretv.ui.components.TvSidebar
 import com.example.calibretv.ui.components.UserProfilesDialog
 import kotlinx.coroutines.launch
@@ -127,11 +129,14 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val prefsManager = remember { com.example.calibretv.data.storage.PreferencesManager(context) }
+    var isDarkTheme by remember { mutableStateOf(prefsManager.isDarkTheme()) }
+
     var feedContent by remember { mutableStateOf<OpdsFeedContent?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var activeProfile by remember { mutableStateOf(repository.getActiveProfile()) }
 
-    var isDrawerOpen by remember { mutableStateOf(false) }
+    val sidebarFocusRequester = remember { FocusRequester() }
     var showUserProfilesModal by remember { mutableStateOf(false) }
     var pendingProtectedAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val householdPin = remember(activeProfile) {
@@ -194,8 +199,7 @@ fun HomeScreen(
         else if (selectedCuratedBook != null) selectedCuratedBook = null
         else if (showDetailsModal) showDetailsModal = false
         else if (showUserProfilesModal) showUserProfilesModal = false
-        else if (isDrawerOpen) isDrawerOpen = false
-        else isDrawerOpen = true
+        else sidebarFocusRequester.requestFocus()
     }
 
     LaunchedEffect(showDetailsModal) {
@@ -271,51 +275,62 @@ fun HomeScreen(
 
     val heroBanner = homeCarteleraData.heroBanner ?: CuratorRepository.getOfflineHomeData().heroBanner!!
 
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundDark)
-    ) {
-        // Rail de Navegación Lateral (Letra A: 68dp, Letra B al desplegar: 215dp)
-        TvSidebar(
-            currentTab = TvNavTab.HOME,
-            onTabSelected = { tab ->
-                when (tab) {
-                    TvNavTab.HOME -> {}
-                    TvNavTab.BIBLIOTECA -> onNavigateToLibrary()
-                    TvNavTab.TUS_LIBROS -> onNavigateToYourBooks()
-                    TvNavTab.LECTOR_3D -> onNavigateToReader()
-                    TvNavTab.AJUSTES -> {
-                        if (activeProfile.isKidsMode && householdPin != null) {
-                            pendingProtectedAction = { onNavigateToSettings() }
-                        } else {
-                            onNavigateToSettings()
+    val screenBg = if (isDarkTheme) BackgroundDark else CanvasBackgroundLight
+    val heroBg = if (isDarkTheme) BackgroundDark else Color(0xFF141619)
+
+    CalibreTVTheme(isDarkTheme = isDarkTheme) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(screenBg)
+        ) {
+            // Rail de Navegación Lateral (Letra A: 68dp, Letra B al desplegar: 215dp)
+            TvSidebar(
+                currentTab = TvNavTab.HOME,
+                isDarkTheme = isDarkTheme,
+                onToggleTheme = {
+                    val newTheme = !isDarkTheme
+                    isDarkTheme = newTheme
+                    prefsManager.setDarkTheme(newTheme)
+                },
+                focusRequester = sidebarFocusRequester,
+                onTabSelected = { tab ->
+                    when (tab) {
+                        TvNavTab.HOME -> {}
+                        TvNavTab.BIBLIOTECA -> onNavigateToLibrary()
+                        TvNavTab.TUS_LIBROS -> onNavigateToYourBooks()
+                        TvNavTab.LECTOR_3D -> onNavigateToReader()
+                        TvNavTab.AJUSTES -> {
+                            if (activeProfile.isKidsMode && householdPin != null) {
+                                pendingProtectedAction = { onNavigateToSettings() }
+                            } else {
+                                onNavigateToSettings()
+                            }
                         }
                     }
                 }
-            }
-        )
+            )
 
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(BackgroundDark)
-            ) {
-            // ==========================================
-            // ZONA A: HERO BANNER 16:9 (BESTSELLER DEL MES)
-            // Branding oficial CalibroTV + Reloj + Perfil
-            // ==========================================
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.44f)
-                    .background(BackgroundDark)
+                    .weight(1f)
+                    .fillMaxHeight()
             ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(screenBg)
+                ) {
+                // ==========================================
+                // ZONA A: HERO BANNER 16:9 (BESTSELLER DEL MES)
+                // Branding oficial CalibroTV + Reloj + Perfil
+                // ==========================================
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.44f)
+                        .background(heroBg)
+                ) {
                 // 1. Dynamic 16:9 Backdrop Image from CMS
                 val backdropCoverBmp = rememberCoverImage(heroBanner.backdropUrl.ifBlank { heroBanner.coverUrl })
                 if (backdropCoverBmp != null) {
@@ -336,10 +351,10 @@ fun HomeScreen(
                         .background(
                             Brush.horizontalGradient(
                                 colors = listOf(
-                                    BackgroundDark,
-                                    BackgroundDark.copy(alpha = 0.97f),
-                                    BackgroundDark.copy(alpha = 0.82f),
-                                    BackgroundDark.copy(alpha = 0.40f),
+                                    heroBg,
+                                    heroBg.copy(alpha = 0.97f),
+                                    heroBg.copy(alpha = 0.82f),
+                                    heroBg.copy(alpha = 0.40f),
                                     Color.Transparent
                                 ),
                                 startX = 0f,
@@ -356,8 +371,8 @@ fun HomeScreen(
                             Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    BackgroundDark.copy(alpha = 0.50f),
-                                    BackgroundDark
+                                    heroBg.copy(alpha = 0.50f),
+                                    heroBg
                                 )
                             )
                         )
@@ -449,24 +464,19 @@ fun HomeScreen(
                                 affiliateQrUrl = heroBanner.affiliatePurchaseUrl
                             )
                         },
-                        onLeftAtBoundary = { isDrawerOpen = true }
+                        onLeftAtBoundary = { sidebarFocusRequester.requestFocus() }
                     )
                 }
             }
 
             // ==========================================
             // ZONA B: CARRUSELES Y ESTANTERÍAS (SCROLL VERTICAL)
-            // 1. Continuar Leyendo (progreso activo)
-            // 2. Ofertas y Descuentos de Cartelera (con tags -45%, -30%)
-            // 3. Cartelera Dinámica por Personajes (CMS / Arquetipos)
-            // 4. Tus Libros Favoritos
-            // 5. Accesos Rápidos a Biblioteca y Memoria TV
             // ==========================================
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .background(BackgroundDark)
+                    .background(screenBg)
             ) {
                 if (isLoading) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -491,8 +501,8 @@ fun HomeScreen(
                                 authHeader = authHeader,
                                 showSeeMore = false,
                                 onSeeMore = {},
-                                onLeftAtBoundary = { isDrawerOpen = true },
-                                isInteractive = !showDetailsModal && !showUserProfilesModal && !isDrawerOpen,
+                                onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
+                                isInteractive = !showDetailsModal && !showUserProfilesModal,
                                 onBookFocused = {},
                                 onBookSelected = { book ->
                                     onBookSelected(book)
@@ -518,7 +528,7 @@ fun HomeScreen(
                                         affiliateQrUrl = offer.affiliateUrl
                                     )
                                 },
-                                onLeftAtBoundary = { isDrawerOpen = true }
+                                onLeftAtBoundary = { sidebarFocusRequester.requestFocus() }
                             )
                         }
 
@@ -531,7 +541,7 @@ fun HomeScreen(
                                 onBookClick = { curatedBook ->
                                     selectedCuratedBook = curatedBook
                                 },
-                                onLeftAtBoundary = { isDrawerOpen = true }
+                                onLeftAtBoundary = { sidebarFocusRequester.requestFocus() }
                             )
                         }
 
@@ -546,8 +556,8 @@ fun HomeScreen(
                                 authHeader = authHeader,
                                 showSeeMore = false,
                                 onSeeMore = {},
-                                onLeftAtBoundary = { isDrawerOpen = true },
-                                isInteractive = !showDetailsModal && !showUserProfilesModal && !isDrawerOpen,
+                                onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
+                                isInteractive = !showDetailsModal && !showUserProfilesModal,
                                 onBookFocused = {},
                                 onBookSelected = { book ->
                                     detailsBook = book
@@ -584,39 +594,6 @@ fun HomeScreen(
                 }
             }
         }
-
-        // ==========================================
-        // SIDE DRAWER LATERAL OCULTO
-        // ==========================================
-        TvSideDrawer(
-            isOpen = isDrawerOpen,
-            currentSelection = DrawerItem.HOME,
-            onClose = { isDrawerOpen = false },
-            onItemSelected = { item ->
-                when (item) {
-                    DrawerItem.HOME -> { /* Already here */ }
-                    DrawerItem.BIBLIOTECA -> onNavigateToLibrary()
-                    DrawerItem.TUS_LIBROS -> onNavigateToYourBooks()
-                    DrawerItem.IMPORTAR_WIFI -> onNavigateToWifiImport()
-                    DrawerItem.USUARIOS -> showUserProfilesModal = true
-                    DrawerItem.LECTOR_3D -> onNavigateToReader()
-                    DrawerItem.AJUSTES -> {
-                        if (activeProfile.isKidsMode && householdPin != null) {
-                            pendingProtectedAction = { onNavigateToSettings() }
-                        } else {
-                            onNavigateToSettings()
-                        }
-                    }
-                    DrawerItem.OPDS -> {
-                        if (activeProfile.isKidsMode && householdPin != null) {
-                            pendingProtectedAction = { onNavigateToOpds() }
-                        } else {
-                            onNavigateToOpds()
-                        }
-                    }
-                }
-            }
-        )
 
         // ==========================================
         // PIN PAD DIALOG PARA ACCIONES PROTEGIDAS EN MODO KIDS
@@ -842,6 +819,7 @@ fun HomeScreen(
             )
         }
     }
+}
 }
 }
 

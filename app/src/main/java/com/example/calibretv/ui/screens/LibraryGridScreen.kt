@@ -77,17 +77,19 @@ import com.example.calibretv.data.model.Book
 import com.example.calibretv.data.opds.OpdsClient
 import com.example.calibretv.data.opds.OpdsFeedContent
 import com.example.calibretv.theme.AmberWarm
+import androidx.compose.ui.platform.LocalContext
 import com.example.calibretv.theme.BackgroundDark
+import com.example.calibretv.theme.CalibreTVTheme
+import com.example.calibretv.theme.CanvasBackgroundLight
 import com.example.calibretv.theme.CyanElectric
+import com.example.calibretv.theme.InkPrimary
 import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.SurfaceRaised
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
 import com.example.calibretv.ui.components.Book3DView
-import com.example.calibretv.ui.components.DrawerItem
 import com.example.calibretv.ui.components.TvNavTab
-import com.example.calibretv.ui.components.TvSideDrawer
 import com.example.calibretv.ui.components.TvSidebar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -158,12 +160,16 @@ fun LibraryGridScreen(
     onNavigateToYourBooks: () -> Unit = {},
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    val prefsManager = remember { com.example.calibretv.data.storage.PreferencesManager(context) }
+    var isDarkTheme by remember { mutableStateOf(prefsManager.isDarkTheme()) }
+
     var feedContent by remember { mutableStateOf<OpdsFeedContent?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedFilterId by remember { mutableStateOf("all") }
     var activeProfile by remember { mutableStateOf(repository.getActiveProfile()) }
 
-    var isDrawerOpen by remember { mutableStateOf(false) }
+    val sidebarFocusRequester = remember { FocusRequester() }
     var showUserProfilesModal by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
@@ -180,7 +186,6 @@ fun LibraryGridScreen(
             detailsBook = null
         }
         else if (showUserProfilesModal) showUserProfilesModal = false
-        else if (isDrawerOpen) isDrawerOpen = false
         else onBack()
     }
 
@@ -324,187 +329,179 @@ fun LibraryGridScreen(
 
     val COLUMNS = 7
 
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundDark)
-    ) {
-        // Rail de Navegación Lateral (Letra A: 68dp, Letra B al desplegar: 215dp)
-        TvSidebar(
-            currentTab = TvNavTab.BIBLIOTECA,
-            onTabSelected = { tab ->
-                when (tab) {
-                    TvNavTab.HOME -> onNavigateToHome()
-                    TvNavTab.BIBLIOTECA -> {}
-                    TvNavTab.TUS_LIBROS -> onNavigateToYourBooks()
-                    TvNavTab.LECTOR_3D -> onNavigateToReader()
-                    TvNavTab.AJUSTES -> onNavigateToSettings()
-                }
-            }
-        )
+    val screenBg = if (isDarkTheme) BackgroundDark else CanvasBackgroundLight
 
-        Box(
+    CalibreTVTheme(isDarkTheme = isDarkTheme) {
+        Row(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
+                .fillMaxSize()
+                .background(screenBg)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Header Bar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 20.dp, end = 36.dp, top = 14.dp, bottom = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = "ESTANTERÍA DE LIBROS",
-                                color = TextPrimary,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 1.sp
-                            )
-                            Text(
-                                text = "• ${filteredBooks.size} libros sincronizados",
-                                color = CyanElectric,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
+            // Rail de Navegación Lateral (Letra A: 68dp, Letra B al desplegar: 215dp)
+            TvSidebar(
+                currentTab = TvNavTab.BIBLIOTECA,
+                isDarkTheme = isDarkTheme,
+                onToggleTheme = {
+                    val newTheme = !isDarkTheme
+                    isDarkTheme = newTheme
+                    prefsManager.setDarkTheme(newTheme)
+                },
+                focusRequester = sidebarFocusRequester,
+                onTabSelected = { tab ->
+                    when (tab) {
+                        TvNavTab.HOME -> onNavigateToHome()
+                        TvNavTab.BIBLIOTECA -> {}
+                        TvNavTab.TUS_LIBROS -> onNavigateToYourBooks()
+                        TvNavTab.LECTOR_3D -> onNavigateToReader()
+                        TvNavTab.AJUSTES -> onNavigateToSettings()
                     }
-
-                // Clock and profile
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Text(
-                        text = currentTime,
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    TvProfilePill(
-                        profile = activeProfile,
-                        onOpenProfileSwitcher = { showUserProfilesModal = true },
-                        onOpenOpds = onNavigateToOpds,
-                        onOpenWifiImport = onNavigateToWifiImport,
-                        onOpenSettings = onNavigateToSettings,
-                        onQuickSync = {
-                            coroutineScope.launch {
-                                isLoading = true
-                                feedContent = repository.getFeed()
-                                isLoading = false
-                            }
-                        },
-                        onNotificationsClick = onNavigateToSettings
-                    )
                 }
-            }
+            )
 
-            // Section A: Netflix Kids Circular Shelves & Difficulty Badges
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(108.dp)
-                    .padding(horizontal = 32.dp, vertical = 4.dp),
-                contentAlignment = Alignment.CenterStart
+                    .weight(1f)
+                    .fillMaxHeight()
             ) {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    itemsIndexed(circleFilters) { index, filter ->
-                        val isFirst = index == 0
-                        NetflixShelfCircleItem(
-                            filter = filter,
-                            isSelected = selectedFilterId == filter.id,
-                            authHeader = authHeader,
-                            isFirst = isFirst,
-                            onLeftAtBoundary = { isDrawerOpen = true },
-                            onClick = { selectedFilterId = filter.id }
+                Column(modifier = Modifier.fillMaxSize().background(screenBg)) {
+                    // Header Bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = 36.dp, top = 14.dp, bottom = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "ESTANTERÍA DE LIBROS",
+                                    color = if (isDarkTheme) TextPrimary else InkPrimary,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.sp
+                                )
+                                Text(
+                                    text = "• ${filteredBooks.size} libros sincronizados",
+                                    color = if (isDarkTheme) CyanElectric else Color(0xFF0284C7),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                    // Clock and profile
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text(
+                            text = currentTime,
+                            color = if (isDarkTheme) Color.White.copy(alpha = 0.85f) else InkPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        TvProfilePill(
+                            profile = activeProfile,
+                            onOpenProfileSwitcher = { showUserProfilesModal = true },
+                            onOpenOpds = onNavigateToOpds,
+                            onOpenWifiImport = onNavigateToWifiImport,
+                            onOpenSettings = onNavigateToSettings,
+                            onQuickSync = {
+                                coroutineScope.launch {
+                                    isLoading = true
+                                    feedContent = repository.getFeed()
+                                    isLoading = false
+                                }
+                            },
+                            onNotificationsClick = onNavigateToSettings
                         )
                     }
                 }
-            }
 
-            // Books Grid
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 32.dp, vertical = 8.dp)
-            ) {
-                if (isLoading) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = CyanElectric)
-                    }
-                } else if (filteredBooks.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MenuBook,
-                                contentDescription = null,
-                                tint = TextMuted,
-                                modifier = Modifier.size(40.dp)
+                // Section A: Netflix Kids Circular Shelves & Difficulty Badges
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(108.dp)
+                        .padding(horizontal = 32.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        itemsIndexed(circleFilters) { index, filter ->
+                            val isFirst = index == 0
+                            NetflixShelfCircleItem(
+                                filter = filter,
+                                isSelected = selectedFilterId == filter.id,
+                                authHeader = authHeader,
+                                isFirst = isFirst,
+                                onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
+                                onClick = { selectedFilterId = filter.id }
                             )
-                            Text("No hay libros en esta categoría", color = TextMuted, fontSize = 14.sp)
                         }
                     }
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(COLUMNS),
-                        contentPadding = PaddingValues(bottom = 60.dp, top = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        itemsIndexed(filteredBooks) { index, book ->
-                            val isLeftEdge = index % COLUMNS == 0
-                            GridCoverCard(
-                                book = book,
-                                authHeader = authHeader,
-                                isInteractive = !showDetailsModal && !isDrawerOpen,
-                                isLeftEdge = isLeftEdge,
-                                modifier = Modifier.focusRequester(bookFocusRequesters.getOrPut(book.id) { FocusRequester() }),
-                                onLeftAtBoundary = { isDrawerOpen = true },
-                                onSelected = {
-                                    detailsBook = book
-                                    showDetailsModal = true
-                                }
-                            )
+                }
+
+                // Books Grid
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(horizontal = 32.dp, vertical = 8.dp)
+                ) {
+                    if (isLoading) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = if (isDarkTheme) CyanElectric else AmberWarm)
+                        }
+                    } else if (filteredBooks.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MenuBook,
+                                    contentDescription = null,
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(40.dp)
+                                )
+                                Text("No hay libros en esta categoría", color = TextMuted, fontSize = 14.sp)
+                            }
+                        }
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(COLUMNS),
+                            contentPadding = PaddingValues(bottom = 60.dp, top = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            itemsIndexed(filteredBooks) { index, book ->
+                                val isLeftEdge = index % COLUMNS == 0
+                                GridCoverCard(
+                                    book = book,
+                                    authHeader = authHeader,
+                                    isInteractive = !showDetailsModal,
+                                    isLeftEdge = isLeftEdge,
+                                    modifier = Modifier.focusRequester(bookFocusRequesters.getOrPut(book.id) { FocusRequester() }),
+                                    onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
+                                    onSelected = {
+                                        detailsBook = book
+                                        showDetailsModal = true
+                                    }
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-
-        // Side Drawer
-        TvSideDrawer(
-            isOpen = isDrawerOpen,
-            currentSelection = DrawerItem.BIBLIOTECA,
-            onClose = { isDrawerOpen = false },
-            onItemSelected = { item ->
-                when (item) {
-                    DrawerItem.HOME -> onNavigateToHome()
-                    DrawerItem.BIBLIOTECA -> { /* Already here */ }
-                    DrawerItem.TUS_LIBROS -> onNavigateToYourBooks()
-                    DrawerItem.IMPORTAR_WIFI -> onNavigateToWifiImport()
-                    DrawerItem.USUARIOS -> showUserProfilesModal = true
-                    DrawerItem.LECTOR_3D -> onNavigateToReader()
-                    DrawerItem.AJUSTES -> onNavigateToSettings()
-                    DrawerItem.OPDS -> onNavigateToOpds()
-                }
-            }
-        )
 
         // Modal de Gestión de Perfiles
         if (showUserProfilesModal) {
