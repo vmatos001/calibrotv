@@ -12,8 +12,8 @@ android {
         applicationId = "com.calibrotv.app"
         minSdk = 23
         targetSdk = 34
-        versionCode = 26
-        versionName = "3.12"
+        versionCode = 27
+        versionName = "3.13"
     }
 
     signingConfigs {
@@ -115,6 +115,9 @@ dependencies {
 
   // EncryptedSharedPreferences (seguridad)
   implementation(libs.androidx.security.crypto)
+
+  // Networking (OkHttp para descargas OTA fiables y rápidas)
+  implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
   // QR Code Generator (ZXing core estándar para códigos QR escaneables)
   implementation("com.google.zxing:core:3.5.3")

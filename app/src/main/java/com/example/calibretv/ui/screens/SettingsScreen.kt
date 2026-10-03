@@ -105,6 +105,7 @@ fun SettingsScreen(
     var isDownloadingUpdate by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableIntStateOf(0) }
     var downloadDetails by remember { mutableStateOf("") }
+    var downloadError by remember { mutableStateOf<String?>(null) }
     var showUpdateDialog by remember { mutableStateOf(false) }
 
     androidx.activity.compose.BackHandler {
@@ -148,18 +149,25 @@ fun SettingsScreen(
         scope.launch {
             isDownloadingUpdate = true
             downloadProgress = 0
-            val apk = UpdateManager.downloadApk(context, release) { pct, cur, tot ->
+            downloadDetails = "Conectando con el servidor..."
+            downloadError = null
+            val result = UpdateManager.downloadApk(context, release) { pct, cur, tot ->
                 downloadProgress = pct
                 val curMb = String.format(java.util.Locale.US, "%.1f", cur / 1048576.0)
                 val totMb = String.format(java.util.Locale.US, "%.1f", tot / 1048576.0)
                 downloadDetails = "$pct% ($curMb MB / $totMb MB)"
             }
             isDownloadingUpdate = false
-            if (apk != null && apk.exists()) {
-                showUpdateDialog = false
-                UpdateManager.installApk(context, apk)
-            } else {
-                updateCheckStatus = "⚠️ Error al descargar el archivo APK."
+            when (result) {
+                is UpdateManager.DownloadResult.Success -> {
+                    showUpdateDialog = false
+                    downloadError = null
+                    UpdateManager.installApk(context, result.apkFile)
+                }
+                is UpdateManager.DownloadResult.Error -> {
+                    downloadError = result.message
+                    updateCheckStatus = "⚠️ ${result.message}"
+                }
             }
         }
     }
@@ -961,6 +969,24 @@ fun SettingsScreen(
                         }
                     }
 
+                    if (downloadError != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF331414))
+                                .border(1.dp, Color(0xFFE53935), RoundedCornerShape(8.dp))
+                                .padding(10.dp)
+                        ) {
+                            Text(
+                                text = "⚠️ $downloadError",
+                                color = Color(0xFFFF8A80),
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+                        }
+                    }
+
                     if (isDownloadingUpdate) {
                         Column(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1014,7 +1040,7 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             TvActionButton(
-                                title = "Descargar e Instalar",
+                                title = if (downloadError != null) "Reintentar Descarga" else "Descargar e Instalar",
                                 icon = Icons.Filled.CloudDownload,
                                 isPrimary = true,
                                 onClick = { startDownloadAndInstall(rel) }
