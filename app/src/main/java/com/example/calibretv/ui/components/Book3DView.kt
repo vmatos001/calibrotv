@@ -178,7 +178,7 @@ private fun Book3DPartA(
     modifier: Modifier = Modifier
 ) {
     val rotationY by animateFloatAsState(
-        targetValue = if (isFocused || !enable3DStandby) 0f else 18f,
+        targetValue = if (isFocused || !enable3DStandby) 0f else -18f,
         animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
         label = "partARotationY"
     )
