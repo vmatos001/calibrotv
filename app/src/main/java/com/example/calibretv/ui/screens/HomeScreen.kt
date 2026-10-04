@@ -1872,20 +1872,29 @@ private fun HomeQuickAccessCard(
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
-    val cardBg = if (isDarkTheme) {
-        if (isFocused) Color(0xFF222632) else Color(0xFF161920)
-    } else {
-        if (isFocused) Color(0xFFF2F5F2) else Color.White
-    }
+    // Colores idénticos a la opción seleccionada del menú expandido:
+    // - En Dark Mode (Rail Blanco en menú, fondo oscuro en app): Píldora AmberWarm translúcida
+    // - En Light Mode (Rail Carbón en menú, fondo claro en app): Contenedor Amber/Carbón suave
+    val baseCardBg = if (isDarkTheme) AmberWarm.copy(alpha = 0.18f) else Color(0xFF28241A)
+    val cardBg = if (isFocused) AmberWarm else baseCardBg
 
     val cardBorder = if (isFocused) {
-        AmberWarm
+        if (isDarkTheme) Color(0xFFFFFFFF) else CyanElectric
     } else {
-        if (isDarkTheme) Color(0xFF262934) else Color(0xFFE2E7E2)
+        AmberWarm
     }
 
-    val titleColor = if (isDarkTheme) TextPrimary else InkPrimary
-    val subtitleColor = if (isDarkTheme) TextMuted else InkSecondary
+    val contentColor = when {
+        isFocused -> Color(0xFF111317)
+        isDarkTheme -> AmberWarm
+        else -> AmberWarm
+    }
+
+    val subtitleColor = when {
+        isFocused -> Color(0xFF111317).copy(alpha = 0.85f)
+        isDarkTheme -> Color(0xFFCBD5E1)
+        else -> Color(0xFFD0D4DC)
+    }
 
     Box(
         modifier = modifier
@@ -1893,14 +1902,14 @@ private fun HomeQuickAccessCard(
             .clip(RoundedCornerShape(20.dp))
             .background(cardBg)
             .border(
-                width = if (isFocused) 2.dp else 0.dp,
-                color = if (isFocused) AmberWarm else Color.Transparent,
+                width = if (isFocused) 2.dp else 1.dp,
+                color = cardBorder,
                 shape = RoundedCornerShape(20.dp)
             )
             .shadow(
-                elevation = if (isDarkTheme) 0.dp else 4.dp,
+                elevation = if (isFocused) 8.dp else (if (isDarkTheme) 0.dp else 4.dp),
                 shape = RoundedCornerShape(20.dp),
-                spotColor = Color.Black.copy(alpha = 0.06f)
+                spotColor = AmberWarm
             )
             .onFocusChanged { isFocused = it.isFocused }
             .onKeyEvent { event ->
@@ -1926,13 +1935,13 @@ private fun HomeQuickAccessCard(
                 modifier = Modifier
                     .size(46.dp)
                     .clip(CircleShape)
-                    .background(AmberWarm.copy(alpha = 0.15f)),
+                    .background(if (isFocused) Color(0xFF111317).copy(alpha = 0.15f) else AmberWarm.copy(alpha = 0.22f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = AmberWarm,
+                    tint = contentColor,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -1942,7 +1951,7 @@ private fun HomeQuickAccessCard(
             ) {
                 Text(
                     text = title,
-                    color = titleColor,
+                    color = contentColor,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -1957,7 +1966,7 @@ private fun HomeQuickAccessCard(
             Icon(
                 imageVector = Icons.Default.ArrowForward,
                 contentDescription = null,
-                tint = if (isFocused) AmberWarm else (if (isDarkTheme) TextMuted else InkSecondary),
+                tint = contentColor,
                 modifier = Modifier.size(18.dp)
             )
         }
