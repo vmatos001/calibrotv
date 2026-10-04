@@ -1882,7 +1882,7 @@ private fun HomeQuickAccessCard(
     val cardBorder = if (isFocused) {
         if (isDarkTheme) Color(0xFFFFFFFF) else CyanElectric
     } else {
-        AmberWarm
+        Color.Transparent
     }
 
     val contentColor = when {
@@ -1900,17 +1900,17 @@ private fun HomeQuickAccessCard(
     Box(
         modifier = modifier
             .scale(if (isFocused) 1.03f else 1.0f)
+            .shadow(
+                elevation = if (isFocused) 8.dp else 0.dp,
+                shape = RoundedCornerShape(20.dp),
+                spotColor = Color.Black.copy(alpha = 0.35f)
+            )
             .clip(RoundedCornerShape(20.dp))
             .background(cardBg)
             .border(
-                width = if (isFocused) 2.dp else 1.dp,
+                width = if (isFocused) 2.dp else 0.dp,
                 color = cardBorder,
                 shape = RoundedCornerShape(20.dp)
-            )
-            .shadow(
-                elevation = if (isFocused) 8.dp else (if (isDarkTheme) 0.dp else 4.dp),
-                shape = RoundedCornerShape(20.dp),
-                spotColor = AmberWarm
             )
             .onFocusChanged { isFocused = it.isFocused }
             .onKeyEvent { event ->
