@@ -25,7 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.NightlightRound
@@ -56,7 +56,6 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.calibretv.theme.AccentLime
 import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.CyanElectric
 import com.example.calibretv.theme.InkPrimary
@@ -165,8 +164,8 @@ fun TvSidebar(
                 horizontalAlignment = if (isExpanded) Alignment.Start else Alignment.CenterHorizontally
             ) {
                 SidebarNavItem(
-                    title = "Dashboard",
-                    icon = Icons.Default.Dashboard,
+                    title = "Home",
+                    icon = Icons.Default.Home,
                     isSelected = currentTab == TvNavTab.HOME,
                     isExpanded = isExpanded,
                     isDarkTheme = isDarkTheme,
@@ -248,13 +247,13 @@ private fun SidebarNavItem(
     val normalIconTint = if (isDarkTheme) Color(0xFF4B5563) else Color(0xFF9DA1AA)
     val normalTextColor = if (isDarkTheme) Color(0xFF1F2937) else Color(0xFFD0D4DC)
 
-    val focusedBg = if (isDarkTheme) AmberWarm else AccentLime
+    val focusedBg = AmberWarm
     val focusedContentColor = Color(0xFF111317)
-    val focusedBorderColor = if (isDarkTheme) Color(0xFF111317) else AccentLime
+    val focusedBorderColor = if (isDarkTheme) Color(0xFF111317) else CyanElectric
 
-    val selectedBg = if (isDarkTheme) AmberWarm.copy(alpha = 0.22f) else Color(0xFF22252C)
-    val selectedContentColor = if (isDarkTheme) Color(0xFFB45309) else AccentLime
-    val selectedBorderColor = if (isDarkTheme) AmberWarm else AccentLime.copy(alpha = 0.6f)
+    val selectedBg = if (isDarkTheme) AmberWarm.copy(alpha = 0.18f) else Color(0xFF28241A)
+    val selectedContentColor = if (isDarkTheme) Color(0xFFB45309) else AmberWarm
+    val selectedBorderColor = AmberWarm
 
     val baseModifier = Modifier
         .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
@@ -320,12 +319,12 @@ private fun SidebarNavItem(
         // Modo Colapsado (Rail): Icono centrado
         val collapsedBg = when {
             isFocused -> focusedBg
-            isSelected -> if (isDarkTheme) AmberWarm else AccentLime
+            isSelected -> AmberWarm
             else -> Color.Transparent
         }
         val collapsedTint = when {
             isFocused -> focusedContentColor
-            isSelected -> focusedContentColor
+            isSelected -> Color(0xFF111317)
             else -> normalIconTint
         }
 
@@ -430,8 +429,8 @@ private fun ThemePillToggleExpanded(
         }
 
         // Lado Light
-        val lightSideBg = if (!isDarkTheme) AccentLime else Color.Transparent
-        val lightSideTint = if (!isDarkTheme) Color(0xFF111317) else Color(0xFF6B7280)
+        val lightSideBg = if (!isDarkTheme) AmberWarm else Color.Transparent
+        val lightSideTint = if (!isDarkTheme) Color(0xFF111317) else (if (isDarkTheme) Color(0xFF4B5563) else Color(0xFF9DA1AA))
 
         Row(
             modifier = Modifier
@@ -515,13 +514,13 @@ private fun ThemePillToggleCollapsed(
             modifier = Modifier
                 .size(26.dp)
                 .clip(CircleShape)
-                .background(if (!isDarkTheme) AccentLime else Color.Transparent),
+                .background(if (!isDarkTheme) AmberWarm else Color.Transparent),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.LightMode,
                 contentDescription = "Modo Claro",
-                tint = if (!isDarkTheme) Color(0xFF111317) else Color(0xFF6B7280),
+                tint = if (!isDarkTheme) Color(0xFF111317) else (if (isDarkTheme) Color(0xFF4B5563) else Color(0xFF9DA1AA)),
                 modifier = Modifier.size(14.dp)
             )
         }

@@ -64,9 +64,6 @@ val InkPrimary = Color(0xFF111317)            // Texto principal / botones oscur
 val InkSecondary = Color(0xFF636670)          // Textos secundarios
 val InkMuted = Color(0xFF9DA1AA)              // Bordes e iconos suaves
 
-val AccentLime = Color(0xFFE6FA53)            // Acento dinámico Cyber Lime
-val AccentLimeDark = Color(0xFFC7DC37)        // Hover/Pressed lima
-val AccentLimeText = Color(0xFF111317)        // Texto sobre fondo lima
 val PillInactiveLight = Color(0xFFE2E7E2)     // Cápsulas en reposo
 val FocusBorderDark = Color(0xFF111317)       // Borde de foco oscuro
 

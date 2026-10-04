@@ -54,6 +54,7 @@ import com.example.calibretv.data.curator.CuratorSection
 import com.example.calibretv.data.image.rememberCoverImage
 import com.example.calibretv.theme.AccentGold
 import com.example.calibretv.theme.AntiqueIvory
+import com.example.calibretv.theme.InkPrimary
 import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextSecondary
@@ -61,6 +62,7 @@ import com.example.calibretv.theme.TextSecondary
 @Composable
 fun CuratorRow(
     section: CuratorSection,
+    isDarkTheme: Boolean = true,
     onBookClick: (CuratedBook) -> Unit,
     onLeftAtBoundary: () -> Unit
 ) {
@@ -113,7 +115,7 @@ fun CuratorRow(
                     ) {
                         Text(
                             text = section.name,
-                            color = AntiqueIvory,
+                            color = if (isDarkTheme) AntiqueIvory else InkPrimary,
                             fontSize = 17.sp,
                             fontFamily = FontFamily.Serif,
                             fontWeight = FontWeight.Bold,
@@ -164,6 +166,7 @@ fun CuratorRow(
                 CuratedBookCard(
                     book = book,
                     isFirst = index == 0,
+                    isDarkTheme = isDarkTheme,
                     onClick = { onBookClick(book) },
                     onLeftAtBoundary = onLeftAtBoundary
                 )
@@ -176,6 +179,7 @@ fun CuratorRow(
 private fun CuratedBookCard(
     book: CuratedBook,
     isFirst: Boolean,
+    isDarkTheme: Boolean = true,
     onClick: () -> Unit,
     onLeftAtBoundary: () -> Unit
 ) {
@@ -218,18 +222,10 @@ private fun CuratedBookCard(
 
         Text(
             text = book.title,
-            color = if (isFocused) AccentGold else AntiqueIvory,
+            color = if (isFocused) AccentGold else (if (isDarkTheme) AntiqueIvory else InkPrimary),
             fontSize = 11.sp,
             fontFamily = FontFamily.Serif,
             fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        Text(
-            text = book.author,
-            color = TextSecondary,
-            fontSize = 9.5.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

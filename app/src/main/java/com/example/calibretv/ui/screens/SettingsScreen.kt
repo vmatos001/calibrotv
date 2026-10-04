@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -78,15 +79,22 @@ import com.example.calibretv.data.model.CurlSpeed
 import com.example.calibretv.data.model.ReadingFont
 import com.example.calibretv.data.model.ReadingSettings
 import com.example.calibretv.data.model.ReadingTheme
+import com.example.calibretv.data.storage.PreferencesManager
 import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.BackgroundDark
+import com.example.calibretv.theme.CanvasBackgroundLight
+import com.example.calibretv.theme.CardBackgroundLight
 import com.example.calibretv.theme.CyanElectric
+import com.example.calibretv.theme.InkMuted
+import com.example.calibretv.theme.InkPrimary
+import com.example.calibretv.theme.InkSecondary
 import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
 import com.example.calibretv.ui.components.TvNavTab
-import com.example.calibretv.ui.components.TvTopBar
+import com.example.calibretv.ui.components.TvSidebar
+import androidx.compose.ui.focus.FocusRequester
 
 @Composable
 fun SettingsScreen(
@@ -172,25 +180,34 @@ fun SettingsScreen(
         }
     }
 
-    Column(
+    val prefs = remember { PreferencesManager(context) }
+    var isDarkTheme by remember { mutableStateOf(prefs.isDarkTheme()) }
+    val sidebarFocusRequester = remember { FocusRequester() }
+    val screenBg = if (isDarkTheme) BackgroundDark else CanvasBackgroundLight
+
+    Row(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(screenBg)
     ) {
-        // Stitch Top Bar with active profile switcher
-        TvTopBar(
+        TvSidebar(
             currentTab = TvNavTab.AJUSTES,
             onTabSelected = onTabSelected,
-            activeProfile = activeProfile,
-            onProfileClick = { showUserProfilesModal = true },
-            onOpenOpds = onOpenOpds
+            isDarkTheme = isDarkTheme,
+            onToggleTheme = {
+                val newTheme = !isDarkTheme
+                isDarkTheme = newTheme
+                scope.launch { prefs.setDarkTheme(newTheme) }
+            },
+            focusRequester = sidebarFocusRequester
         )
 
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
+                .fillMaxHeight()
                 .verticalScroll(scrollState)
-                .padding(horizontal = 40.dp, vertical = 16.dp)
+                .padding(horizontal = 36.dp, vertical = 16.dp)
         ) {
             // Header
             Row(

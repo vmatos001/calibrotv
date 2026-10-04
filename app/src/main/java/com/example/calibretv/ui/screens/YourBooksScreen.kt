@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -58,10 +60,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.calibretv.data.BookRepository
+import com.example.calibretv.data.storage.PreferencesManager
 import com.example.calibretv.data.image.rememberCoverImage
 import com.example.calibretv.data.model.Book
 import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.BackgroundDark
+import com.example.calibretv.theme.CanvasBackgroundLight
+import com.example.calibretv.theme.CardBackgroundLight
+import com.example.calibretv.theme.InkMuted
+import com.example.calibretv.theme.InkPrimary
+import com.example.calibretv.theme.InkSecondary
 import com.example.calibretv.theme.SurfaceCard
 import com.example.calibretv.theme.SurfaceFocused
 import com.example.calibretv.theme.SurfaceRaised
@@ -70,8 +78,17 @@ import com.example.calibretv.theme.TextPrimary
 import com.example.calibretv.theme.TextSecondary
 import com.example.calibretv.ui.components.Book3DView
 import com.example.calibretv.ui.components.TvNavTab
-import com.example.calibretv.ui.components.TvTopBar
+import com.example.calibretv.ui.components.TvProfilePill
+import com.example.calibretv.ui.components.TvSidebar
 import com.example.calibretv.ui.components.UserProfilesDialog
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
 
@@ -137,19 +154,29 @@ fun YourBooksScreen(
         refreshStorageInfo()
     }
 
+    val prefs = remember { PreferencesManager(context) }
+    var isDarkTheme by remember { mutableStateOf(prefs.isDarkTheme()) }
+    val coroutineScope = rememberCoroutineScope()
+    val sidebarFocusRequester = remember { FocusRequester() }
+
+    val screenBg = if (isDarkTheme) BackgroundDark else CanvasBackgroundLight
+    val cardBg = if (isDarkTheme) SurfaceCard else CardBackgroundLight
+    val cardBorder = if (isDarkTheme) SurfaceRaised else Color(0xFFD6DDD6)
+    val textPrimaryColor = if (isDarkTheme) TextPrimary else InkPrimary
+    val textSecondaryColor = if (isDarkTheme) TextSecondary else InkSecondary
+    val textMutedColor = if (isDarkTheme) TextMuted else InkMuted
+
     BackHandler {
         onNavigateToHome()
     }
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(screenBg)
     ) {
-        // TopBar cinemática de 5 pestañas
-        TvTopBar(
+        TvSidebar(
             currentTab = TvNavTab.TUS_LIBROS,
-            activeProfile = activeProfile,
             onTabSelected = { tab ->
                 when (tab) {
                     TvNavTab.HOME -> onNavigateToHome()
@@ -159,143 +186,185 @@ fun YourBooksScreen(
                     TvNavTab.AJUSTES -> onNavigateToSettings()
                 }
             },
-            onProfileClick = { showUserProfilesModal = true },
-            onOpenWifiImport = onNavigateToWifiImport,
-            onOpenSettings = onNavigateToSettings
+            isDarkTheme = isDarkTheme,
+            onToggleTheme = {
+                val newTheme = !isDarkTheme
+                isDarkTheme = newTheme
+                coroutineScope.launch { prefs.setDarkTheme(newTheme) }
+            },
+            focusRequester = sidebarFocusRequester
         )
 
-        // Panel de información de memoria física en TV (10-Foot UI)
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 36.dp, vertical = 12.dp)
-                .background(SurfaceCard, RoundedCornerShape(12.dp))
-                .border(1.dp, SurfaceRaised, RoundedCornerShape(12.dp))
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .weight(1f)
+                .fillMaxHeight()
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .background(AmberWarm.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Storage,
-                        contentDescription = "Almacenamiento",
-                        tint = AmberWarm,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                Spacer(Modifier.width(16.dp))
-                Column {
-                    Text(
-                        text = "Gestor Físico de Memoria TV",
-                        color = TextPrimary,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "${localBooksWithFiles.size} libros descargados en la memoria interna",
-                        color = TextSecondary,
-                        fontSize = 13.sp
-                    )
-                }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "Espacio ocupado por libros",
-                        color = TextMuted,
-                        fontSize = 11.sp
-                    )
-                    Text(
-                        text = formatBytes(totalUsedBytes),
-                        color = AmberWarm,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "Espacio libre en TV",
-                        color = TextMuted,
-                        fontSize = 11.sp
-                    )
-                    Text(
-                        text = formatBytes(freeStorageBytes),
-                        color = TextPrimary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-
-        // Grilla de libros locales o estado vacío
-        if (localBooksWithFiles.isEmpty()) {
-            Box(
+            // Header Bar
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(36.dp),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 36.dp, top = 14.dp, bottom = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Folder,
-                        contentDescription = null,
-                        tint = TextMuted,
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        text = "No tienes libros descargados en este televisor",
-                        color = TextPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "Transfiere archivos EPUB/PDF desde tu teléfono o descarga clásicos desde la Biblioteca.",
-                        color = TextSecondary,
-                        fontSize = 14.sp
-                    )
-                    Spacer(Modifier.height(24.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        YourBooksActionButton(
-                            title = "Transferir por Wi-Fi",
-                            icon = Icons.Default.Wifi,
-                            onClick = onNavigateToWifiImport
+                Text(
+                    text = "TUS LIBROS • MEMORIA TV",
+                    color = textPrimaryColor,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp
+                )
+
+                TvProfilePill(
+                    profile = activeProfile,
+                    onOpenProfileSwitcher = { showUserProfilesModal = true },
+                    onOpenOpds = {},
+                    onOpenWifiImport = onNavigateToWifiImport,
+                    onOpenSettings = onNavigateToSettings,
+                    onQuickSync = { refreshStorageInfo() },
+                    onNotificationsClick = onNavigateToSettings
+                )
+            }
+
+            // Panel de información de memoria física en TV (10-Foot UI)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .background(cardBg, RoundedCornerShape(12.dp))
+                    .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(AmberWarm.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Storage,
+                            contentDescription = "Almacenamiento",
+                            tint = AmberWarm,
+                            modifier = Modifier.size(24.dp)
                         )
-                        YourBooksActionButton(
-                            title = "Explorar Biblioteca",
-                            icon = Icons.Default.MenuBook,
-                            onClick = onNavigateToLibrary
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "Gestor Físico de Memoria TV",
+                            color = textPrimaryColor,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "${localBooksWithFiles.size} libros descargados en la memoria interna",
+                            color = textSecondaryColor,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "Espacio ocupado por libros",
+                            color = textMutedColor,
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            text = formatBytes(totalUsedBytes),
+                            color = AmberWarm,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "Espacio libre en TV",
+                            color = textMutedColor,
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            text = formatBytes(freeStorageBytes),
+                            color = textPrimaryColor,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 160.dp),
-                contentPadding = PaddingValues(horizontal = 36.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(localBooksWithFiles, key = { it.first.id }) { (book, sizeBytes) ->
-                    YourBookItemCard(
-                        book = book,
-                        sizeBytes = sizeBytes,
-                        onClick = { bookToManage = book },
-                        onDeleteClick = { bookToDelete = book }
-                    )
+
+            // Grilla de libros locales o estado vacío
+            if (localBooksWithFiles.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(36.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Folder,
+                            contentDescription = null,
+                            tint = textMutedColor,
+                            modifier = Modifier.size(64.dp)
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = "No tienes libros descargados en este televisor",
+                            color = textPrimaryColor,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "Transfiere archivos EPUB/PDF desde tu teléfono o descarga clásicos desde la Biblioteca.",
+                            color = textSecondaryColor,
+                            fontSize = 14.sp
+                        )
+                        Spacer(Modifier.height(24.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            YourBooksActionButton(
+                                title = "Transferir por Wi-Fi",
+                                icon = Icons.Default.Wifi,
+                                onClick = onNavigateToWifiImport
+                            )
+                            YourBooksActionButton(
+                                title = "Explorar Biblioteca",
+                                icon = Icons.Default.MenuBook,
+                                onClick = onNavigateToLibrary
+                            )
+                        }
+                    }
+                }
+            } else {
+                val COLUMNS_COUNT = 4
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 150.dp),
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    itemsIndexed(localBooksWithFiles, key = { _, pair -> pair.first.id }) { index, (book, sizeBytes) ->
+                        val isLeftEdge = index % COLUMNS_COUNT == 0
+                        YourBookItemCard(
+                            book = book,
+                            sizeBytes = sizeBytes,
+                            isDarkTheme = isDarkTheme,
+                            isLeftEdge = isLeftEdge,
+                            onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
+                            onClick = { bookToManage = book },
+                            onDeleteClick = { bookToDelete = book }
+                        )
+                    }
                 }
             }
         }
@@ -410,6 +479,9 @@ fun YourBooksScreen(
 private fun YourBookItemCard(
     book: Book,
     sizeBytes: Long,
+    isDarkTheme: Boolean = true,
+    isLeftEdge: Boolean = false,
+    onLeftAtBoundary: () -> Unit = {},
     onClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
@@ -420,6 +492,23 @@ private fun YourBookItemCard(
         modifier = Modifier
             .width(122.dp)
             .onFocusChanged { isFocused = it.isFocused }
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    when (event.key) {
+                        Key.DirectionLeft -> {
+                            if (isLeftEdge) {
+                                onLeftAtBoundary()
+                                true
+                            } else false
+                        }
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                            onClick()
+                            true
+                        }
+                        else -> false
+                    }
+                } else false
+            }
             .focusable()
             .clickable { onClick() },
         horizontalAlignment = Alignment.CenterHorizontally
@@ -435,18 +524,10 @@ private fun YourBookItemCard(
         Spacer(Modifier.height(4.dp))
         Text(
             text = book.title,
-            color = if (isFocused) AmberWarm else TextPrimary,
+            color = if (isFocused) AmberWarm else (if (isDarkTheme) TextPrimary else InkPrimary),
             fontSize = 11.sp,
             fontFamily = FontFamily.Serif,
             fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 2.dp)
-        )
-        Text(
-            text = book.author.ifBlank { "Memoria TV" },
-            color = TextSecondary,
-            fontSize = 9.5.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp)

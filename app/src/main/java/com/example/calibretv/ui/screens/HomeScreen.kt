@@ -503,6 +503,7 @@ fun HomeScreen(
                                 onSeeMore = {},
                                 onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
                                 isInteractive = !showDetailsModal && !showUserProfilesModal,
+                                isDarkTheme = isDarkTheme,
                                 onBookFocused = {},
                                 onBookSelected = { book ->
                                     onBookSelected(book)
@@ -516,6 +517,7 @@ fun HomeScreen(
                         if (homeCarteleraData.offers.isNotEmpty()) {
                             HomeOffersRow(
                                 offers = homeCarteleraData.offers,
+                                isDarkTheme = isDarkTheme,
                                 onOfferSelected = { offer ->
                                     selectedCuratedBook = CuratedBook(
                                         id = offer.id,
@@ -538,6 +540,7 @@ fun HomeScreen(
                         curatorSections.forEach { section ->
                             CuratorRow(
                                 section = section,
+                                isDarkTheme = isDarkTheme,
                                 onBookClick = { curatedBook ->
                                     selectedCuratedBook = curatedBook
                                 },
@@ -558,6 +561,7 @@ fun HomeScreen(
                                 onSeeMore = {},
                                 onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
                                 isInteractive = !showDetailsModal && !showUserProfilesModal,
+                                isDarkTheme = isDarkTheme,
                                 onBookFocused = {},
                                 onBookSelected = { book ->
                                     detailsBook = book
@@ -962,6 +966,7 @@ private fun HomeShelf(
     onSeeMore: () -> Unit,
     onLeftAtBoundary: () -> Unit,
     isInteractive: Boolean = true,
+    isDarkTheme: Boolean = true,
     onBookFocused: (Book) -> Unit,
     onBookSelected: (Book) -> Unit
 ) {
@@ -986,7 +991,7 @@ private fun HomeShelf(
                 )
                 Text(
                     text = sectionTitle,
-                    color = TextPrimary,
+                    color = if (isDarkTheme) TextPrimary else InkPrimary,
                     fontSize = 17.sp,
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Bold,
@@ -1022,7 +1027,7 @@ private fun HomeShelf(
                 ) {
                     Text(
                         text = "Ver más",
-                        color = if (isSeeMoreFocused) AccentGold else TextPrimary,
+                        color = if (isSeeMoreFocused) AccentGold else (if (isDarkTheme) TextPrimary else InkPrimary),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1054,6 +1059,7 @@ private fun HomeShelf(
                     authHeader = authHeader,
                     isInteractive = isInteractive,
                     isFirst = isFirst,
+                    isDarkTheme = isDarkTheme,
                     onLeftAtBoundary = onLeftAtBoundary,
                     onFocused = { onBookFocused(book) },
                     onSelected = { onBookSelected(book) }
@@ -1073,6 +1079,7 @@ private fun CompactCoverCard(
     authHeader: String?,
     isInteractive: Boolean = true,
     isFirst: Boolean = false,
+    isDarkTheme: Boolean = true,
     onLeftAtBoundary: () -> Unit,
     onFocused: () -> Unit,
     onSelected: () -> Unit
@@ -1121,7 +1128,7 @@ private fun CompactCoverCard(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Title and reading bar
+        // Title strictly legible in both themes, without author or progress bar underneath
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1129,38 +1136,13 @@ private fun CompactCoverCard(
         ) {
             Text(
                 text = book.title,
-                color = if (isFocused) AmberWarm else TextPrimary,
+                color = if (isFocused) AmberWarm else (if (isDarkTheme) TextPrimary else InkPrimary),
                 fontSize = 11.sp,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-
-            Text(
-                text = book.author.ifBlank { "Biblioteca" },
-                color = TextMuted,
-                fontSize = 9.5.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            if (book.progressPercent > 0) {
-                Spacer(modifier = Modifier.height(3.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.5.dp)
-                        .background(Color(0xFF26262A), RoundedCornerShape(1.dp))
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(book.progressPercent / 100f)
-                            .height(2.5.dp)
-                            .background(AmberWarm, RoundedCornerShape(1.dp))
-                    )
-                }
-            }
         }
     }
 }
@@ -1702,6 +1684,7 @@ private fun HomeHeroBanner(
 @Composable
 private fun HomeOffersRow(
     offers: List<BookOffer>,
+    isDarkTheme: Boolean = true,
     onOfferSelected: (BookOffer) -> Unit,
     onLeftAtBoundary: () -> Unit
 ) {
@@ -1735,7 +1718,7 @@ private fun HomeOffersRow(
             Column {
                 Text(
                     text = "Ofertas y Descuentos Destacados",
-                    color = TextPrimary,
+                    color = if (isDarkTheme) TextPrimary else InkPrimary,
                     fontSize = 17.sp,
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Bold,
@@ -1760,6 +1743,7 @@ private fun HomeOffersRow(
                 HomeOfferCard(
                     offer = offer,
                     isFirst = index == 0,
+                    isDarkTheme = isDarkTheme,
                     onClick = { onOfferSelected(offer) },
                     onLeftAtBoundary = onLeftAtBoundary
                 )
@@ -1772,6 +1756,7 @@ private fun HomeOffersRow(
 private fun HomeOfferCard(
     offer: BookOffer,
     isFirst: Boolean,
+    isDarkTheme: Boolean = true,
     onClick: () -> Unit,
     onLeftAtBoundary: () -> Unit
 ) {
@@ -1814,18 +1799,10 @@ private fun HomeOfferCard(
 
         Text(
             text = offer.title,
-            color = if (isFocused) AmberWarm else TextPrimary,
+            color = if (isFocused) AmberWarm else (if (isDarkTheme) TextPrimary else InkPrimary),
             fontSize = 11.sp,
             fontFamily = FontFamily.Serif,
             fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        Text(
-            text = offer.author,
-            color = TextMuted,
-            fontSize = 9.5.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

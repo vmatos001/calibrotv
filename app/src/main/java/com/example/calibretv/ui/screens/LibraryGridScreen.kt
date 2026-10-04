@@ -489,6 +489,7 @@ fun LibraryGridScreen(
                                     authHeader = authHeader,
                                     isInteractive = !showDetailsModal,
                                     isLeftEdge = isLeftEdge,
+                                    isDarkTheme = isDarkTheme,
                                     modifier = Modifier.focusRequester(bookFocusRequesters.getOrPut(book.id) { FocusRequester() }),
                                     onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
                                     onSelected = {
@@ -705,6 +706,7 @@ private fun GridCoverCard(
     authHeader: String?,
     isInteractive: Boolean = true,
     isLeftEdge: Boolean = false,
+    isDarkTheme: Boolean = true,
     modifier: Modifier = Modifier,
     onLeftAtBoundary: () -> Unit,
     onSelected: () -> Unit
@@ -753,6 +755,7 @@ private fun GridCoverCard(
 
         Spacer(modifier = Modifier.height(4.dp))
 
+        // Title strictly legible in both themes, without author or progress bar underneath
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -760,41 +763,12 @@ private fun GridCoverCard(
         ) {
             Text(
                 text = book.title,
-                color = if (isFocused) AmberWarm else TextPrimary,
+                color = if (isFocused) AmberWarm else (if (isDarkTheme) TextPrimary else InkPrimary),
                 fontSize = 10.5.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-
-            val shelfOrAuthor = book.shelves.firstOrNull { OpdsClient.isCharacterShelfName(it) } ?: book.shelves.firstOrNull() ?: book.author
-            if (shelfOrAuthor.isNotBlank()) {
-                Text(
-                    text = shelfOrAuthor,
-                    color = TextMuted,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            if (book.progressPercent > 0) {
-                Spacer(modifier = Modifier.height(3.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .background(Color(0xFF26262A), RoundedCornerShape(1.dp))
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(book.progressPercent / 100f)
-                            .height(2.dp)
-                            .background(AmberWarm, RoundedCornerShape(1.dp))
-                    )
-                }
-            }
         }
     }
 }
