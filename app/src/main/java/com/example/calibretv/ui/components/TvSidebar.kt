@@ -121,7 +121,6 @@ fun TvSidebar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
-                    .clickable { isForcedExpanded = !isForcedExpanded }
             ) {
                 Box(
                     modifier = Modifier

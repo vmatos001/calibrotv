@@ -1012,14 +1012,27 @@ private fun HomeShelf(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = AmberWarm,
-                    modifier = Modifier.size(17.dp)
-                )
+                // Icono dentro de círculo del color de fondo del menú para consistencia visual
+                val iconCircleBg = if (isDarkTheme) Color(0xFFFFFFFF) else Color(0xFF141619)
+                val iconCircleTint = if (isDarkTheme) Color(0xFF111317) else Color.White
+
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(iconCircleBg),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconCircleTint,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
                 Text(
                     text = sectionTitle,
                     color = if (isDarkTheme) TextPrimary else InkPrimary,
