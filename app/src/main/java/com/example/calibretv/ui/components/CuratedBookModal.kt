@@ -104,9 +104,8 @@ fun CuratedBookModal(
             },
         contentAlignment = Alignment.Center
     ) {
-        // Tarjeta principal de descripción: Fondo oscuro en Dark Mode, o color papel claro en Light Mode
+        // Tarjeta principal de descripción: Fondo oscuro en Dark Mode, o color papel claro en Light Mode (sin bordes)
         val modalBg = if (isDarkTheme) SurfaceContainer else Color(0xFFF7F5F0) // Papel claro suave
-        val modalBorder = if (isDarkTheme) AccentGold.copy(alpha = 0.5f) else Color(0xFFE2DDD5)
 
         Box(
             modifier = Modifier
@@ -114,7 +113,6 @@ fun CuratedBookModal(
                 .fillMaxHeight(0.82f)
                 .clip(RoundedCornerShape(18.dp))
                 .background(modalBg)
-                .border(1.5.dp, modalBorder, RoundedCornerShape(18.dp))
                 .clickable(enabled = false) {}
                 .padding(28.dp)
         ) {
@@ -262,6 +260,8 @@ fun CuratedBookModal(
                                     isPrimary = true,
                                     isDarkTheme = isDarkTheme,
                                     focusRequester = actionFocusRequester,
+                                    trapLeft = true,
+                                    trapRight = false,
                                     onClick = onRead
                                 )
                             } else {
@@ -272,6 +272,8 @@ fun CuratedBookModal(
                                     isDarkTheme = isDarkTheme,
                                     isLoading = isDownloading,
                                     focusRequester = actionFocusRequester,
+                                    trapLeft = true,
+                                    trapRight = false,
                                     onClick = {
                                         if (!isDownloading) onDownload()
                                     }
@@ -285,16 +287,17 @@ fun CuratedBookModal(
                             isPrimary = !book.isPublicDomain,
                             isDarkTheme = isDarkTheme,
                             focusRequester = if (!book.isPublicDomain) actionFocusRequester else null,
+                            trapLeft = !book.isPublicDomain,
+                            trapRight = true,
                             onClick = onDismiss
                         )
                     }
                 }
 
                 // Lado derecho: Si es comercial, Código QR dinámico para comprar con el móvil
-                // En modo light, esta tarjeta interna es blanca pura. En modo oscuro, mantiene SurfaceContainerHigh
+                // En modo light, esta tarjeta interna es blanca pura. En modo oscuro, mantiene SurfaceContainerHigh (sin bordes)
                 if (!book.isPublicDomain) {
                     val qrCardBg = if (isDarkTheme) SurfaceContainerHigh else Color.White
-                    val qrCardBorder = if (isDarkTheme) Color(0xFF423419) else Color(0xFFE2DDD5)
 
                     Column(
                         modifier = Modifier
@@ -302,7 +305,6 @@ fun CuratedBookModal(
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(12.dp))
                             .background(qrCardBg)
-                            .border(1.dp, qrCardBorder, RoundedCornerShape(12.dp))
                             .padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
@@ -356,6 +358,8 @@ private fun ModalActionButton(
     isDarkTheme: Boolean = true,
     isLoading: Boolean = false,
     focusRequester: FocusRequester? = null,
+    trapLeft: Boolean = false,
+    trapRight: Boolean = false,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -393,10 +397,24 @@ private fun ModalActionButton(
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onFocusChanged { isFocused = it.isFocused }
             .onKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)) {
-                    onClick()
-                    true
+                if (event.type == KeyEventType.KeyDown) {
+                    when (event.key) {
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                            onClick()
+                            true
+                        }
+                        Key.DirectionUp, Key.DirectionDown -> {
+                            // Prevenir que el foco salga del modal hacia los elementos de fondo de la pantalla Home
+                            true
+                        }
+                        Key.DirectionLeft -> {
+                            if (trapLeft) true else false
+                        }
+                        Key.DirectionRight -> {
+                            if (trapRight) true else false
+                        }
+                        else -> false
+                    }
                 } else false
             }
             .focusable()

@@ -214,6 +214,8 @@ fun HomeScreen(
         }
     }
 
+    val isAnyModalOpen = showDetailsModal || showUserProfilesModal || (selectedCuratedBook != null) || (pendingProtectedAction != null)
+
     val verticalScrollState = rememberScrollState()
 
     val config = remember { repository.getServerConfig() }
@@ -359,6 +361,7 @@ fun HomeScreen(
 
                             HomeHeroBanner(
                                 heroBanner = heroBanner,
+                                isInteractive = !isAnyModalOpen,
                                 onReadSample = {
                                     val sampleUrl = heroBanner.sampleEpubUrl
                                     if (!sampleUrl.isNullOrBlank()) {
@@ -468,7 +471,7 @@ fun HomeScreen(
                                     showSeeMore = false,
                                     onSeeMore = {},
                                     onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
-                                    isInteractive = !showDetailsModal && !showUserProfilesModal,
+                                    isInteractive = !isAnyModalOpen,
                                     isDarkTheme = isDarkTheme,
                                     onBookFocused = {},
                                     onBookSelected = { book ->
@@ -496,6 +499,7 @@ fun HomeScreen(
                                 HomeOffersRow(
                                     offers = homeCarteleraData.offers,
                                     isDarkTheme = isDarkTheme,
+                                    isInteractive = !isAnyModalOpen,
                                     onOfferSelected = { offer ->
                                         selectedCuratedBook = CuratedBook(
                                             id = offer.id,
@@ -531,6 +535,7 @@ fun HomeScreen(
                                 CuratorRow(
                                     section = section,
                                     isDarkTheme = isDarkTheme,
+                                    isInteractive = !isAnyModalOpen,
                                     onBookClick = { curatedBook ->
                                         selectedCuratedBook = curatedBook
                                     },
@@ -562,7 +567,7 @@ fun HomeScreen(
                                     showSeeMore = false,
                                     onSeeMore = {},
                                     onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
-                                    isInteractive = !showDetailsModal && !showUserProfilesModal,
+                                    isInteractive = !isAnyModalOpen,
                                     isDarkTheme = isDarkTheme,
                                     onBookFocused = {},
                                     onBookSelected = { book ->
@@ -588,6 +593,7 @@ fun HomeScreen(
                                 icon = Icons.Default.AutoStories,
                                 modifier = Modifier.weight(1f),
                                 isDarkTheme = isDarkTheme,
+                                isInteractive = !isAnyModalOpen,
                                 onClick = onNavigateToLibrary
                             )
                             HomeQuickAccessCard(
@@ -596,6 +602,7 @@ fun HomeScreen(
                                 icon = Icons.Default.Storage,
                                 modifier = Modifier.weight(1f),
                                 isDarkTheme = isDarkTheme,
+                                isInteractive = !isAnyModalOpen,
                                 onClick = onNavigateToYourBooks
                             )
                         }
@@ -1514,6 +1521,7 @@ fun EmptyLibraryBanner(
 @Composable
 private fun HomeHeroBanner(
     heroBanner: HeroBanner,
+    isInteractive: Boolean = true,
     onReadSample: () -> Unit,
     onBuyQr: () -> Unit,
     onLeftAtBoundary: () -> Unit
@@ -1664,8 +1672,8 @@ private fun HomeHeroBanner(
                             }
                         } else false
                     }
-                    .focusable()
-                    .clickable { onReadSample() }
+                    .focusable(enabled = isInteractive)
+                    .clickable(enabled = isInteractive) { onReadSample() }
                     .padding(horizontal = 22.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -1739,6 +1747,7 @@ private fun HomeHeroBanner(
 private fun HomeOffersRow(
     offers: List<BookOffer>,
     isDarkTheme: Boolean = true,
+    isInteractive: Boolean = true,
     onOfferSelected: (BookOffer) -> Unit,
     onLeftAtBoundary: () -> Unit
 ) {
@@ -1798,6 +1807,7 @@ private fun HomeOffersRow(
                     offer = offer,
                     isFirst = index == 0,
                     isDarkTheme = isDarkTheme,
+                    isInteractive = isInteractive,
                     onClick = { onOfferSelected(offer) },
                     onLeftAtBoundary = onLeftAtBoundary
                 )
@@ -1811,6 +1821,7 @@ private fun HomeOfferCard(
     offer: BookOffer,
     isFirst: Boolean,
     isDarkTheme: Boolean = true,
+    isInteractive: Boolean = true,
     onClick: () -> Unit,
     onLeftAtBoundary: () -> Unit
 ) {
@@ -1838,8 +1849,8 @@ private fun HomeOfferCard(
                     }
                 } else false
             }
-            .focusable()
-            .clickable { onClick() }
+            .focusable(enabled = isInteractive)
+            .clickable(enabled = isInteractive) { onClick() }
     ) {
         Book3DView(
             coverBitmap = coverBmp,
@@ -1870,6 +1881,7 @@ private fun HomeQuickAccessCard(
     icon: ImageVector,
     modifier: Modifier = Modifier,
     isDarkTheme: Boolean = true,
+    isInteractive: Boolean = true,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -1925,8 +1937,8 @@ private fun HomeQuickAccessCard(
                     }
                 } else false
             }
-            .focusable()
-            .clickable { onClick() }
+            .focusable(enabled = isInteractive)
+            .clickable(enabled = isInteractive) { onClick() }
             .padding(18.dp)
     ) {
         Row(

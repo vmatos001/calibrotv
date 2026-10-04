@@ -63,6 +63,7 @@ import com.example.calibretv.theme.TextSecondary
 fun CuratorRow(
     section: CuratorSection,
     isDarkTheme: Boolean = true,
+    isInteractive: Boolean = true,
     onBookClick: (CuratedBook) -> Unit,
     onLeftAtBoundary: () -> Unit
 ) {
@@ -169,6 +170,7 @@ fun CuratorRow(
                     book = book,
                     isFirst = index == 0,
                     isDarkTheme = isDarkTheme,
+                    isInteractive = isInteractive,
                     onClick = { onBookClick(book) },
                     onLeftAtBoundary = onLeftAtBoundary
                 )
@@ -182,6 +184,7 @@ private fun CuratedBookCard(
     book: CuratedBook,
     isFirst: Boolean,
     isDarkTheme: Boolean = true,
+    isInteractive: Boolean = true,
     onClick: () -> Unit,
     onLeftAtBoundary: () -> Unit
 ) {
@@ -209,8 +212,8 @@ private fun CuratedBookCard(
                     }
                 } else false
             }
-            .focusable()
-            .clickable { onClick() }
+            .focusable(enabled = isInteractive)
+            .clickable(enabled = isInteractive) { onClick() }
     ) {
         Book3DView(
             coverBitmap = coverBmp,
