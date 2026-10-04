@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -92,26 +93,32 @@ fun TvSidebar(
 
     Box(
         modifier = modifier
-            .width(sidebarWidth)
+            .width(68.dp)
             .fillMaxHeight()
-            .padding(vertical = 12.dp, horizontal = 6.dp)
-            .shadow(
-                elevation = 16.dp,
-                shape = RoundedCornerShape(22.dp),
-                spotColor = if (isDarkTheme) Color.Black.copy(alpha = 0.25f) else Color.Black
-            )
-            .clip(RoundedCornerShape(22.dp))
-            .background(sidebarBg)
-            .border(1.dp, sidebarBorder, RoundedCornerShape(22.dp))
-            .onFocusChanged { isSidebarFocused = it.hasFocus }
     ) {
-        Column(
+        Box(
             modifier = Modifier
+                .width(sidebarWidth)
                 .fillMaxHeight()
-                .padding(vertical = 18.dp, horizontal = if (isExpanded) 12.dp else 8.dp),
-            horizontalAlignment = if (isExpanded) Alignment.Start else Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+                .padding(vertical = 12.dp, horizontal = 6.dp)
+                .zIndex(100f)
+                .shadow(
+                    elevation = if (isExpanded) 24.dp else 16.dp,
+                    shape = RoundedCornerShape(22.dp),
+                    spotColor = if (isDarkTheme) Color.Black.copy(alpha = 0.35f) else Color.Black
+                )
+                .clip(RoundedCornerShape(22.dp))
+                .background(sidebarBg)
+                .border(1.dp, sidebarBorder, RoundedCornerShape(22.dp))
+                .onFocusChanged { isSidebarFocused = it.hasFocus }
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .padding(vertical = 18.dp, horizontal = if (isExpanded) 12.dp else 8.dp),
+                horizontalAlignment = if (isExpanded) Alignment.Start else Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
             // ==========================================
             // TOP: Logo de Marca
             // ==========================================
@@ -229,6 +236,7 @@ fun TvSidebar(
             }
         }
     }
+}
 }
 
 @Composable

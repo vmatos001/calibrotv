@@ -3,6 +3,7 @@ package com.example.calibretv.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -49,6 +50,12 @@ import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
 
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ViewInAr
+import androidx.compose.ui.graphics.vector.ImageVector
+
 enum class TvNavTab {
     HOME,
     BIBLIOTECA,
@@ -70,122 +77,64 @@ fun TvTopBar(
     initialFocusRequester: androidx.compose.ui.focus.FocusRequester? = null,
     modifier: Modifier = Modifier
 ) {
+    // Menú horizontal contraído centrado en pantalla para el Lector 3D
+    // Mismo estilo que el menú contraído vertical: iconos circulares limpios, sin botón de cambiar tema
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(64.dp)
-            .background(BackgroundDark.copy(alpha = 0.96f))
-            .padding(horizontal = 32.dp),
-        contentAlignment = Alignment.Center
+            .padding(top = 16.dp),
+        contentAlignment = Alignment.TopCenter
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Brand Logo estilizado idéntico al recuadro blanco de la referencia
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(Color.White),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MenuBook,
-                        contentDescription = null,
-                        tint = Color(0xFF101014),
-                        modifier = Modifier.size(21.dp)
-                    )
-                }
-                Text(
-                    text = "CalibroTV",
-                    color = TextPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 0.4.sp
+        Box(
+            modifier = Modifier
+                .shadow(
+                    elevation = 20.dp,
+                    shape = RoundedCornerShape(26.dp),
+                    spotColor = Color.Black.copy(alpha = 0.5f)
                 )
-            }
-
-            // Navigation Tabs (Home, Biblioteca, Tus Libros, Lector 3D, Ajustes)
+                .clip(RoundedCornerShape(26.dp))
+                .background(Color(0xFF141619))
+                .border(1.dp, Color(0xFF242734), RoundedCornerShape(26.dp))
+                .padding(horizontal = 14.dp, vertical = 8.dp)
+        ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TvNavTabItem(
-                    title = "Inicio",
+                TvHorizontalNavIconItem(
+                    title = "Home",
+                    icon = Icons.Default.Home,
                     isSelected = currentTab == TvNavTab.HOME,
-                    modifier = if (initialFocusRequester != null && currentTab == TvNavTab.HOME) {
-                        Modifier.focusRequester(initialFocusRequester)
-                    } else Modifier,
+                    focusRequester = if (currentTab == TvNavTab.HOME) initialFocusRequester else null,
                     onClick = { onTabSelected(TvNavTab.HOME) }
                 )
-                TvNavTabItem(
+                TvHorizontalNavIconItem(
                     title = "Biblioteca",
+                    icon = Icons.Default.MenuBook,
                     isSelected = currentTab == TvNavTab.BIBLIOTECA,
-                    modifier = if (initialFocusRequester != null && currentTab == TvNavTab.BIBLIOTECA) {
-                        Modifier.focusRequester(initialFocusRequester)
-                    } else Modifier,
+                    focusRequester = if (currentTab == TvNavTab.BIBLIOTECA) initialFocusRequester else null,
                     onClick = { onTabSelected(TvNavTab.BIBLIOTECA) }
                 )
-                TvNavTabItem(
+                TvHorizontalNavIconItem(
                     title = "Tus Libros",
+                    icon = Icons.Default.Bookmark,
                     isSelected = currentTab == TvNavTab.TUS_LIBROS,
-                    modifier = if (initialFocusRequester != null && currentTab == TvNavTab.TUS_LIBROS) {
-                        Modifier.focusRequester(initialFocusRequester)
-                    } else Modifier,
+                    focusRequester = if (currentTab == TvNavTab.TUS_LIBROS) initialFocusRequester else null,
                     onClick = { onTabSelected(TvNavTab.TUS_LIBROS) }
                 )
-                TvNavTabItem(
+                TvHorizontalNavIconItem(
                     title = "Lector 3D",
+                    icon = Icons.Default.ViewInAr,
                     isSelected = currentTab == TvNavTab.LECTOR_3D,
-                    modifier = if (initialFocusRequester != null && currentTab == TvNavTab.LECTOR_3D) {
-                        Modifier.focusRequester(initialFocusRequester)
-                    } else Modifier,
+                    focusRequester = if (currentTab == TvNavTab.LECTOR_3D) initialFocusRequester else null,
                     onClick = { onTabSelected(TvNavTab.LECTOR_3D) }
                 )
-                TvNavTabItem(
+                TvHorizontalNavIconItem(
                     title = "Ajustes",
+                    icon = Icons.Default.Settings,
                     isSelected = currentTab == TvNavTab.AJUSTES,
-                    modifier = if (initialFocusRequester != null && currentTab == TvNavTab.AJUSTES) {
-                        Modifier.focusRequester(initialFocusRequester)
-                    } else Modifier,
+                    focusRequester = if (currentTab == TvNavTab.AJUSTES) initialFocusRequester else null,
                     onClick = { onTabSelected(TvNavTab.AJUSTES) }
-                )
-            }
-
-            // Status and User Profile Pill (Nuevo diseño cápsula con acciones y avatar)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                val formattedTime = remember {
-                    try {
-                        val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-                        sdf.format(java.util.Date())
-                    } catch (_: Exception) {
-                        "12:00"
-                    }
-                }
-
-                Text(
-                    text = formattedTime,
-                    color = TextMuted,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-
-                TvProfilePill(
-                    profile = activeProfile,
-                    onOpenProfileSwitcher = onProfileClick,
-                    onOpenOpds = onOpenOpds,
-                    onOpenWifiImport = onOpenWifiImport,
-                    onOpenSettings = onOpenSettings,
-                    onQuickSync = onQuickSync
                 )
             }
         }
@@ -193,32 +142,45 @@ fun TvTopBar(
 }
 
 @Composable
-private fun TvNavTabItem(
+private fun TvHorizontalNavIconItem(
     title: String,
+    icon: ImageVector,
     isSelected: Boolean,
-    modifier: Modifier = Modifier,
+    focusRequester: androidx.compose.ui.focus.FocusRequester? = null,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
+    val normalIconTint = Color(0xFF9DA1AA)
+    val focusedBg = AmberWarm
+    val focusedContentColor = Color(0xFF111317)
+    val focusedBorderColor = CyanElectric
+
+    val collapsedBg = when {
+        isFocused -> focusedBg
+        isSelected -> AmberWarm
+        else -> Color.Transparent
+    }
+    val collapsedTint = when {
+        isFocused -> focusedContentColor
+        isSelected -> Color(0xFF111317)
+        else -> normalIconTint
+    }
+
     Box(
-        modifier = modifier
-            .scale(if (isFocused) 1.05f else 1.0f)
-            .shadow(if (isFocused) 10.dp else 0.dp, RoundedCornerShape(10.dp), spotColor = CyanElectric)
-            .clip(RoundedCornerShape(10.dp))
-            .background(
-                when {
-                    isFocused -> AmberWarm
-                    isSelected -> AmberWarm.copy(alpha = 0.85f)
-                    else -> Color.Transparent
-                }
-            )
+        modifier = Modifier
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .size(44.dp)
+            .scale(if (isFocused) 1.15f else 1.0f)
+            .clip(CircleShape)
+            .background(collapsedBg)
             .border(
-                width = if (isFocused) 2.dp else if (isSelected) 1.dp else 0.dp,
-                color = if (isFocused) CyanElectric else if (isSelected) AmberWarm else Color.Transparent,
-                shape = RoundedCornerShape(10.dp)
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) focusedBorderColor else Color.Transparent,
+                shape = CircleShape
             )
             .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown &&
                     (event.key == Key.DirectionCenter ||
@@ -229,15 +191,14 @@ private fun TvNavTabItem(
                     true
                 } else false
             }
-            .clickable { onClick() }
-            .padding(horizontal = 13.dp, vertical = 6.dp),
+            .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = title,
-            color = if (isFocused || isSelected) Color(0xFF131315) else TextMuted,
-            fontSize = 13.sp,
-            fontWeight = if (isFocused || isSelected) FontWeight.Bold else FontWeight.Medium
+        Icon(
+            imageVector = icon,
+            contentDescription = title,
+            tint = collapsedTint,
+            modifier = Modifier.size(21.dp)
         )
     }
 }
