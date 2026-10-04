@@ -83,7 +83,7 @@ fun CuratorRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 36.dp, vertical = 4.dp),
+                .padding(horizontal = 20.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -159,7 +159,7 @@ fun CuratorRow(
 
         // Fila horizontal de libros en 3D (sin tarjeta, con perspectiva y animación al foco)
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 36.dp, vertical = 10.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(28.dp)
         ) {
             itemsIndexed(section.books, key = { _, b -> b.id }) { index, book ->

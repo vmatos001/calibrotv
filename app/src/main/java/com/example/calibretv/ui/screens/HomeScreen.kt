@@ -322,162 +322,58 @@ fun HomeScreen(
                         .background(screenBg)
                 ) {
                 // ==========================================
-                // ZONA A: HERO BANNER 16:9 (BESTSELLER DEL MES)
-                // Branding oficial CalibroTV + Reloj + Perfil
+                // CABECERA SUPERIOR: Reloj en vivo & Perfil de Usuario
                 // ==========================================
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.44f)
-                        .background(heroBg)
-                ) {
-                // 1. Dynamic 16:9 Backdrop Image from CMS
-                val backdropCoverBmp = rememberCoverImage(heroBanner.backdropUrl.ifBlank { heroBanner.coverUrl })
-                if (backdropCoverBmp != null) {
-                    Image(
-                        bitmap = backdropCoverBmp,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer { alpha = 0.35f }
-                    )
-                }
-
-                // 2. Horizontal gradient overlay (OLED black on left for sharp legibility)
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.horizontalGradient(
-                                colors = listOf(
-                                    heroBg,
-                                    heroBg.copy(alpha = 0.97f),
-                                    heroBg.copy(alpha = 0.82f),
-                                    heroBg.copy(alpha = 0.40f),
-                                    Color.Transparent
-                                ),
-                                startX = 0f,
-                                endX = 1400f
-                            )
-                        )
-                )
-
-                // 3. Vertical gradient towards shelves
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    heroBg.copy(alpha = 0.50f),
-                                    heroBg
-                                )
-                            )
-                        )
-                )
-
-                // 4. FLOATING TOP-RIGHT OVERLAY: Reloj en vivo & Perfil de Usuario
                 Row(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(end = 36.dp, top = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        .fillMaxWidth()
+                        .padding(start = 28.dp, end = 28.dp, top = 14.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = currentTime,
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
+                        text = "CalibroTV",
+                        color = if (isDarkTheme) TextPrimary else InkPrimary,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.5.sp
                     )
 
-                    TvProfilePill(
-                        profile = activeProfile,
-                        onOpenProfileSwitcher = { showUserProfilesModal = true },
-                        onOpenOpds = onNavigateToOpds,
-                        onOpenWifiImport = onNavigateToWifiImport,
-                        onOpenSettings = onNavigateToSettings,
-                        onQuickSync = {
-                            coroutineScope.launch {
-                                isLoading = true
-                                feedContent = repository.getFeed()
-                                isLoading = false
-                            }
-                        },
-                        onNotificationsClick = onNavigateToSettings
-                    )
-                }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text(
+                            text = currentTime,
+                            color = if (isDarkTheme) Color.White.copy(alpha = 0.75f) else Color(0xFF555B66),
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium
+                        )
 
-                // HERO SPOTLIGHT: Portada 3D, Sinopsis Editorial y Botones (Espacio Completo)
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(top = 8.dp)
-                ) {
-                    HomeHeroBanner(
-                        heroBanner = heroBanner,
-                        onReadSample = {
-                            val sampleUrl = heroBanner.sampleEpubUrl
-                            if (!sampleUrl.isNullOrBlank()) {
-                                isDownloadingCuratedBook = true
+                        TvProfilePill(
+                            profile = activeProfile,
+                            onOpenProfileSwitcher = { showUserProfilesModal = true },
+                            onOpenOpds = onNavigateToOpds,
+                            onOpenWifiImport = onNavigateToWifiImport,
+                            onOpenSettings = onNavigateToSettings,
+                            onQuickSync = {
                                 coroutineScope.launch {
-                                    val heroCurated = CuratedBook(
-                                        id = heroBanner.id,
-                                        title = heroBanner.title,
-                                        author = heroBanner.author,
-                                        coverUrl = heroBanner.coverUrl,
-                                        summary = heroBanner.synopsis,
-                                        category = "Bestseller Destacado",
-                                        isPublicDomain = true,
-                                        publicDownloadUrl = sampleUrl
-                                    )
-                                    val res = CuratorRepository.downloadPublicDomainBook(context, heroCurated, repository)
-                                    isDownloadingCuratedBook = false
-                                    if (res.isSuccess && res.getOrNull() != null) {
-                                        onBookSelected(res.getOrNull()!!)
-                                    }
+                                    isLoading = true
+                                    feedContent = repository.getFeed()
+                                    isLoading = false
                                 }
-                            } else {
-                                selectedCuratedBook = CuratedBook(
-                                    id = heroBanner.id,
-                                    title = heroBanner.title,
-                                    author = heroBanner.author,
-                                    coverUrl = heroBanner.coverUrl,
-                                    summary = heroBanner.synopsis,
-                                    category = "Bestseller Destacado",
-                                    isPublicDomain = false,
-                                    affiliateQrUrl = heroBanner.affiliatePurchaseUrl
-                                )
-                            }
-                        },
-                        onBuyQr = {
-                            selectedCuratedBook = CuratedBook(
-                                id = heroBanner.id,
-                                title = heroBanner.title,
-                                author = heroBanner.author,
-                                coverUrl = heroBanner.coverUrl,
-                                summary = heroBanner.synopsis,
-                                category = "Bestseller Destacado",
-                                isPublicDomain = false,
-                                affiliateQrUrl = heroBanner.affiliatePurchaseUrl
-                            )
-                        },
-                        onLeftAtBoundary = { sidebarFocusRequester.requestFocus() }
-                    )
+                            },
+                            onNotificationsClick = onNavigateToSettings
+                        )
+                    }
                 }
-            }
 
-            // ==========================================
-            // ZONA B: CARRUSELES Y ESTANTERÍAS (SCROLL VERTICAL)
-            // ==========================================
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .background(screenBg)
-            ) {
+                // ==========================================
+                // CONTENIDO SCROLLABLE (Bento Grid)
+                // ==========================================
+                val shelfCardBg = if (isDarkTheme) Color(0xFF161920) else Color.White
+                val shelfCardBorder = if (isDarkTheme) Color(0xFF262934) else Color(0xFFE2E7E2)
+
                 if (isLoading) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = AccentGold)
@@ -487,87 +383,242 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(verticalScrollState)
-                            .padding(top = 8.dp, bottom = 60.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                            .padding(bottom = 60.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        // ----------------------------------------------------
-                        // Carrusel 1: Continuar Leyendo (libros con progreso > 0)
-                        // ----------------------------------------------------
-                        if (continuingBooks.isNotEmpty()) {
-                            HomeShelf(
-                                sectionTitle = "Continuar Leyendo",
-                                icon = Icons.Default.History,
-                                books = continuingBooks,
-                                authHeader = authHeader,
-                                showSeeMore = false,
-                                onSeeMore = {},
-                                onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
-                                isInteractive = !showDetailsModal && !showUserProfilesModal,
-                                isDarkTheme = isDarkTheme,
-                                onBookFocused = {},
-                                onBookSelected = { book ->
-                                    onBookSelected(book)
-                                }
-                            )
-                        }
+                        // ==========================================
+                        // ZONA A: BENTO HERO BANNER (Estilo Imagen 2 Card A)
+                        // ==========================================
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(210.dp)
+                                .padding(horizontal = 28.dp, vertical = 4.dp)
+                                .clip(RoundedCornerShape(26.dp))
+                                .background(Color(0xFF12141A))
+                                .border(1.dp, Color(0xFF242734), RoundedCornerShape(26.dp))
+                                .shadow(
+                                    elevation = if (isDarkTheme) 0.dp else 8.dp,
+                                    shape = RoundedCornerShape(26.dp),
+                                    spotColor = Color.Black.copy(alpha = 0.15f)
+                                )
+                        ) {
+                            val backdropCoverBmp = rememberCoverImage(heroBanner.backdropUrl.ifBlank { heroBanner.coverUrl })
+                            if (backdropCoverBmp != null) {
+                                Image(
+                                    bitmap = backdropCoverBmp,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer { alpha = 0.28f }
+                                )
+                            }
 
-                        // ----------------------------------------------------
-                        // Carrusel 2: Ofertas y Descuentos Destacados (desde CMS)
-                        // ----------------------------------------------------
-                        if (homeCarteleraData.offers.isNotEmpty()) {
-                            HomeOffersRow(
-                                offers = homeCarteleraData.offers,
-                                isDarkTheme = isDarkTheme,
-                                onOfferSelected = { offer ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            colors = listOf(
+                                                Color(0xFF12141A),
+                                                Color(0xFF12141A).copy(alpha = 0.95f),
+                                                Color(0xFF12141A).copy(alpha = 0.70f),
+                                                Color(0xFF12141A).copy(alpha = 0.30f),
+                                                Color.Transparent
+                                            ),
+                                            startX = 0f,
+                                            endX = 1100f
+                                        )
+                                    )
+                            )
+
+                            HomeHeroBanner(
+                                heroBanner = heroBanner,
+                                onReadSample = {
+                                    val sampleUrl = heroBanner.sampleEpubUrl
+                                    if (!sampleUrl.isNullOrBlank()) {
+                                        isDownloadingCuratedBook = true
+                                        coroutineScope.launch {
+                                            val heroCurated = CuratedBook(
+                                                id = heroBanner.id,
+                                                title = heroBanner.title,
+                                                author = heroBanner.author,
+                                                coverUrl = heroBanner.coverUrl,
+                                                summary = heroBanner.synopsis,
+                                                category = "Bestseller Destacado",
+                                                isPublicDomain = true,
+                                                publicDownloadUrl = sampleUrl
+                                            )
+                                            val res = CuratorRepository.downloadPublicDomainBook(context, heroCurated, repository)
+                                            isDownloadingCuratedBook = false
+                                            if (res.isSuccess && res.getOrNull() != null) {
+                                                onBookSelected(res.getOrNull()!!)
+                                            }
+                                        }
+                                    } else {
+                                        selectedCuratedBook = CuratedBook(
+                                            id = heroBanner.id,
+                                            title = heroBanner.title,
+                                            author = heroBanner.author,
+                                            coverUrl = heroBanner.coverUrl,
+                                            summary = heroBanner.synopsis,
+                                            category = "Bestseller Destacado",
+                                            isPublicDomain = false,
+                                            affiliateQrUrl = heroBanner.affiliatePurchaseUrl
+                                        )
+                                    }
+                                },
+                                onBuyQr = {
                                     selectedCuratedBook = CuratedBook(
-                                        id = offer.id,
-                                        title = offer.title,
-                                        author = offer.author,
-                                        coverUrl = offer.coverUrl,
-                                        summary = "Oferta especial de cartelera con descuento de ${offer.discountTag}.",
-                                        category = "Oferta ${offer.discountTag}",
+                                        id = heroBanner.id,
+                                        title = heroBanner.title,
+                                        author = heroBanner.author,
+                                        coverUrl = heroBanner.coverUrl,
+                                        summary = heroBanner.synopsis,
+                                        category = "Bestseller Destacado",
                                         isPublicDomain = false,
-                                        affiliateQrUrl = offer.affiliateUrl
+                                        affiliateQrUrl = heroBanner.affiliatePurchaseUrl
                                     )
                                 },
                                 onLeftAtBoundary = { sidebarFocusRequester.requestFocus() }
                             )
                         }
 
-                        // ----------------------------------------------------
-                        // Carrusel 3: Cartelera Dinámica por Personajes / Arquetipos
-                        // ----------------------------------------------------
-                        curatorSections.forEach { section ->
-                            CuratorRow(
-                                section = section,
-                                isDarkTheme = isDarkTheme,
-                                onBookClick = { curatedBook ->
-                                    selectedCuratedBook = curatedBook
-                                },
-                                onLeftAtBoundary = { sidebarFocusRequester.requestFocus() }
-                            )
+                        // ==========================================
+                        // ZONA B: TARJETAS BENTO PARA LIBROS (Estilo Imagen 2 Card B)
+                        // ==========================================
+
+                        // Carrusel 1: Continuar Leyendo (libros con progreso > 0)
+                        if (continuingBooks.isNotEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 28.dp, vertical = 2.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(shelfCardBg)
+                                    .border(1.dp, shelfCardBorder, RoundedCornerShape(24.dp))
+                                    .shadow(
+                                        elevation = if (isDarkTheme) 0.dp else 4.dp,
+                                        shape = RoundedCornerShape(24.dp),
+                                        spotColor = Color.Black.copy(alpha = 0.05f)
+                                    )
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                HomeShelf(
+                                    sectionTitle = "Continuar Leyendo",
+                                    icon = Icons.Default.History,
+                                    books = continuingBooks,
+                                    authHeader = authHeader,
+                                    showSeeMore = false,
+                                    onSeeMore = {},
+                                    onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
+                                    isInteractive = !showDetailsModal && !showUserProfilesModal,
+                                    isDarkTheme = isDarkTheme,
+                                    onBookFocused = {},
+                                    onBookSelected = { book ->
+                                        onBookSelected(book)
+                                    }
+                                )
+                            }
                         }
 
-                        // ----------------------------------------------------
+                        // Carrusel 2: Ofertas y Descuentos Destacados (desde CMS)
+                        if (homeCarteleraData.offers.isNotEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 28.dp, vertical = 2.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(shelfCardBg)
+                                    .border(1.dp, shelfCardBorder, RoundedCornerShape(24.dp))
+                                    .shadow(
+                                        elevation = if (isDarkTheme) 0.dp else 4.dp,
+                                        shape = RoundedCornerShape(24.dp),
+                                        spotColor = Color.Black.copy(alpha = 0.05f)
+                                    )
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                HomeOffersRow(
+                                    offers = homeCarteleraData.offers,
+                                    isDarkTheme = isDarkTheme,
+                                    onOfferSelected = { offer ->
+                                        selectedCuratedBook = CuratedBook(
+                                            id = offer.id,
+                                            title = offer.title,
+                                            author = offer.author,
+                                            coverUrl = offer.coverUrl,
+                                            summary = "Oferta especial de cartelera con descuento de ${offer.discountTag}.",
+                                            category = "Oferta ${offer.discountTag}",
+                                            isPublicDomain = false,
+                                            affiliateQrUrl = offer.affiliateUrl
+                                        )
+                                    },
+                                    onLeftAtBoundary = { sidebarFocusRequester.requestFocus() }
+                                )
+                            }
+                        }
+
+                        // Carrusel 3: Cartelera Dinámica por Personajes / Arquetipos
+                        curatorSections.forEach { section ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 28.dp, vertical = 2.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(shelfCardBg)
+                                    .border(1.dp, shelfCardBorder, RoundedCornerShape(24.dp))
+                                    .shadow(
+                                        elevation = if (isDarkTheme) 0.dp else 4.dp,
+                                        shape = RoundedCornerShape(24.dp),
+                                        spotColor = Color.Black.copy(alpha = 0.05f)
+                                    )
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                CuratorRow(
+                                    section = section,
+                                    isDarkTheme = isDarkTheme,
+                                    onBookClick = { curatedBook ->
+                                        selectedCuratedBook = curatedBook
+                                    },
+                                    onLeftAtBoundary = { sidebarFocusRequester.requestFocus() }
+                                )
+                            }
+                        }
+
                         // Carrusel 4: Libros Favoritos del usuario activo
-                        // ----------------------------------------------------
                         if (favoriteBooks.isNotEmpty()) {
-                            HomeShelf(
-                                sectionTitle = "Tus Libros Favoritos",
-                                icon = Icons.Default.Star,
-                                books = favoriteBooks,
-                                authHeader = authHeader,
-                                showSeeMore = false,
-                                onSeeMore = {},
-                                onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
-                                isInteractive = !showDetailsModal && !showUserProfilesModal,
-                                isDarkTheme = isDarkTheme,
-                                onBookFocused = {},
-                                onBookSelected = { book ->
-                                    detailsBook = book
-                                    showDetailsModal = true
-                                }
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 28.dp, vertical = 2.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(shelfCardBg)
+                                    .border(1.dp, shelfCardBorder, RoundedCornerShape(24.dp))
+                                    .shadow(
+                                        elevation = if (isDarkTheme) 0.dp else 4.dp,
+                                        shape = RoundedCornerShape(24.dp),
+                                        spotColor = Color.Black.copy(alpha = 0.05f)
+                                    )
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                HomeShelf(
+                                    sectionTitle = "Tus Libros Favoritos",
+                                    icon = Icons.Default.Star,
+                                    books = favoriteBooks,
+                                    authHeader = authHeader,
+                                    showSeeMore = false,
+                                    onSeeMore = {},
+                                    onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
+                                    isInteractive = !showDetailsModal && !showUserProfilesModal,
+                                    isDarkTheme = isDarkTheme,
+                                    onBookFocused = {},
+                                    onBookSelected = { book ->
+                                        detailsBook = book
+                                        showDetailsModal = true
+                                    }
+                                )
+                            }
                         }
 
                         // ----------------------------------------------------
@@ -576,7 +627,7 @@ fun HomeScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 36.dp, vertical = 6.dp),
+                                .padding(horizontal = 28.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             HomeQuickAccessCard(
@@ -584,6 +635,7 @@ fun HomeScreen(
                                 subtitle = "Ver catálogo completo de libros con filtros y búsqueda",
                                 icon = Icons.Default.AutoStories,
                                 modifier = Modifier.weight(1f),
+                                isDarkTheme = isDarkTheme,
                                 onClick = onNavigateToLibrary
                             )
                             HomeQuickAccessCard(
@@ -591,12 +643,12 @@ fun HomeScreen(
                                 subtitle = "Ver libros en almacenamiento de la TV y liberar espacio",
                                 icon = Icons.Default.Storage,
                                 modifier = Modifier.weight(1f),
+                                isDarkTheme = isDarkTheme,
                                 onClick = onNavigateToYourBooks
                             )
                         }
                     }
                 }
-            }
         }
 
         // ==========================================
@@ -975,7 +1027,7 @@ private fun HomeShelf(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 36.dp, vertical = 2.dp),
+                .padding(horizontal = 20.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1050,7 +1102,7 @@ private fun HomeShelf(
         // Horizontal Carousel of 3D Books (Tilted in standby, face-forward on focus)
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(28.dp),
-            contentPadding = PaddingValues(horizontal = 36.dp, vertical = 10.dp)
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
         ) {
             itemsIndexed(books) { index, book ->
                 val isFirst = index == 0
@@ -1500,21 +1552,21 @@ private fun HomeHeroBanner(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 36.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
+            .padding(horizontal = 20.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(22.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // LADO IZQUIERDO: Portada del mismo tamaño que los libros de abajo (96dp x 142dp)
+        // LADO IZQUIERDO: Portada 3D del libro destacado
         Book3DView(
             coverBitmap = coverBmp,
             title = heroBanner.title,
-            width = 96.dp,
-            height = 142.dp,
+            width = 94.dp,
+            height = 138.dp,
             isFocused = false,
             enable3DStandby = false
         )
 
-        // CENTRO: Badge, Título, Autor, Cita, Sinopsis y Botón de Muestra
+        // CENTRO: Badge, Título, Autor, Cita, Sinopsis y Botón Blanco (Estilo Imagen 2 Card A)
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -1524,15 +1576,15 @@ private fun HomeHeroBanner(
             // Badge BESTSELLER DEL MES
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFF003844).copy(alpha = 0.85f))
-                    .border(1.dp, CyanElectric.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF222632))
+                    .border(1.dp, Color(0xFF333848), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 9.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = "BESTSELLER DEL MES",
-                    color = CyanElectric,
-                    fontSize = 9.5.sp,
+                    text = "★ BESTSELLER DEL MES",
+                    color = AmberWarm,
+                    fontSize = 9.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 0.8.sp
                 )
@@ -1544,7 +1596,7 @@ private fun HomeHeroBanner(
             Text(
                 text = heroBanner.title,
                 color = Color.White,
-                fontSize = 22.sp,
+                fontSize = 20.sp,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.3.sp,
@@ -1556,17 +1608,17 @@ private fun HomeHeroBanner(
             Text(
                 text = heroBanner.author.ifBlank { "Cixin Liu" },
                 color = AmberWarm,
-                fontSize = 12.5.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(3.dp))
 
             // Cita editorial destacada
             Text(
                 text = "“${heroBanner.tagline.ifBlank { heroBanner.synopsis }}”",
-                color = Color(0xFF88D8E8),
-                fontSize = 11.sp,
+                color = Color(0xFFCBD5E1),
+                fontSize = 10.5.sp,
                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -1577,27 +1629,31 @@ private fun HomeHeroBanner(
             // Sinopsis breve
             Text(
                 text = heroBanner.synopsis.ifBlank { heroBanner.tagline },
-                color = Color(0xFFD6D3D1),
-                fontSize = 10.5.sp,
-                lineHeight = 14.5.sp,
+                color = Color(0xFF94A3B8),
+                fontSize = 10.sp,
+                lineHeight = 14.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Botón único de acción: Leer Muestra EPUB (Capítulo 1)
+            // Botón Blanco de Acción (Estilo Imagen 2 Card A: [ Upgrade > ])
             Box(
                 modifier = Modifier
                     .focusRequester(readBtnFocusRequester)
                     .scale(if (isReadFocused) 1.05f else 1.0f)
-                    .shadow(if (isReadFocused) 10.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = CyanElectric)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (isReadFocused) CyanElectric else Color(0xFF004D5A))
+                    .shadow(
+                        elevation = if (isReadFocused) 10.dp else 4.dp,
+                        shape = RoundedCornerShape(22.dp),
+                        spotColor = if (isReadFocused) AmberWarm else Color.Black.copy(alpha = 0.35f)
+                    )
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(Color.White)
                     .border(
-                        width = if (isReadFocused) 2.dp else 1.dp,
-                        color = if (isReadFocused) Color.White else CyanElectric.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(8.dp)
+                        width = if (isReadFocused) 2.dp else 0.dp,
+                        color = if (isReadFocused) AmberWarm else Color.Transparent,
+                        shape = RoundedCornerShape(22.dp)
                     )
                     .onFocusChanged { isReadFocused = it.isFocused }
                     .onKeyEvent { event ->
@@ -1617,7 +1673,7 @@ private fun HomeHeroBanner(
                     }
                     .focusable()
                     .clickable { onReadSample() }
-                    .padding(horizontal = 14.dp, vertical = 7.dp),
+                    .padding(horizontal = 18.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
@@ -1627,14 +1683,20 @@ private fun HomeHeroBanner(
                     Icon(
                         imageVector = Icons.Default.MenuBook,
                         contentDescription = null,
-                        tint = if (isReadFocused) Color(0xFF002228) else Color.White,
+                        tint = Color(0xFF111317),
                         modifier = Modifier.size(15.dp)
                     )
                     Text(
                         text = "Leer Muestra EPUB (Capítulo 1)",
-                        color = if (isReadFocused) Color(0xFF002228) else Color.White,
+                        color = Color(0xFF111317),
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ArrowForward,
+                        contentDescription = null,
+                        tint = Color(0xFF111317),
+                        modifier = Modifier.size(13.dp)
                     )
                 }
             }
@@ -1643,9 +1705,9 @@ private fun HomeHeroBanner(
         // LADO DERECHO: Tarjeta con Código QR a la vista para comprar desde el móvil
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF0D141E).copy(alpha = 0.90f))
-                .border(1.dp, Color(0xFF1E2B3C), RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFF161922))
+                .border(1.dp, Color(0xFF262A38), RoundedCornerShape(16.dp))
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -1656,8 +1718,8 @@ private fun HomeHeroBanner(
                 if (qrBitmap != null) {
                     Box(
                         modifier = Modifier
-                            .size(76.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                            .size(72.dp)
+                            .clip(RoundedCornerShape(8.dp))
                             .background(Color.White)
                             .padding(4.dp),
                         contentAlignment = Alignment.Center
@@ -1671,9 +1733,9 @@ private fun HomeHeroBanner(
                 }
                 Text(
                     text = "COMPRAR EN MÓVIL",
-                    color = Color(0xFF88D8E8),
+                    color = Color(0xFFD0D4DC),
                     fontSize = 8.5.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                    fontWeight = FontWeight.Bold,
                     letterSpacing = 0.5.sp
                 )
             }
@@ -1697,7 +1759,7 @@ private fun HomeOffersRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 36.dp, vertical = 4.dp),
+                .padding(horizontal = 20.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -1736,7 +1798,7 @@ private fun HomeOffersRow(
 
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 36.dp, vertical = 10.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(28.dp)
         ) {
             itemsIndexed(offers, key = { _, o -> o.id }) { index, offer ->
@@ -1815,19 +1877,40 @@ private fun HomeQuickAccessCard(
     subtitle: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
+    isDarkTheme: Boolean = true,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
+    val cardBg = if (isDarkTheme) {
+        if (isFocused) Color(0xFF222632) else Color(0xFF161920)
+    } else {
+        if (isFocused) Color(0xFFF2F5F2) else Color.White
+    }
+
+    val cardBorder = if (isFocused) {
+        AmberWarm
+    } else {
+        if (isDarkTheme) Color(0xFF262934) else Color(0xFFE2E7E2)
+    }
+
+    val titleColor = if (isDarkTheme) TextPrimary else InkPrimary
+    val subtitleColor = if (isDarkTheme) TextMuted else InkSecondary
+
     Box(
         modifier = modifier
             .scale(if (isFocused) 1.03f else 1.0f)
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (isFocused) SurfaceContainerHighest else SurfaceContainer)
+            .clip(RoundedCornerShape(20.dp))
+            .background(cardBg)
             .border(
                 width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) AmberWarm else Color(0xFF2E2E34),
-                shape = RoundedCornerShape(14.dp)
+                color = cardBorder,
+                shape = RoundedCornerShape(20.dp)
+            )
+            .shadow(
+                elevation = if (isDarkTheme) 0.dp else 4.dp,
+                shape = RoundedCornerShape(20.dp),
+                spotColor = Color.Black.copy(alpha = 0.06f)
             )
             .onFocusChanged { isFocused = it.isFocused }
             .onKeyEvent { event ->
@@ -1869,13 +1952,13 @@ private fun HomeQuickAccessCard(
             ) {
                 Text(
                     text = title,
-                    color = TextPrimary,
+                    color = titleColor,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = subtitle,
-                    color = TextMuted,
+                    color = subtitleColor,
                     fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -1884,7 +1967,7 @@ private fun HomeQuickAccessCard(
             Icon(
                 imageVector = Icons.Default.ArrowForward,
                 contentDescription = null,
-                tint = if (isFocused) AmberWarm else TextMuted,
+                tint = if (isFocused) AmberWarm else (if (isDarkTheme) TextMuted else InkSecondary),
                 modifier = Modifier.size(18.dp)
             )
         }
