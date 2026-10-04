@@ -67,6 +67,7 @@ import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.BackgroundDark
 import com.example.calibretv.theme.CanvasBackgroundLight
 import com.example.calibretv.theme.CardBackgroundLight
+import com.example.calibretv.theme.CyanElectric
 import com.example.calibretv.theme.InkMuted
 import com.example.calibretv.theme.InkPrimary
 import com.example.calibretv.theme.InkSecondary
@@ -166,6 +167,8 @@ fun YourBooksScreen(
     val textSecondaryColor = if (isDarkTheme) TextSecondary else InkSecondary
     val textMutedColor = if (isDarkTheme) TextMuted else InkMuted
 
+    val isAnyModalOpen = bookToManage != null || bookToDelete != null || showUserProfilesModal
+
     BackHandler {
         onNavigateToHome()
     }
@@ -211,14 +214,24 @@ fun YourBooksScreen(
                 )
             }
 
-            // Panel de información de memoria física en TV (10-Foot UI)
+            // Panel de información de memoria física en TV (Bento Style, limpio sin bordes duros)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 8.dp)
-                    .background(cardBg, RoundedCornerShape(12.dp))
-                    .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (isDarkTheme) SurfaceCard else Color.White)
+                    .shadow(
+                        elevation = if (isDarkTheme) 0.dp else 4.dp,
+                        shape = RoundedCornerShape(20.dp),
+                        spotColor = Color.Black.copy(alpha = 0.05f)
+                    )
+                    .border(
+                        width = if (isDarkTheme) 1.dp else 0.dp,
+                        color = if (isDarkTheme) SurfaceRaised else Color.Transparent,
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                    .padding(horizontal = 22.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -318,11 +331,13 @@ fun YourBooksScreen(
                             YourBooksActionButton(
                                 title = "Transferir por Wi-Fi",
                                 icon = Icons.Default.Wifi,
+                                isDarkTheme = isDarkTheme,
                                 onClick = onNavigateToWifiImport
                             )
                             YourBooksActionButton(
                                 title = "Explorar Biblioteca",
                                 icon = Icons.Default.MenuBook,
+                                isDarkTheme = isDarkTheme,
                                 onClick = onNavigateToLibrary
                             )
                         }
@@ -343,6 +358,7 @@ fun YourBooksScreen(
                             book = book,
                             sizeBytes = sizeBytes,
                             isDarkTheme = isDarkTheme,
+                            isInteractive = !isAnyModalOpen,
                             isLeftEdge = isLeftEdge,
                             onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
                             onClick = { bookToManage = book },
@@ -384,7 +400,7 @@ fun YourBooksScreen(
             title = {
                 Text(
                     text = book.title,
-                    color = TextPrimary,
+                    color = if (isDarkTheme) TextPrimary else InkPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 2,
@@ -394,7 +410,7 @@ fun YourBooksScreen(
             text = {
                 Text(
                     text = "¿Qué deseas hacer con este libro en la televisión?",
-                    color = TextSecondary,
+                    color = if (isDarkTheme) TextSecondary else InkSecondary,
                     fontSize = 14.sp
                 )
             },
@@ -420,7 +436,7 @@ fun YourBooksScreen(
                     Text("🗑️ Liberar Espacio", color = Color(0xFFEF5350))
                 }
             },
-            containerColor = SurfaceCard,
+            containerColor = if (isDarkTheme) SurfaceCard else Color(0xFFF7F5F0),
             shape = RoundedCornerShape(16.dp)
         )
     }
@@ -432,7 +448,7 @@ fun YourBooksScreen(
             title = {
                 Text(
                     text = "Liberar espacio en la TV",
-                    color = TextPrimary,
+                    color = if (isDarkTheme) TextPrimary else InkPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -440,7 +456,7 @@ fun YourBooksScreen(
             text = {
                 Text(
                     text = "¿Eliminar el archivo físico de «${book.title}» de la memoria del televisor? Tu progreso y notas seguirán guardados.",
-                    color = TextSecondary,
+                    color = if (isDarkTheme) TextSecondary else InkSecondary,
                     fontSize = 14.sp
                 )
             },
@@ -461,10 +477,10 @@ fun YourBooksScreen(
             },
             dismissButton = {
                 TextButton(onClick = { bookToDelete = null }) {
-                    Text("Cancelar", color = TextSecondary)
+                    Text("Cancelar", color = if (isDarkTheme) TextSecondary else InkSecondary)
                 }
             },
-            containerColor = SurfaceCard,
+            containerColor = if (isDarkTheme) SurfaceCard else Color(0xFFF7F5F0),
             shape = RoundedCornerShape(16.dp)
         )
     }
@@ -487,6 +503,7 @@ private fun YourBookItemCard(
     book: Book,
     sizeBytes: Long,
     isDarkTheme: Boolean = true,
+    isInteractive: Boolean = true,
     isLeftEdge: Boolean = false,
     onLeftAtBoundary: () -> Unit = {},
     onClick: () -> Unit,
@@ -516,8 +533,8 @@ private fun YourBookItemCard(
                     }
                 } else false
             }
-            .focusable()
-            .clickable { onClick() },
+            .focusable(enabled = isInteractive)
+            .clickable(enabled = isInteractive) { onClick() },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Book3DView(
@@ -546,29 +563,37 @@ private fun YourBookItemCard(
 private fun YourBooksActionButton(
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isDarkTheme: Boolean = true,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    val unfocusedBg = if (isDarkTheme) SurfaceCard else Color(0xFFF1F5F1)
+    val unfocusedTextColor = if (isDarkTheme) TextPrimary else InkPrimary
+
     Row(
         modifier = Modifier
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
             .clickable { onClick() }
-            .background(if (isFocused) AmberWarm else SurfaceCard, RoundedCornerShape(8.dp))
-            .border(1.dp, if (isFocused) AmberWarm else SurfaceRaised, RoundedCornerShape(8.dp))
+            .background(if (isFocused) AmberWarm else unfocusedBg, RoundedCornerShape(10.dp))
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) (if (isDarkTheme) Color.White else CyanElectric) else Color.Transparent,
+                shape = RoundedCornerShape(10.dp)
+            )
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (isFocused) Color.Black else AmberWarm,
+            tint = if (isFocused) Color(0xFF111317) else AmberWarm,
             modifier = Modifier.size(18.dp)
         )
         Spacer(Modifier.width(8.dp))
         Text(
             text = title,
-            color = if (isFocused) Color.Black else TextPrimary,
+            color = if (isFocused) Color(0xFF111317) else unfocusedTextColor,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold
         )

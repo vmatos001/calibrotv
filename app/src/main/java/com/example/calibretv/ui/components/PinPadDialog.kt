@@ -49,8 +49,13 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.platform.LocalContext
+import com.example.calibretv.data.storage.PreferencesManager
 import com.example.calibretv.theme.AccentGold
 import com.example.calibretv.theme.BackgroundDark
+import com.example.calibretv.theme.InkPrimary
+import com.example.calibretv.theme.InkSecondary
 import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceRaised
 import com.example.calibretv.theme.TextMuted
@@ -66,6 +71,7 @@ fun PinPadDialog(
     title: String = "Control Parental",
     subtitle: String = "Introduce el código PIN de 4 dígitos",
     targetPin: String? = null,
+    isDarkTheme: Boolean = PreferencesManager(LocalContext.current).isDarkTheme(),
     onSuccess: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -141,9 +147,13 @@ fun PinPadDialog(
         Box(
             modifier = Modifier
                 .width(420.dp)
+                .shadow(
+                    elevation = if (isDarkTheme) 0.dp else 16.dp,
+                    shape = RoundedCornerShape(24.dp),
+                    spotColor = Color.Black.copy(alpha = 0.12f)
+                )
                 .clip(RoundedCornerShape(24.dp))
-                .background(SurfaceContainer)
-                .border(1.5.dp, AccentGold.copy(alpha = 0.6f), RoundedCornerShape(24.dp))
+                .background(if (isDarkTheme) SurfaceContainer else Color(0xFFF7F5F0))
                 .clickable(enabled = false) {}
                 .padding(28.dp),
             contentAlignment = Alignment.Center
@@ -175,13 +185,13 @@ fun PinPadDialog(
                 ) {
                     Text(
                         text = title,
-                        color = TextPrimary,
+                        color = if (isDarkTheme) TextPrimary else InkPrimary,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = subtitle,
-                        color = TextMuted,
+                        color = if (isDarkTheme) TextMuted else InkSecondary,
                         fontSize = 13.sp
                     )
                 }
@@ -201,7 +211,7 @@ fun PinPadDialog(
                                 .background(if (isFilled) AccentGold else Color.Transparent)
                                 .border(
                                     width = 2.dp,
-                                    color = if (isFilled) AccentGold else Color(0xFF6B655B),
+                                    color = if (isFilled) AccentGold else (if (isDarkTheme) Color(0xFF6B655B) else Color(0xFFCBD5E1)),
                                     shape = CircleShape
                                 )
                         )
@@ -244,6 +254,7 @@ fun PinPadDialog(
                                 PinKeyButton(
                                     label = item,
                                     isInitial = isFirstButton,
+                                    isDarkTheme = isDarkTheme,
                                     focusRequester = if (isFirstButton) initialFocusRequester else null,
                                     onClick = {
                                         when (item) {
@@ -266,6 +277,7 @@ fun PinPadDialog(
 private fun PinKeyButton(
     label: String,
     isInitial: Boolean = false,
+    isDarkTheme: Boolean = true,
     focusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
@@ -274,18 +286,22 @@ private fun PinKeyButton(
     val btnModifier = Modifier
         .size(68.dp, 54.dp)
         .scale(if (isFocused) 1.10f else 1.0f)
+        .shadow(
+            elevation = if (isFocused || isDarkTheme) 0.dp else 2.dp,
+            shape = RoundedCornerShape(12.dp),
+            spotColor = Color.Black.copy(alpha = 0.08f)
+        )
         .clip(RoundedCornerShape(12.dp))
         .background(
             when {
                 isFocused -> AccentGold
-                label == "CANCEL" -> SurfaceRaised
-                label == "BACK" -> SurfaceRaised
-                else -> SurfaceContainer
+                label == "CANCEL" || label == "BACK" -> if (isDarkTheme) SurfaceRaised else Color(0xFFE2E7E2)
+                else -> if (isDarkTheme) SurfaceContainer else Color.White
             }
         )
         .border(
-            width = if (isFocused) 2.dp else 1.dp,
-            color = if (isFocused) Color.White else Color(0xFF383842),
+            width = if (isFocused) 2.dp else if (isDarkTheme) 1.dp else 0.dp,
+            color = if (isFocused) Color.White else if (isDarkTheme) Color(0xFF383842) else Color.Transparent,
             shape = RoundedCornerShape(12.dp)
         )
         .onFocusChanged { isFocused = it.isFocused }
@@ -305,7 +321,7 @@ private fun PinKeyButton(
         modifier = btnModifier,
         contentAlignment = Alignment.Center
     ) {
-        val textColor = if (isFocused) Color(0xFF0C0A09) else TextPrimary
+        val textColor = if (isFocused) Color(0xFF0C0A09) else (if (isDarkTheme) TextPrimary else InkPrimary)
         when (label) {
             "BACK" -> {
                 Icon(

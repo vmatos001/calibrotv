@@ -55,11 +55,16 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.calibretv.data.BookRepository
 import com.example.calibretv.data.model.UserProfile
+import com.example.calibretv.data.storage.PreferencesManager
 import com.example.calibretv.theme.AccentGold
+import com.example.calibretv.theme.AmberWarm
+import com.example.calibretv.theme.InkPrimary
+import com.example.calibretv.theme.InkSecondary
 import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.SurfaceRaised
@@ -71,6 +76,7 @@ import kotlinx.coroutines.delay
 fun UserProfilesDialog(
     repository: BookRepository,
     activeProfile: UserProfile,
+    isDarkTheme: Boolean = PreferencesManager(LocalContext.current).isDarkTheme(),
     onProfileChanged: (UserProfile) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -144,9 +150,13 @@ fun UserProfilesDialog(
             modifier = Modifier
                 .fillMaxWidth(0.78f)
                 .fillMaxHeight(0.85f)
+                .shadow(
+                    elevation = if (isDarkTheme) 0.dp else 16.dp,
+                    shape = RoundedCornerShape(24.dp),
+                    spotColor = Color.Black.copy(alpha = 0.12f)
+                )
                 .clip(RoundedCornerShape(24.dp))
-                .background(SurfaceContainer)
-                .border(1.5.dp, AccentGold.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
+                .background(if (isDarkTheme) SurfaceContainer else Color(0xFFF7F5F0))
                 .clickable(enabled = false) {}
                 .padding(32.dp)
         ) {
@@ -183,14 +193,14 @@ fun UserProfilesDialog(
                             Column {
                                 Text(
                                     text = "PERFILES FAMILIARES",
-                                    color = TextPrimary,
+                                    color = if (isDarkTheme) TextPrimary else InkPrimary,
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     letterSpacing = 1.sp
                                 )
                                 Text(
                                     text = "Progreso, favoritos, tamaño de letra y control parental independiente por lector",
-                                    color = TextMuted,
+                                    color = if (isDarkTheme) TextMuted else InkSecondary,
                                     fontSize = 12.sp
                                 )
                             }
@@ -202,11 +212,11 @@ fun UserProfilesDialog(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(AccentGold.copy(alpha = 0.15f))
+                                .background(AccentGold.copy(alpha = if (isDarkTheme) 0.15f else 0.22f))
                                 .border(1.dp, AccentGold, RoundedCornerShape(12.dp))
                                 .padding(horizontal = 14.dp, vertical = 6.dp)
                         ) {
-                            Text("Activo: ", color = TextMuted, fontSize = 12.sp)
+                            Text("Activo: ", color = if (isDarkTheme) TextMuted else InkSecondary, fontSize = 12.sp)
                             Text(currentActive.name, color = AccentGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                             if (currentActive.isKidsMode) {
                                 Text("🎈", fontSize = 12.sp)
@@ -222,7 +232,7 @@ fun UserProfilesDialog(
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text(
                         text = "Selecciona un lector:",
-                        color = TextPrimary,
+                        color = if (isDarkTheme) TextPrimary else InkPrimary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -230,7 +240,7 @@ fun UserProfilesDialog(
                     if (profiles.isEmpty()) {
                         Text(
                             text = "No hay perfiles creados. Pulsa 'Crear Perfil' abajo para comenzar.",
-                            color = TextMuted,
+                            color = if (isDarkTheme) TextMuted else InkSecondary,
                             fontSize = 13.sp,
                             modifier = Modifier.padding(vertical = 12.dp)
                         )
@@ -247,11 +257,19 @@ fun UserProfilesDialog(
                                 val cardModifier = Modifier
                                     .width(160.dp)
                                     .scale(if (isFocused) 1.06f else 1.0f)
+                                    .shadow(
+                                        elevation = if (isDarkTheme) 0.dp else (if (isFocused) 8.dp else 2.dp),
+                                        shape = RoundedCornerShape(18.dp),
+                                        spotColor = Color.Black.copy(alpha = 0.08f)
+                                    )
                                     .clip(RoundedCornerShape(18.dp))
-                                    .background(if (isActive) AccentGold.copy(alpha = 0.15f) else SurfaceRaised)
+                                    .background(
+                                        if (isActive) (if (isDarkTheme) AccentGold.copy(alpha = 0.15f) else AmberWarm.copy(alpha = 0.2f))
+                                        else (if (isDarkTheme) SurfaceRaised else Color.White)
+                                    )
                                     .border(
-                                        width = if (isFocused) 2.5.dp else if (isActive) 1.5.dp else 1.dp,
-                                        color = if (isFocused) AccentGold else if (isActive) AccentGold.copy(alpha = 0.6f) else Color(0xFF2E2E36),
+                                        width = if (isFocused) 2.5.dp else if (isActive) 1.5.dp else if (isDarkTheme) 1.dp else 0.dp,
+                                        color = if (isFocused) AccentGold else if (isActive) AccentGold.copy(alpha = 0.8f) else if (isDarkTheme) Color(0xFF2E2E36) else Color.Transparent,
                                         shape = RoundedCornerShape(18.dp)
                                     )
                                     .onFocusChanged { isFocused = it.isFocused }
@@ -298,7 +316,7 @@ fun UserProfilesDialog(
                                     // Profile Name
                                     Text(
                                         text = profile.name,
-                                        color = TextPrimary,
+                                        color = if (isDarkTheme) TextPrimary else InkPrimary,
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1
@@ -329,7 +347,7 @@ fun UserProfilesDialog(
                                             Icon(
                                                 imageVector = Icons.Default.Lock,
                                                 contentDescription = "Protegido con PIN",
-                                                tint = Color(0xFFE0E0E0),
+                                                tint = if (isDarkTheme) Color(0xFFE0E0E0) else Color(0xFF757575),
                                                 modifier = Modifier.size(12.dp)
                                             )
                                         }
@@ -357,7 +375,7 @@ fun UserProfilesDialog(
                                     } else {
                                         Text(
                                             text = if (profile.parentalPin != null) "🔒 Desbloquear" else "Seleccionar",
-                                            color = TextMuted,
+                                            color = if (isDarkTheme) TextMuted else InkSecondary,
                                             fontSize = 11.sp
                                         )
                                     }
@@ -373,11 +391,17 @@ fun UserProfilesDialog(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .shadow(if (isDarkTheme) 0.dp else 4.dp, RoundedCornerShape(16.dp), spotColor = Color.Black.copy(alpha = 0.05f))
                             .clip(RoundedCornerShape(16.dp))
-                            .background(SurfaceContainerHigh)
+                            .background(if (isDarkTheme) SurfaceContainerHigh else Color.White)
                             .padding(16.dp)
                     ) {
-                        Text("Nuevo Perfil de Lectura:", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "Nuevo Perfil de Lectura:",
+                            color = if (isDarkTheme) TextPrimary else InkPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -390,10 +414,10 @@ fun UserProfilesDialog(
                                     .weight(1f)
                                     .height(50.dp)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(if (isNameFieldFocused) Color(0xFF262320) else SurfaceContainerHigh)
+                                    .background(if (isNameFieldFocused) (if (isDarkTheme) Color(0xFF262320) else Color(0xFFF0F4F0)) else (if (isDarkTheme) SurfaceContainerHigh else Color(0xFFF6F8F6)))
                                     .border(
-                                        width = if (isNameFieldFocused) 2.dp else 1.dp,
-                                        color = if (isNameFieldFocused) AccentGold else Color(0xFF4A4A58),
+                                        width = if (isNameFieldFocused) 2.dp else if (isDarkTheme) 1.dp else 0.dp,
+                                        color = if (isNameFieldFocused) AccentGold else if (isDarkTheme) Color(0xFF4A4A58) else Color.Transparent,
                                         shape = RoundedCornerShape(10.dp)
                                     )
                                     .onFocusChanged { isNameFieldFocused = it.isFocused }
@@ -404,7 +428,7 @@ fun UserProfilesDialog(
                                     placeholder = {
                                         Text(
                                             "Ej: Mateo, Papá, Niños...",
-                                            color = TextMuted,
+                                            color = if (isDarkTheme) TextMuted else InkSecondary,
                                             fontSize = 13.sp
                                         )
                                     },
@@ -412,8 +436,8 @@ fun UserProfilesDialog(
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = Color.Transparent,
                                         unfocusedBorderColor = Color.Transparent,
-                                        focusedTextColor = TextPrimary,
-                                        unfocusedTextColor = TextPrimary,
+                                        focusedTextColor = if (isDarkTheme) TextPrimary else InkPrimary,
+                                        unfocusedTextColor = if (isDarkTheme) TextPrimary else InkPrimary,
                                         cursorColor = AccentGold
                                     ),
                                     textStyle = androidx.compose.ui.text.TextStyle(
@@ -458,7 +482,7 @@ fun UserProfilesDialog(
                             ) {
                                 Text(
                                     text = if (isNewUserKidsMode) "🎈 Modo Infantil: SÍ" else "🎈 Modo Infantil: NO",
-                                    color = if (isKidsBtnFocused) Color(0xFF0C0A09) else if (isNewUserKidsMode) Color(0xFFA5D6A7) else TextMuted,
+                                    color = if (isKidsBtnFocused) Color(0xFF0C0A09) else if (isNewUserKidsMode) Color(0xFFA5D6A7) else (if (isDarkTheme) TextMuted else InkSecondary),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -474,12 +498,12 @@ fun UserProfilesDialog(
                                         when {
                                             isPinBtnFocused -> AccentGold
                                             newUserPin != null -> Color(0xFF3E2723)
-                                            else -> SurfaceRaised
+                                            else -> if (isDarkTheme) SurfaceRaised else Color(0xFFF3F5F3)
                                         }
                                     )
                                     .border(
-                                        width = if (isPinBtnFocused || newUserPin != null) 1.5.dp else 1.dp,
-                                        color = if (isPinBtnFocused) Color.White else if (newUserPin != null) AccentGold else Color(0xFF383842),
+                                        width = if (isPinBtnFocused || newUserPin != null) 1.5.dp else if (isDarkTheme) 1.dp else 0.dp,
+                                        color = if (isPinBtnFocused) Color.White else if (newUserPin != null) AccentGold else if (isDarkTheme) Color(0xFF383842) else Color.Transparent,
                                         shape = RoundedCornerShape(10.dp)
                                     )
                                     .onFocusChanged { isPinBtnFocused = it.isFocused }
@@ -502,7 +526,7 @@ fun UserProfilesDialog(
                             ) {
                                 Text(
                                     text = if (newUserPin != null) "🔒 PIN Configurado" else "🔒 Añadir PIN",
-                                    color = if (isPinBtnFocused) Color(0xFF0C0A09) else if (newUserPin != null) AccentGold else TextMuted,
+                                    color = if (isPinBtnFocused) Color(0xFF0C0A09) else if (newUserPin != null) AccentGold else (if (isDarkTheme) TextMuted else InkSecondary),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -568,7 +592,7 @@ fun UserProfilesDialog(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Color:", color = TextMuted, fontSize = 11.sp)
+                            Text("Color:", color = if (isDarkTheme) TextMuted else InkSecondary, fontSize = 11.sp)
                             presetColors.forEach { hex ->
                                 val isColorSelected = selectedColorHex == hex
                                 var isColorFocused by remember { mutableStateOf(false) }
@@ -622,9 +646,14 @@ fun UserProfilesDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier
+                            .shadow(if (isDarkTheme) 0.dp else 2.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.08f))
                             .clip(RoundedCornerShape(12.dp))
-                            .background(if (isAddFocused) AccentGold else SurfaceContainerHigh)
-                            .border(1.dp, if (isAddFocused) Color.White else Color(0xFF383842), RoundedCornerShape(12.dp))
+                            .background(if (isAddFocused) AccentGold else (if (isDarkTheme) SurfaceContainerHigh else Color.White))
+                            .border(
+                                width = if (isAddFocused) 2.dp else if (isDarkTheme) 1.dp else 0.dp,
+                                color = if (isAddFocused) Color.White else if (isDarkTheme) Color(0xFF383842) else Color.Transparent,
+                                shape = RoundedCornerShape(12.dp)
+                            )
                             .onFocusChanged { isAddFocused = it.isFocused }
                             .then(if (profiles.isEmpty()) Modifier.focusRequester(initialFocusRequester) else Modifier)
                             .onKeyEvent { event ->
@@ -647,7 +676,7 @@ fun UserProfilesDialog(
                         )
                         Text(
                             text = if (showCreateField) "Cancelar" else "Crear Nuevo Perfil",
-                            color = if (isAddFocused) Color(0xFF0C0A09) else TextPrimary,
+                            color = if (isAddFocused) Color(0xFF0C0A09) else (if (isDarkTheme) TextPrimary else InkPrimary),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -658,9 +687,14 @@ fun UserProfilesDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier
+                            .shadow(if (isDarkTheme) 0.dp else 2.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.08f))
                             .clip(RoundedCornerShape(12.dp))
-                            .background(if (isCloseFocused) AccentGold else SurfaceRaised)
-                            .border(1.dp, if (isCloseFocused) Color.White else Color(0xFF383842), RoundedCornerShape(12.dp))
+                            .background(if (isCloseFocused) AccentGold else (if (isDarkTheme) SurfaceRaised else Color.White))
+                            .border(
+                                width = if (isCloseFocused) 2.dp else if (isDarkTheme) 1.dp else 0.dp,
+                                color = if (isCloseFocused) Color.White else if (isDarkTheme) Color(0xFF383842) else Color.Transparent,
+                                shape = RoundedCornerShape(12.dp)
+                            )
                             .onFocusChanged { isCloseFocused = it.isFocused }
                             .onKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyDown &&
@@ -677,12 +711,12 @@ fun UserProfilesDialog(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = null,
-                            tint = if (isCloseFocused) Color(0xFF0C0A09) else TextPrimary,
+                            tint = if (isCloseFocused) Color(0xFF0C0A09) else (if (isDarkTheme) TextPrimary else InkPrimary),
                             modifier = Modifier.size(15.dp)
                         )
                         Text(
                             text = "Listo",
-                            color = if (isCloseFocused) Color(0xFF0C0A09) else TextPrimary,
+                            color = if (isCloseFocused) Color(0xFF0C0A09) else (if (isDarkTheme) TextPrimary else InkPrimary),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -699,6 +733,7 @@ fun UserProfilesDialog(
             title = "Acceso Protegido",
             subtitle = "Introduce el PIN de 4 dígitos para acceder a ${targetProfile.name}",
             targetPin = targetProfile.parentalPin,
+            isDarkTheme = isDarkTheme,
             onSuccess = {
                 showPinPadForTargetProfile = null
                 applySwitchProfile(targetProfile)
@@ -715,6 +750,7 @@ fun UserProfilesDialog(
             title = "Definir PIN Parental",
             subtitle = "Introduce 4 dígitos para proteger este perfil",
             targetPin = null,
+            isDarkTheme = isDarkTheme,
             onSuccess = { pin ->
                 newUserPin = pin
                 showPinPadForCreatingPin = false

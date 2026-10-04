@@ -92,9 +92,13 @@ import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import com.example.calibretv.ui.components.TvNavTab
 import com.example.calibretv.ui.components.TvSidebar
 import androidx.compose.ui.focus.FocusRequester
+
+private val LocalIsDarkTheme = staticCompositionLocalOf { true }
 
 @Composable
 fun SettingsScreen(
@@ -185,96 +189,112 @@ fun SettingsScreen(
     val sidebarFocusRequester = remember { FocusRequester() }
     val screenBg = if (isDarkTheme) BackgroundDark else CanvasBackgroundLight
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(screenBg)
-    ) {
+    val isAnyModalOpen = showUserProfilesModal || showUpdateDialog
+    val contentPrimary = if (isDarkTheme) TextPrimary else InkPrimary
+    val contentSecondary = if (isDarkTheme) TextMuted else InkSecondary
+
+    CompositionLocalProvider(LocalIsDarkTheme provides isDarkTheme) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 68.dp)
+                .background(screenBg)
         ) {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(scrollState)
-                    .padding(horizontal = 36.dp, vertical = 16.dp)
+                    .padding(start = 68.dp)
             ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 36.dp, vertical = 16.dp)
+                ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = null,
+                                tint = CyanElectric,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "CONTROL REMOTO TV • AJUSTES DIRECTOS",
+                                color = CyanElectric,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Ajustes",
+                            color = contentPrimary,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // Profile and TV Info
+                    var isProfilePillFocused by remember { mutableStateOf(false) }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .scale(if (isProfilePillFocused) 1.05f else 1.0f)
+                            .shadow(
+                                elevation = if (isDarkTheme) 0.dp else 2.dp,
+                                shape = RoundedCornerShape(12.dp),
+                                spotColor = Color.Black.copy(alpha = 0.06f)
+                            )
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (isProfilePillFocused) {
+                                    if (isDarkTheme) SurfaceContainerHigh else Color(0xFFE2E7E2)
+                                } else {
+                                    if (isDarkTheme) SurfaceContainer else Color.White
+                                }
+                            )
+                            .border(
+                                width = if (isProfilePillFocused) 2.dp else 0.dp,
+                                color = if (isProfilePillFocused) CyanElectric else Color.Transparent,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .onFocusChanged { isProfilePillFocused = it.isFocused }
+                            .focusable(enabled = !isAnyModalOpen)
+                            .clickable(enabled = !isAnyModalOpen) { showUserProfilesModal = true }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Tune,
+                            imageVector = Icons.Default.Tv,
                             contentDescription = null,
-                            tint = CyanElectric,
-                            modifier = Modifier.size(16.dp)
+                            tint = AmberWarm,
+                            modifier = Modifier.size(20.dp)
                         )
-                        Text(
-                            text = "CONTROL REMOTO TV • AJUSTES DIRECTOS",
-                            color = CyanElectric,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Ajustes",
-                        color = TextPrimary,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Profile and TV Info
-                var isProfilePillFocused by remember { mutableStateOf(false) }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier
-                        .scale(if (isProfilePillFocused) 1.05f else 1.0f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isProfilePillFocused) SurfaceContainerHigh else SurfaceContainer)
-                        .border(
-                            width = if (isProfilePillFocused) 2.dp else 1.dp,
-                            color = if (isProfilePillFocused) CyanElectric else Color.Transparent,
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        .onFocusChanged { isProfilePillFocused = it.isFocused }
-                        .focusable()
-                        .clickable { showUserProfilesModal = true }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Tv,
-                        contentDescription = null,
-                        tint = AmberWarm,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Column {
-                        Text(
-                            text = "Perfil Activo: ${activeProfile.name}",
-                            color = TextPrimary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "HDMI • 1080p @ 60Hz • Presiona para cambiar",
-                            color = TextMuted,
-                            fontSize = 10.sp
-                        )
+                        Column {
+                            Text(
+                                text = "Perfil Activo: ${activeProfile.name}",
+                                color = contentPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "HDMI • 1080p @ 60Hz • Presiona para cambiar",
+                                color = contentSecondary,
+                                fontSize = 10.sp
+                            )
+                        }
                     }
                 }
-            }
 
             Spacer(modifier = Modifier.height(18.dp))
 
@@ -497,7 +517,7 @@ fun SettingsScreen(
                 ) {
                     // Fuente
                     Column(modifier = Modifier.weight(0.6f)) {
-                        Text("Catálogo de Fuentes", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Catálogo de Fuentes", color = contentSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         Spacer(modifier = Modifier.height(6.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             SegmentedOption(
@@ -524,7 +544,7 @@ fun SettingsScreen(
                     // Profundidad 3D del Lomo
                     Column(modifier = Modifier.weight(0.4f)) {
                         val depthPct = (settings.spineDepth3D * 100).toInt()
-                        Text("Profundidad 3D Lomo: $depthPct%", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Profundidad 3D Lomo: $depthPct%", color = contentSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         Spacer(modifier = Modifier.height(6.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             SegmentedOption(
@@ -566,14 +586,14 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Sonido Foley de papel al pasar la hoja",
-                            color = TextPrimary,
+                            color = contentPrimary,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Reproduce un crujido orgánico aleatorizado que simula el roce físico del papel.",
-                            color = TextMuted,
+                            color = contentSecondary,
                             fontSize = 11.sp
                         )
                     }
@@ -619,12 +639,12 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Apaga automáticamente el lector tras el tiempo seleccionado",
-                            color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                            color = contentPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "La pantalla se atenúa progresivamente en los últimos 2 minutos antes de cerrar.",
-                            color = TextMuted, fontSize = 11.sp
+                            color = contentSecondary, fontSize = 11.sp
                         )
                     }
                     Row(
@@ -662,12 +682,12 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Lee el libro en voz alta con resaltado de oración activa",
-                            color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                            color = contentPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Activa desde el HUD del lector (botón ▶ Leer). Ajusta aquí la velocidad.",
-                            color = TextMuted, fontSize = 11.sp
+                            color = contentSecondary, fontSize = 11.sp
                         )
                     }
                     Row(
@@ -705,12 +725,12 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Control de brillo interno independiente del brillo del TV",
-                            color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                            color = contentPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "También ajustable desde el HUD del lector. Combinar con tema 'Cine Oscuro' para sala oscura.",
-                            color = TextMuted, fontSize = 11.sp
+                            color = contentSecondary, fontSize = 11.sp
                         )
                     }
                     Row(
@@ -749,12 +769,12 @@ fun SettingsScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Reproduce ambiente sonoro continuo durante la lectura",
-                                color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                                color = contentPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "Diseñado para TV en sala. Cicla entre sonidos desde el HUD del lector.",
-                                color = TextMuted, fontSize = 11.sp
+                                color = contentSecondary, fontSize = 11.sp
                             )
                         }
                     }
@@ -801,14 +821,14 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Versión instalada: v$currentVersionName (Build $currentVersionCode)",
-                            color = TextPrimary,
+                            color = contentPrimary,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = if (updateCheckStatus.isNotBlank()) updateCheckStatus else "Verifica directamente desde GitHub si hay nuevas versiones de CalibroTV disponibles.",
-                            color = if (availableRelease != null) CyanElectric else TextMuted,
+                            color = if (availableRelease != null) CyanElectric else contentSecondary,
                             fontSize = 11.sp
                         )
                     }
@@ -846,7 +866,7 @@ fun SettingsScreen(
             ) {
                 Text(
                     text = if (saveFeedback.isNotBlank()) saveFeedback else "ⓘ Aplicación instantánea con 1 solo click del control remoto.",
-                    color = if (saveFeedback.isNotBlank()) CyanElectric else TextMuted,
+                    color = if (saveFeedback.isNotBlank()) CyanElectric else contentSecondary,
                     fontSize = 12.sp
                 )
 
@@ -901,11 +921,13 @@ fun SettingsScreen(
             focusRequester = sidebarFocusRequester
         )
     }
+    }
 
     if (showUserProfilesModal) {
         UserProfilesDialog(
             repository = repository,
             activeProfile = activeProfile,
+            isDarkTheme = isDarkTheme,
             onProfileChanged = {
                 activeProfile = it
                 showUserProfilesModal = false
@@ -933,9 +955,18 @@ fun SettingsScreen(
             Box(
                 modifier = Modifier
                     .width(520.dp)
+                    .shadow(
+                        elevation = if (isDarkTheme) 0.dp else 16.dp,
+                        shape = RoundedCornerShape(18.dp),
+                        spotColor = Color.Black.copy(alpha = 0.12f)
+                    )
                     .clip(RoundedCornerShape(18.dp))
-                    .background(SurfaceContainer)
-                    .border(1.5.dp, CyanElectric, RoundedCornerShape(18.dp))
+                    .background(if (isDarkTheme) SurfaceContainer else Color(0xFFF7F5F0))
+                    .border(
+                        width = if (isDarkTheme) 1.5.dp else 0.dp,
+                        color = if (isDarkTheme) CyanElectric else Color.Transparent,
+                        shape = RoundedCornerShape(18.dp)
+                    )
                     .padding(24.dp)
             ) {
                 Column(
@@ -962,13 +993,13 @@ fun SettingsScreen(
                         Column {
                             Text(
                                 text = "Nueva versión: ${rel.tagName}",
-                                color = TextPrimary,
+                                color = contentPrimary,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "CalibroTV OTA Update",
-                                color = TextMuted,
+                                color = contentSecondary,
                                 fontSize = 12.sp
                             )
                         }
@@ -980,14 +1011,14 @@ fun SettingsScreen(
                                 .fillMaxWidth()
                                 .heightIn(max = 140.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(BackgroundDark)
-                                .border(1.dp, Color(0xFF26262A), RoundedCornerShape(10.dp))
+                                .background(if (isDarkTheme) BackgroundDark else Color.White)
+                                .border(1.dp, if (isDarkTheme) Color(0xFF26262A) else Color(0xFFE2E7E2), RoundedCornerShape(10.dp))
                                 .padding(12.dp)
                                 .verticalScroll(rememberScrollState())
                         ) {
                             Text(
                                 text = rel.changelog,
-                                color = TextPrimary,
+                                color = contentPrimary,
                                 fontSize = 11.sp,
                                 lineHeight = 16.sp
                             )
@@ -1085,11 +1116,21 @@ private fun CleanBentoCard(
     icon: ImageVector,
     content: @Composable () -> Unit
 ) {
+    val isDarkTheme = LocalIsDarkTheme.current
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(SurfaceContainer)
-            .border(1.dp, Color(0xFF26262A), RoundedCornerShape(14.dp))
+            .shadow(
+                elevation = if (isDarkTheme) 0.dp else 4.dp,
+                shape = RoundedCornerShape(16.dp),
+                spotColor = Color.Black.copy(alpha = 0.05f)
+            )
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (isDarkTheme) SurfaceContainer else Color.White)
+            .border(
+                width = 1.dp,
+                color = if (isDarkTheme) Color(0xFF26262A) else Color.Transparent,
+                shape = RoundedCornerShape(16.dp)
+            )
             .padding(16.dp)
     ) {
         Column {
@@ -1105,7 +1146,7 @@ private fun CleanBentoCard(
                 )
                 Text(
                     text = title,
-                    color = TextPrimary,
+                    color = if (isDarkTheme) TextPrimary else InkPrimary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -1125,6 +1166,7 @@ private fun SettingToggleButton(
     isActive: Boolean,
     onToggle: () -> Unit
 ) {
+    val isDarkTheme = LocalIsDarkTheme.current
     var isFocused by remember { mutableStateOf(false) }
 
     Box(
@@ -1132,7 +1174,10 @@ private fun SettingToggleButton(
             .scale(if (isFocused) 1.05f else 1.0f)
             .shadow(if (isFocused) 10.dp else 0.dp, RoundedCornerShape(10.dp), spotColor = CyanElectric)
             .clip(RoundedCornerShape(10.dp))
-            .background(if (isActive) AmberWarm.copy(alpha = 0.25f) else SurfaceContainerHigh)
+            .background(
+                if (isActive) AmberWarm.copy(alpha = 0.22f)
+                else (if (isDarkTheme) SurfaceContainerHigh else Color(0xFFF3F5F3))
+            )
             .border(
                 width = if (isFocused) 2.dp else if (isActive) 1.5.dp else 0.dp,
                 color = if (isFocused) CyanElectric else if (isActive) AmberWarm else Color.Transparent,
@@ -1150,12 +1195,12 @@ private fun SettingToggleButton(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isActive) AmberWarm else TextMuted,
+                tint = if (isActive) AmberWarm else (if (isDarkTheme) TextMuted else InkMuted),
                 modifier = Modifier.size(22.dp)
             )
             Text(
                 text = title,
-                color = if (isActive) AmberWarm else TextPrimary,
+                color = if (isActive) AmberWarm else (if (isDarkTheme) TextPrimary else InkPrimary),
                 fontSize = 12.sp,
                 fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium
             )
@@ -1229,6 +1274,7 @@ private fun SegmentedOption(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val isDarkTheme = LocalIsDarkTheme.current
     var isFocused by remember { mutableStateOf(false) }
 
     Box(
@@ -1236,7 +1282,10 @@ private fun SegmentedOption(
             .scale(if (isFocused) 1.05f else 1.0f)
             .shadow(if (isFocused) 8.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = CyanElectric)
             .clip(RoundedCornerShape(8.dp))
-            .background(if (isSelected) AmberWarm else SurfaceContainerHigh)
+            .background(
+                if (isSelected) AmberWarm
+                else (if (isDarkTheme) SurfaceContainerHigh else Color(0xFFF3F5F3))
+            )
             .border(
                 width = if (isFocused) 2.dp else 0.dp,
                 color = if (isFocused) CyanElectric else Color.Transparent,
@@ -1249,7 +1298,7 @@ private fun SegmentedOption(
     ) {
         Text(
             text = title,
-            color = if (isSelected) Color(0xFF131315) else TextPrimary,
+            color = if (isSelected) Color(0xFF131315) else (if (isDarkTheme) TextPrimary else InkPrimary),
             fontSize = 11.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
         )
@@ -1263,6 +1312,7 @@ private fun TvActionButton(
     isPrimary: Boolean,
     onClick: () -> Unit
 ) {
+    val isDarkTheme = LocalIsDarkTheme.current
     var isFocused by remember { mutableStateOf(false) }
 
     Row(
@@ -1272,7 +1322,10 @@ private fun TvActionButton(
             .scale(if (isFocused) 1.05f else 1.0f)
             .shadow(if (isFocused) 10.dp else 0.dp, RoundedCornerShape(10.dp), spotColor = CyanElectric)
             .clip(RoundedCornerShape(10.dp))
-            .background(if (isPrimary || isFocused) AmberWarm else SurfaceContainerHigh)
+            .background(
+                if (isPrimary || isFocused) AmberWarm
+                else (if (isDarkTheme) SurfaceContainerHigh else Color(0xFFE8ECE8))
+            )
             .border(
                 width = if (isFocused) 2.dp else 0.dp,
                 color = if (isFocused) CyanElectric else Color.Transparent,
@@ -1285,12 +1338,12 @@ private fun TvActionButton(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (isPrimary || isFocused) Color(0xFF131315) else TextPrimary,
+            tint = if (isPrimary || isFocused) Color(0xFF131315) else (if (isDarkTheme) TextPrimary else InkPrimary),
             modifier = Modifier.size(16.dp)
         )
         Text(
             text = title,
-            color = if (isPrimary || isFocused) Color(0xFF131315) else TextPrimary,
+            color = if (isPrimary || isFocused) Color(0xFF131315) else (if (isDarkTheme) TextPrimary else InkPrimary),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
         )

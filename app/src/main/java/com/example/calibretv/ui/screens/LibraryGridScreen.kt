@@ -83,8 +83,10 @@ import com.example.calibretv.theme.CalibreTVTheme
 import com.example.calibretv.theme.CanvasBackgroundLight
 import com.example.calibretv.theme.CyanElectric
 import com.example.calibretv.theme.InkPrimary
+import com.example.calibretv.theme.InkSecondary
 import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceContainerHigh
+import com.example.calibretv.theme.SurfaceContainerHighest
 import com.example.calibretv.theme.SurfaceRaised
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
@@ -330,6 +332,7 @@ fun LibraryGridScreen(
     val COLUMNS = 7
 
     val screenBg = if (isDarkTheme) BackgroundDark else CanvasBackgroundLight
+    val isAnyModalOpen = showDetailsModal || showUserProfilesModal
 
     CalibreTVTheme(isDarkTheme = isDarkTheme) {
         Box(
@@ -421,6 +424,8 @@ fun LibraryGridScreen(
                                 isSelected = selectedFilterId == filter.id,
                                 authHeader = authHeader,
                                 isFirst = isFirst,
+                                isDarkTheme = isDarkTheme,
+                                isInteractive = !isAnyModalOpen,
                                 onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
                                 onClick = { selectedFilterId = filter.id }
                             )
@@ -451,7 +456,7 @@ fun LibraryGridScreen(
                                     tint = TextMuted,
                                     modifier = Modifier.size(40.dp)
                                 )
-                                Text("No hay libros en esta categoría", color = TextMuted, fontSize = 14.sp)
+                                Text("No hay libros en esta categoría", color = if (isDarkTheme) TextMuted else InkSecondary, fontSize = 14.sp)
                             }
                         }
                     } else {
@@ -466,7 +471,7 @@ fun LibraryGridScreen(
                                 GridCoverCard(
                                     book = book,
                                     authHeader = authHeader,
-                                    isInteractive = !showDetailsModal,
+                                    isInteractive = !isAnyModalOpen,
                                     isLeftEdge = isLeftEdge,
                                     isDarkTheme = isDarkTheme,
                                     modifier = Modifier.focusRequester(bookFocusRequesters.getOrPut(book.id) { FocusRequester() }),
@@ -496,14 +501,17 @@ fun LibraryGridScreen(
         }
 
         // Book Details Dialog
+        // Book Details Dialog (Sin bordes, superficie adaptativa al tema)
         if (showDetailsModal && detailsBook != null) {
             val book = detailsBook!!
             val modalCover = rememberCoverImage(book.coverUrl, authHeader)
+            val modalBg = if (isDarkTheme) SurfaceContainer else Color(0xFFF7F5F0)
+            val synopsisBg = if (isDarkTheme) SurfaceContainerHigh.copy(alpha = 0.5f) else Color.White
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.88f))
+                    .background(Color.Black.copy(alpha = if (isDarkTheme) 0.88f else 0.65f))
                     .onKeyEvent { keyEvent ->
                         if (keyEvent.type == KeyEventType.KeyDown && (keyEvent.key == Key.Back || keyEvent.key == Key.Escape)) {
                             showDetailsModal = false
@@ -522,8 +530,7 @@ fun LibraryGridScreen(
                         .fillMaxWidth(0.78f)
                         .fillMaxHeight(0.80f)
                         .clip(RoundedCornerShape(18.dp))
-                        .background(SurfaceContainer)
-                        .border(1.5.dp, CyanElectric.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
+                        .background(modalBg)
                         .clickable(enabled = false) {}
                         .padding(28.dp)
                 ) {
@@ -554,7 +561,7 @@ fun LibraryGridScreen(
                             ) {
                                 Text(
                                     text = book.title,
-                                    color = TextPrimary,
+                                    color = if (isDarkTheme) TextPrimary else InkPrimary,
                                     fontSize = 22.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     maxLines = 2,
@@ -609,7 +616,7 @@ fun LibraryGridScreen(
 
                                 Text(
                                     text = "Sinopsis:",
-                                    color = TextMuted,
+                                    color = if (isDarkTheme) TextMuted else InkSecondary,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -618,13 +625,14 @@ fun LibraryGridScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .weight(1f)
-                                        .background(SurfaceContainerHigh.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                        .padding(10.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(synopsisBg)
+                                        .padding(12.dp)
                                         .verticalScroll(rememberScrollState())
                                 ) {
                                     Text(
                                         text = if (modalDescription.isNotBlank()) modalDescription else book.summary.ifBlank { "Sin descripción disponible." },
-                                        color = TextPrimary.copy(alpha = 0.9f),
+                                        color = if (isDarkTheme) TextPrimary.copy(alpha = 0.9f) else Color(0xFF44403C),
                                         fontSize = 13.sp,
                                         lineHeight = 18.sp
                                     )
@@ -644,6 +652,7 @@ fun LibraryGridScreen(
                                     title = "Leer en 3D",
                                     icon = Icons.Default.MenuBook,
                                     isPrimary = true,
+                                    isDarkTheme = isDarkTheme,
                                     modifier = Modifier.focusRequester(modalReadFocusRequester),
                                     onClick = {
                                         showDetailsModal = false
@@ -655,6 +664,7 @@ fun LibraryGridScreen(
                                     title = if (isFav) "En Favoritos" else "Añadir a Favoritos",
                                     icon = Icons.Default.Star,
                                     isPrimary = isFav,
+                                    isDarkTheme = isDarkTheme,
                                     onClick = {
                                         repository.toggleFavorite(book.id)
                                         isFav = repository.isFavorite(book.id)
@@ -664,6 +674,7 @@ fun LibraryGridScreen(
                                     title = "Cerrar",
                                     icon = Icons.Default.Close,
                                     isPrimary = false,
+                                    isDarkTheme = isDarkTheme,
                                     onClick = {
                                         showDetailsModal = false
                                         detailsBook = null
@@ -859,10 +870,23 @@ private fun GridActionCapsule(
     title: String,
     icon: ImageVector,
     isPrimary: Boolean,
+    isDarkTheme: Boolean = true,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+
+    val unfocusedBg = if (isDarkTheme) {
+        if (isPrimary) Color(0xFF423419) else SurfaceContainerHighest
+    } else {
+        if (isPrimary) Color(0xFF111317) else Color(0xFFE5E0D8)
+    }
+
+    val unfocusedTextColor = if (isDarkTheme) {
+        if (isPrimary) AmberWarm else TextPrimary
+    } else {
+        if (isPrimary) Color.White else InkPrimary
+    }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -871,13 +895,7 @@ private fun GridActionCapsule(
             .scale(if (isFocused) 1.06f else 1.0f)
             .shadow(if (isFocused) 10.dp else 2.dp, RoundedCornerShape(20.dp), spotColor = AmberWarm)
             .clip(RoundedCornerShape(20.dp))
-            .background(
-                when {
-                    isFocused -> AmberWarm
-                    isPrimary -> AmberWarm
-                    else -> SurfaceContainerHigh
-                }
-            )
+            .background(if (isFocused) AmberWarm else unfocusedBg)
             .border(
                 width = if (isFocused) 2.dp else 0.dp,
                 color = if (isFocused) Color.White else Color.Transparent,
@@ -885,10 +903,18 @@ private fun GridActionCapsule(
             )
             .onFocusChanged { isFocused = it.isFocused }
             .onKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)) {
-                    onClick()
-                    true
+                if (event.type == KeyEventType.KeyDown) {
+                    when (event.key) {
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                            onClick()
+                            true
+                        }
+                        Key.DirectionUp, Key.DirectionDown -> {
+                            // Prevenir fuga de foco fuera de los botones del modal hacia el grid de fondo
+                            true
+                        }
+                        else -> false
+                    }
                 } else false
             }
             .focusable()
@@ -898,12 +924,12 @@ private fun GridActionCapsule(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (isFocused || isPrimary) Color(0xFF131315) else TextPrimary,
+            tint = if (isFocused) Color(0xFF131315) else unfocusedTextColor,
             modifier = Modifier.size(16.dp)
         )
         Text(
             text = title,
-            color = if (isFocused || isPrimary) Color(0xFF131315) else TextPrimary,
+            color = if (isFocused) Color(0xFF131315) else unfocusedTextColor,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
         )
@@ -916,6 +942,8 @@ private fun NetflixShelfCircleItem(
     isSelected: Boolean,
     authHeader: String?,
     isFirst: Boolean = false,
+    isDarkTheme: Boolean = true,
+    isInteractive: Boolean = true,
     onLeftAtBoundary: () -> Unit,
     onClick: () -> Unit
 ) {
@@ -947,8 +975,8 @@ private fun NetflixShelfCircleItem(
                     }
                 } else false
             }
-            .focusable()
-            .clickable { onClick() }
+            .focusable(enabled = isInteractive)
+            .clickable(enabled = isInteractive) { onClick() }
     ) {
         // Circle Avatar
         Box(
@@ -1033,13 +1061,15 @@ private fun NetflixShelfCircleItem(
 
         Spacer(modifier = Modifier.height(4.dp))
 
+        val labelColor = when {
+            isFocused -> if (isDarkTheme) Color.White else InkPrimary
+            isSelected -> CyanElectric
+            else -> if (isDarkTheme) TextPrimary.copy(alpha = 0.85f) else InkSecondary
+        }
+
         Text(
             text = if (filter.type == CircleShelfType.LEVEL) "Nivel ${filter.levelNumber}" else filter.title,
-            color = when {
-                isFocused -> Color.White
-                isSelected -> CyanElectric
-                else -> TextPrimary.copy(alpha = 0.85f)
-            },
+            color = labelColor,
             fontSize = 10.sp,
             fontWeight = if (isFocused || isSelected) FontWeight.Bold else FontWeight.Medium,
             maxLines = 1,

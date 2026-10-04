@@ -37,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -49,9 +51,13 @@ import androidx.compose.ui.unit.sp
 import com.example.calibretv.data.BookRepository
 import com.example.calibretv.data.server.QrCodeGenerator
 import com.example.calibretv.data.server.WifiImportServer
+import com.example.calibretv.data.storage.PreferencesManager
 import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.BackgroundDark
+import com.example.calibretv.theme.CanvasBackgroundLight
 import com.example.calibretv.theme.CyanElectric
+import com.example.calibretv.theme.InkPrimary
+import com.example.calibretv.theme.InkSecondary
 import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
@@ -62,6 +68,12 @@ fun WifiImportScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val prefs = remember { PreferencesManager(context) }
+    val isDarkTheme = remember { prefs.isDarkTheme() }
+    val screenBg = if (isDarkTheme) BackgroundDark else CanvasBackgroundLight
+    val contentPrimary = if (isDarkTheme) TextPrimary else InkPrimary
+    val contentSecondary = if (isDarkTheme) TextMuted else InkSecondary
+
     val wifiServer = remember { WifiImportServer(context, repository) }
     var isServerRunning by remember { mutableStateOf(false) }
     var serverUrl by remember { mutableStateOf("") }
@@ -94,7 +106,7 @@ fun WifiImportScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(screenBg)
             .padding(36.dp)
     ) {
         Row(
@@ -111,26 +123,39 @@ fun WifiImportScreen(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    var isBackFocused by remember { mutableStateOf(false) }
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(SurfaceContainer)
+                            .scale(if (isBackFocused) 1.08f else 1.0f)
+                            .shadow(if (isDarkTheme) 0.dp else 2.dp, RoundedCornerShape(10.dp), spotColor = Color.Black.copy(alpha = 0.08f))
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                if (isBackFocused) AmberWarm
+                                else (if (isDarkTheme) SurfaceContainer else Color.White)
+                            )
+                            .border(
+                                width = if (isBackFocused) 2.dp else 0.dp,
+                                color = if (isBackFocused) CyanElectric else Color.Transparent,
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                            .onFocusChanged { isBackFocused = it.isFocused }
+                            .focusable()
                             .clickable { onBack() }
-                            .padding(8.dp)
+                            .padding(10.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Atrás",
-                            tint = AmberWarm,
+                            tint = if (isBackFocused) Color(0xFF131315) else AmberWarm,
                             modifier = Modifier.size(24.dp)
                         )
                     }
 
                     Text(
                         text = "Importar por WiFi",
-                        color = TextPrimary,
+                        color = contentPrimary,
                         fontSize = 32.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
@@ -140,14 +165,14 @@ fun WifiImportScreen(
 
                 Text(
                     text = "Dirección de tu Servidor en TV:",
-                    color = TextMuted,
+                    color = contentSecondary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
 
                 Text(
                     text = if (isServerRunning) serverUrl else "Servidor Detenido",
-                    color = if (isServerRunning) AmberWarm else Color.Gray,
+                    color = if (isServerRunning) AmberWarm else (if (isDarkTheme) Color.Gray else Color(0xFF9E9E9E)),
                     fontSize = 28.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
@@ -176,11 +201,12 @@ fun WifiImportScreen(
                     ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
+                        .scale(if (isFocused) 1.05f else 1.0f)
                         .focusRequester(buttonFocusRequester)
                         .onFocusChanged { isFocused = it.isFocused }
                         .border(
-                            width = if (isFocused) 3.dp else 0.dp,
-                            color = if (isFocused) Color.White else Color.Transparent,
+                            width = if (isFocused) 2.dp else 0.dp,
+                            color = if (isFocused) CyanElectric else Color.Transparent,
                             shape = RoundedCornerShape(12.dp)
                         )
                 ) {
@@ -206,8 +232,8 @@ fun WifiImportScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
-                    text = "Para subir archivos, escanee el código QR o ingrese la URL anterior en un dispositivo en la misma red Wi-Fi.",
-                    color = TextMuted,
+                    text = "Para subir archivos, escanea el código QR o ingresa la URL anterior en un navegador web desde cualquier celular, tablet o computadora en la misma red Wi-Fi.",
+                    color = contentSecondary,
                     fontSize = 14.sp,
                     lineHeight = 22.sp
                 )
@@ -218,7 +244,7 @@ fun WifiImportScreen(
                 modifier = Modifier
                     .width(1.dp)
                     .fillMaxHeight(0.8f)
-                    .background(Color.White.copy(alpha = 0.15f))
+                    .background(if (isDarkTheme) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.08f))
             )
 
             // Right Column: QR Code & Server Status
@@ -229,13 +255,18 @@ fun WifiImportScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
+                // QR Card: BORDERLESS per user instructions!
                 Box(
                     modifier = Modifier
                         .size(260.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .shadow(
+                            elevation = if (isDarkTheme) 0.dp else 6.dp,
+                            shape = RoundedCornerShape(20.dp),
+                            spotColor = Color.Black.copy(alpha = 0.08f)
+                        )
+                        .clip(RoundedCornerShape(20.dp))
                         .background(Color.White)
-                        .border(2.dp, AmberWarm, RoundedCornerShape(16.dp))
-                        .padding(16.dp),
+                        .padding(18.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     if (qrBitmap != null && isServerRunning) {
@@ -261,7 +292,7 @@ fun WifiImportScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Estado del Servidor:", color = TextMuted, fontSize = 15.sp)
+                        Text("Estado del Servidor:", color = contentSecondary, fontSize = 15.sp)
                         Text(
                             text = if (isServerRunning) "Ejecutándose" else "Detenido",
                             color = if (isServerRunning) Color(0xFF00C853) else Color(0xFFD50000),
@@ -274,7 +305,7 @@ fun WifiImportScreen(
 
                     Text(
                         text = "Clientes Conectados: ${wifiServer.connectedClientsCount}",
-                        color = TextMuted,
+                        color = contentSecondary,
                         fontSize = 14.sp
                     )
 
