@@ -83,10 +83,11 @@ fun TvSidebar(
 
     // Colores del Sidebar:
     // - En Dark Mode (Invertido): Rail BLANCO puro (#FFFFFF) para alto contraste con fondo de cine
+    // - En Light Mode (Bento): Rail CARBÓN (#141619) tal como en la referencia de diseño
     val sidebarBg = if (isDarkTheme) Color(0xFFFFFFFF) else Color(0xFF141619)
     val sidebarBorder = if (isDarkTheme) Color(0xFFE2E6E2) else Color(0xFF22222A)
-    val logoBoxBg = if (isDarkTheme) Color(0xFFF1F3F1) else Color(0xFF20232B)
-    val logoIconTint = if (isDarkTheme) Color(0xFF111317) else Color.White
+    val logoBoxBg = if (isDarkTheme) Color(0xFF111317) else Color.White
+    val logoIconTint = if (isDarkTheme) Color.White else Color(0xFF101014)
     val brandTitleColor = if (isDarkTheme) Color(0xFF111317) else Color.White
 
     Box(
@@ -243,18 +244,16 @@ private fun SidebarNavItem(
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
-    val normalIconTint = if (isDarkTheme) Color(0xFF6B7280) else Color(0xFF8E929E)
+    val normalIconTint = if (isDarkTheme) Color(0xFF4B5563) else Color(0xFF9DA1AA)
     val normalTextColor = if (isDarkTheme) Color(0xFF1F2937) else Color(0xFFD0D4DC)
 
-    // Botones Invertidos:
-    // - En Dark Mode (Rail Blanco): Botón seleccionado es OSCURO (#111317) con icono blanco
-    // - En Light Mode (Rail Carbón): Botón seleccionado es BLANCO (#FFFFFF) con icono oscuro
-    val selectedBg = if (isDarkTheme) Color(0xFF111317) else Color.White
-    val selectedContentColor = if (isDarkTheme) Color.White else Color(0xFF111317)
+    val focusedBg = AmberWarm
+    val focusedContentColor = Color(0xFF111317)
+    val focusedBorderColor = if (isDarkTheme) Color(0xFF111317) else CyanElectric
 
-    val focusedBg = if (isDarkTheme) Color(0xFF111317) else Color.White
-    val focusedContentColor = if (isDarkTheme) Color.White else Color(0xFF111317)
-    val focusedBorderColor = AmberWarm
+    val selectedBg = if (isDarkTheme) AmberWarm.copy(alpha = 0.18f) else Color(0xFF28241A)
+    val selectedContentColor = if (isDarkTheme) Color(0xFFB45309) else AmberWarm
+    val selectedBorderColor = AmberWarm
 
     val baseModifier = Modifier
         .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
@@ -276,8 +275,8 @@ private fun SidebarNavItem(
                     }
                 )
                 .border(
-                    width = if (isFocused) 2.dp else if (isSelected) 1.dp else 0.dp,
-                    color = if (isFocused) focusedBorderColor else if (isSelected) selectedBg.copy(alpha = 0.5f) else Color.Transparent,
+                    width = if (isFocused) 1.5.dp else if (isSelected) 1.dp else 0.dp,
+                    color = if (isFocused) focusedBorderColor else if (isSelected) selectedBorderColor else Color.Transparent,
                     shape = RoundedCornerShape(12.dp)
                 )
                 .onFocusChanged { isFocused = it.isFocused }
@@ -317,15 +316,15 @@ private fun SidebarNavItem(
             )
         }
     } else {
-        // Modo Colapsado (Rail): Botón circular/squircle blanco u oscuro invertido
+        // Modo Colapsado (Rail): Icono centrado
         val collapsedBg = when {
             isFocused -> focusedBg
-            isSelected -> selectedBg
+            isSelected -> AmberWarm
             else -> Color.Transparent
         }
         val collapsedTint = when {
             isFocused -> focusedContentColor
-            isSelected -> selectedContentColor
+            isSelected -> Color(0xFF111317)
             else -> normalIconTint
         }
 
@@ -374,7 +373,7 @@ private fun ThemePillToggleExpanded(
 
     val containerBg = if (isDarkTheme) Color(0xFFF1F5F1) else Color(0xFF17171E)
     val containerBorder = if (isDarkTheme) Color(0xFFD1D5DB) else Color(0xFF2C2C38)
-    val focusBorder = AmberWarm
+    val focusBorder = if (isDarkTheme) Color(0xFF111317) else CyanElectric
 
     Row(
         modifier = Modifier
@@ -383,7 +382,7 @@ private fun ThemePillToggleExpanded(
             .clip(RoundedCornerShape(20.dp))
             .background(containerBg)
             .border(
-                width = if (isFocused) 2.dp else 1.dp,
+                width = if (isFocused) 1.5.dp else 1.dp,
                 color = if (isFocused) focusBorder else containerBorder,
                 shape = RoundedCornerShape(20.dp)
             )
@@ -401,9 +400,9 @@ private fun ThemePillToggleExpanded(
             .padding(3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Lado Dark: Botón Oscuro si activo
+        // Lado Dark
         val darkSideBg = if (isDarkTheme) Color(0xFF111317) else Color.Transparent
-        val darkSideTint = if (isDarkTheme) Color.White else Color(0xFF8E929E)
+        val darkSideTint = if (isDarkTheme) AmberWarm else (if (isDarkTheme) Color(0xFF4B5563) else Color(0xFF9DA1AA))
 
         Row(
             modifier = Modifier
@@ -429,9 +428,9 @@ private fun ThemePillToggleExpanded(
             )
         }
 
-        // Lado Light: Botón Blanco si activo
-        val lightSideBg = if (!isDarkTheme) Color.White else Color.Transparent
-        val lightSideTint = if (!isDarkTheme) Color(0xFF111317) else Color(0xFF6B7280)
+        // Lado Light
+        val lightSideBg = if (!isDarkTheme) AmberWarm else Color.Transparent
+        val lightSideTint = if (!isDarkTheme) Color(0xFF111317) else (if (isDarkTheme) Color(0xFF4B5563) else Color(0xFF9DA1AA))
 
         Row(
             modifier = Modifier
@@ -468,7 +467,7 @@ private fun ThemePillToggleCollapsed(
 
     val containerBg = if (isDarkTheme) Color(0xFFF1F5F1) else Color(0xFF17171E)
     val containerBorder = if (isDarkTheme) Color(0xFFD1D5DB) else Color(0xFF2C2C38)
-    val focusBorder = AmberWarm
+    val focusBorder = if (isDarkTheme) Color(0xFF111317) else CyanElectric
 
     Column(
         modifier = Modifier
@@ -477,7 +476,7 @@ private fun ThemePillToggleCollapsed(
             .clip(RoundedCornerShape(18.dp))
             .background(containerBg)
             .border(
-                width = if (isFocused) 2.dp else 1.dp,
+                width = if (isFocused) 1.5.dp else 1.dp,
                 color = if (isFocused) focusBorder else containerBorder,
                 shape = RoundedCornerShape(18.dp)
             )
@@ -496,7 +495,6 @@ private fun ThemePillToggleCollapsed(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // Opción Oscura: Botón negro con icono blanco cuando activo
         Box(
             modifier = Modifier
                 .size(26.dp)
@@ -507,23 +505,22 @@ private fun ThemePillToggleCollapsed(
             Icon(
                 imageVector = Icons.Default.NightlightRound,
                 contentDescription = "Modo Oscuro",
-                tint = if (isDarkTheme) Color.White else Color(0xFF8E929E),
+                tint = if (isDarkTheme) AmberWarm else (if (isDarkTheme) Color(0xFF4B5563) else Color(0xFF9DA1AA)),
                 modifier = Modifier.size(14.dp)
             )
         }
 
-        // Opción Clara: Botón blanco con icono oscuro cuando activo
         Box(
             modifier = Modifier
                 .size(26.dp)
                 .clip(CircleShape)
-                .background(if (!isDarkTheme) Color.White else Color.Transparent),
+                .background(if (!isDarkTheme) AmberWarm else Color.Transparent),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.LightMode,
                 contentDescription = "Modo Claro",
-                tint = if (!isDarkTheme) Color(0xFF111317) else Color(0xFF6B7280),
+                tint = if (!isDarkTheme) Color(0xFF111317) else (if (isDarkTheme) Color(0xFF4B5563) else Color(0xFF9DA1AA)),
                 modifier = Modifier.size(14.dp)
             )
         }

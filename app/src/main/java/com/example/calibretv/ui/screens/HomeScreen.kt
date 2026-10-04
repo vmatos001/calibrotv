@@ -322,57 +322,9 @@ fun HomeScreen(
                         .background(screenBg)
                 ) {
                 // ==========================================
-                // CABECERA SUPERIOR: Reloj en vivo & Perfil de Usuario
-                // ==========================================
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 28.dp, end = 28.dp, top = 14.dp, bottom = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "CalibroTV",
-                        color = if (isDarkTheme) TextPrimary else InkPrimary,
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.5.sp
-                    )
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Text(
-                            text = currentTime,
-                            color = if (isDarkTheme) Color.White.copy(alpha = 0.75f) else Color(0xFF555B66),
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-
-                        TvProfilePill(
-                            profile = activeProfile,
-                            onOpenProfileSwitcher = { showUserProfilesModal = true },
-                            onOpenOpds = onNavigateToOpds,
-                            onOpenWifiImport = onNavigateToWifiImport,
-                            onOpenSettings = onNavigateToSettings,
-                            onQuickSync = {
-                                coroutineScope.launch {
-                                    isLoading = true
-                                    feedContent = repository.getFeed()
-                                    isLoading = false
-                                }
-                            },
-                            onNotificationsClick = onNavigateToSettings
-                        )
-                    }
-                }
-
-                // ==========================================
                 // CONTENIDO SCROLLABLE (Bento Grid)
                 // ==========================================
                 val shelfCardBg = if (isDarkTheme) Color(0xFF161920) else Color.White
-                val shelfCardBorder = if (isDarkTheme) Color(0xFF262934) else Color(0xFFE2E7E2)
 
                 if (isLoading) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -387,16 +339,15 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         // ==========================================
-                        // ZONA A: BENTO HERO BANNER (Estilo Imagen 2 Card A)
+                        // ZONA A: BENTO HERO BANNER (Estilo Bento sin barra superior)
                         // ==========================================
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(210.dp)
-                                .padding(horizontal = 28.dp, vertical = 4.dp)
+                                .padding(horizontal = 28.dp, vertical = 6.dp)
                                 .clip(RoundedCornerShape(26.dp))
                                 .background(Color(0xFF12141A))
-                                .border(1.dp, Color(0xFF242734), RoundedCornerShape(26.dp))
                                 .shadow(
                                     elevation = if (isDarkTheme) 0.dp else 8.dp,
                                     shape = RoundedCornerShape(26.dp),
@@ -483,10 +434,42 @@ fun HomeScreen(
                                 },
                                 onLeftAtBoundary = { sidebarFocusRequester.requestFocus() }
                             )
+
+                            // Reloj en vivo y Perfil de Usuario flotantes arriba a la derecha dentro del banner
+                            Row(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(end = 22.dp, top = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Text(
+                                    text = currentTime,
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+
+                                TvProfilePill(
+                                    profile = activeProfile,
+                                    onOpenProfileSwitcher = { showUserProfilesModal = true },
+                                    onOpenOpds = onNavigateToOpds,
+                                    onOpenWifiImport = onNavigateToWifiImport,
+                                    onOpenSettings = onNavigateToSettings,
+                                    onQuickSync = {
+                                        coroutineScope.launch {
+                                            isLoading = true
+                                            feedContent = repository.getFeed()
+                                            isLoading = false
+                                        }
+                                    },
+                                    onNotificationsClick = onNavigateToSettings
+                                )
+                            }
                         }
 
                         // ==========================================
-                        // ZONA B: TARJETAS BENTO PARA LIBROS (Estilo Imagen 2 Card B)
+                        // ZONA B: TARJETAS BENTO PARA LIBROS (Estilo Bento Limpio)
                         // ==========================================
 
                         // Carrusel 1: Continuar Leyendo (libros con progreso > 0)
@@ -497,7 +480,6 @@ fun HomeScreen(
                                     .padding(horizontal = 28.dp, vertical = 2.dp)
                                     .clip(RoundedCornerShape(24.dp))
                                     .background(shelfCardBg)
-                                    .border(1.dp, shelfCardBorder, RoundedCornerShape(24.dp))
                                     .shadow(
                                         elevation = if (isDarkTheme) 0.dp else 4.dp,
                                         shape = RoundedCornerShape(24.dp),
@@ -531,7 +513,6 @@ fun HomeScreen(
                                     .padding(horizontal = 28.dp, vertical = 2.dp)
                                     .clip(RoundedCornerShape(24.dp))
                                     .background(shelfCardBg)
-                                    .border(1.dp, shelfCardBorder, RoundedCornerShape(24.dp))
                                     .shadow(
                                         elevation = if (isDarkTheme) 0.dp else 4.dp,
                                         shape = RoundedCornerShape(24.dp),
@@ -567,7 +548,6 @@ fun HomeScreen(
                                     .padding(horizontal = 28.dp, vertical = 2.dp)
                                     .clip(RoundedCornerShape(24.dp))
                                     .background(shelfCardBg)
-                                    .border(1.dp, shelfCardBorder, RoundedCornerShape(24.dp))
                                     .shadow(
                                         elevation = if (isDarkTheme) 0.dp else 4.dp,
                                         shape = RoundedCornerShape(24.dp),
@@ -594,7 +574,6 @@ fun HomeScreen(
                                     .padding(horizontal = 28.dp, vertical = 2.dp)
                                     .clip(RoundedCornerShape(24.dp))
                                     .background(shelfCardBg)
-                                    .border(1.dp, shelfCardBorder, RoundedCornerShape(24.dp))
                                     .shadow(
                                         elevation = if (isDarkTheme) 0.dp else 4.dp,
                                         shape = RoundedCornerShape(24.dp),
@@ -1573,13 +1552,12 @@ private fun HomeHeroBanner(
                 .fillMaxHeight(),
             verticalArrangement = Arrangement.Center
         ) {
-            // Badge BESTSELLER DEL MES
+            // Badge BESTSELLER DEL MES (limpio sin bordes)
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF222632))
-                    .border(1.dp, Color(0xFF333848), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 9.dp, vertical = 2.dp)
+                    .background(AmberWarm.copy(alpha = 0.18f))
+                    .padding(horizontal = 10.dp, vertical = 3.dp)
             ) {
                 Text(
                     text = "★ BESTSELLER DEL MES",
@@ -1638,22 +1616,22 @@ private fun HomeHeroBanner(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Botón Blanco de Acción (Estilo Imagen 2 Card A: [ Upgrade > ])
+            // Botón CTA Limpio con los colores del menú (AmberWarm) estilo [ Upgrade > ]
             Box(
                 modifier = Modifier
                     .focusRequester(readBtnFocusRequester)
-                    .scale(if (isReadFocused) 1.05f else 1.0f)
+                    .scale(if (isReadFocused) 1.06f else 1.0f)
                     .shadow(
-                        elevation = if (isReadFocused) 10.dp else 4.dp,
-                        shape = RoundedCornerShape(22.dp),
-                        spotColor = if (isReadFocused) AmberWarm else Color.Black.copy(alpha = 0.35f)
+                        elevation = if (isReadFocused) 12.dp else 4.dp,
+                        shape = RoundedCornerShape(24.dp),
+                        spotColor = AmberWarm
                     )
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(Color.White)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(AmberWarm)
                     .border(
                         width = if (isReadFocused) 2.dp else 0.dp,
-                        color = if (isReadFocused) AmberWarm else Color.Transparent,
-                        shape = RoundedCornerShape(22.dp)
+                        color = if (isReadFocused) Color.White else Color.Transparent,
+                        shape = RoundedCornerShape(24.dp)
                     )
                     .onFocusChanged { isReadFocused = it.isFocused }
                     .onKeyEvent { event ->
@@ -1673,7 +1651,7 @@ private fun HomeHeroBanner(
                     }
                     .focusable()
                     .clickable { onReadSample() }
-                    .padding(horizontal = 18.dp, vertical = 8.dp),
+                    .padding(horizontal = 20.dp, vertical = 9.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
@@ -1689,7 +1667,7 @@ private fun HomeHeroBanner(
                     Text(
                         text = "Leer Muestra EPUB (Capítulo 1)",
                         color = Color(0xFF111317),
-                        fontSize = 11.5.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Icon(
@@ -1702,12 +1680,11 @@ private fun HomeHeroBanner(
             }
         }
 
-        // LADO DERECHO: Tarjeta con Código QR a la vista para comprar desde el móvil
+        // LADO DERECHO: Tarjeta con Código QR limpia sin bordes
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color(0xFF161922))
-                .border(1.dp, Color(0xFF262A38), RoundedCornerShape(16.dp))
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -1903,8 +1880,8 @@ private fun HomeQuickAccessCard(
             .clip(RoundedCornerShape(20.dp))
             .background(cardBg)
             .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = cardBorder,
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) AmberWarm else Color.Transparent,
                 shape = RoundedCornerShape(20.dp)
             )
             .shadow(
