@@ -156,41 +156,84 @@ class BookRepository(private val context: Context) {
         bookNoteDao.deleteNote(noteId)
     }
 
-    fun isFavorite(bookId: String): Boolean = runBlocking(Dispatchers.IO) {
-        favoriteDao.isFavorite(prefs.getActiveProfile().id, bookId)
-    }
+    @Volatile
+    private var inMemoryBooks: List<Book>? = null
 
-    fun toggleFavorite(bookId: String): Boolean = runBlocking(Dispatchers.IO) {
+    private val favoriteIdsCache = java.util.concurrent.ConcurrentHashMap<String, MutableSet<String>>()
+
+    fun isFavorite(bookId: String): Boolean {
         val profileId = prefs.getActiveProfile().id
-        val isFav = favoriteDao.isFavorite(profileId, bookId)
-        if (isFav) {
-            favoriteDao.remove(profileId, bookId)
-            false
-        } else {
-            favoriteDao.add(FavoriteEntity(profileId, bookId))
-            true
+        val cachedSet = favoriteIdsCache[profileId]
+        if (cachedSet != null) {
+            return cachedSet.contains(bookId)
+        }
+        return runBlocking(Dispatchers.IO) {
+            val isFav = favoriteDao.isFavorite(profileId, bookId)
+            val set = favoriteIdsCache.getOrPut(profileId) { java.util.concurrent.ConcurrentHashMap.newKeySet() }
+            if (isFav) set.add(bookId) else set.remove(bookId)
+            isFav
         }
     }
 
-    fun getFavoriteBookIds(): Set<String> = runBlocking(Dispatchers.IO) {
-        favoriteDao.getFavoriteIds(prefs.getActiveProfile().id).toSet()
-    }
+    fun toggleFavorite(bookId: String): Boolean {
+        val profileId = prefs.getActiveProfile().id
+        val set = favoriteIdsCache.getOrPut(profileId) { java.util.concurrent.ConcurrentHashMap.newKeySet() }
+        val currentlyFav = if (set.contains(bookId)) true else {
+            runBlocking(Dispatchers.IO) { favoriteDao.isFavorite(profileId, bookId) }
+        }
+        val newFav = !currentlyFav
+        if (newFav) set.add(bookId) else set.remove(bookId)
 
-    fun getFavoriteBooks(): List<Book> = runBlocking(Dispatchers.IO) {
-        val favIds = favoriteDao.getFavoriteIds(prefs.getActiveProfile().id)
-        if (favIds.isEmpty()) emptyList() else bookDao.getBooksByIds(favIds).map { it.toBook() }
-    }
-
-    fun getCachedBooks(): List<Book> = runBlocking(Dispatchers.IO) {
-        val entities = bookDao.getAllBooks()
-        if (entities.isEmpty()) {
-            val legacy = prefs.getCachedBooks()
-            if (legacy.isNotEmpty()) {
-                bookDao.upsertBooks(legacy.map { it.toEntity() })
-                return@runBlocking legacy
+        CoroutineScope(Dispatchers.IO).launch {
+            if (newFav) {
+                favoriteDao.add(FavoriteEntity(profileId, bookId))
+            } else {
+                favoriteDao.remove(profileId, bookId)
             }
         }
-        entities.map { it.toBook() }
+        return newFav
+    }
+
+    fun getFavoriteBookIds(): Set<String> {
+        val profileId = prefs.getActiveProfile().id
+        favoriteIdsCache[profileId]?.let { return it.toSet() }
+        return runBlocking(Dispatchers.IO) {
+            val favIds = favoriteDao.getFavoriteIds(profileId).toSet()
+            val set = favoriteIdsCache.getOrPut(profileId) { java.util.concurrent.ConcurrentHashMap.newKeySet() }
+            set.addAll(favIds)
+            favIds
+        }
+    }
+
+    fun getFavoriteBooks(): List<Book> {
+        val profileId = prefs.getActiveProfile().id
+        val favIds = getFavoriteBookIds()
+        if (favIds.isEmpty()) return emptyList()
+        val cached = inMemoryBooks
+        if (cached != null) {
+            return cached.filter { favIds.contains(it.id) }
+        }
+        return runBlocking(Dispatchers.IO) {
+            bookDao.getBooksByIds(favIds.toList()).map { it.toBook() }
+        }
+    }
+
+    fun getCachedBooks(): List<Book> {
+        inMemoryBooks?.let { return it }
+        return runBlocking(Dispatchers.IO) {
+            val entities = bookDao.getAllBooks()
+            val books = if (entities.isEmpty()) {
+                val legacy = prefs.getCachedBooks()
+                if (legacy.isNotEmpty()) {
+                    bookDao.upsertBooks(legacy.map { it.toEntity() })
+                    legacy
+                } else emptyList()
+            } else {
+                entities.map { it.toBook() }
+            }
+            inMemoryBooks = books
+            books
+        }
     }
 
     suspend fun saveCachedBooks(books: List<Book>) = withContext(Dispatchers.IO) {
@@ -198,6 +241,7 @@ class BookRepository(private val context: Context) {
             .distinctBy { "${it.title.lowercase().trim()}_${it.author.lowercase().trim()}" }
         bookDao.clearAll()
         bookDao.upsertBooks(unique.map { it.toEntity() })
+        inMemoryBooks = unique
     }
 
     fun getBookProgress(bookId: String): Int = runBlocking(Dispatchers.IO) {

@@ -205,6 +205,7 @@ fun YourBooksScreen(
 
                 TvProfilePill(
                     profile = activeProfile,
+                    isDarkTheme = isDarkTheme,
                     onOpenProfileSwitcher = { showUserProfilesModal = true },
                     onOpenOpds = {},
                     onOpenWifiImport = onNavigateToWifiImport,

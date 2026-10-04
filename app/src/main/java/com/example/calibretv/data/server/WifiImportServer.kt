@@ -52,7 +52,52 @@ class WifiImportServer(private val context: Context, private val repository: Boo
     var uploadedFilesCount: Int = 0
         private set
 
+    /** Token de acceso aleatorio por sesión de la app; se incluye en las URLs de los QR. */
+    val accessToken: String = run {
+        val chars = "abcdefghjkmnpqrstuvwxyz23456789"
+        val rnd = java.security.SecureRandom()
+        (1..8).map { chars[rnd.nextInt(chars.length)] }.joinToString("")
+    }
+
+    /** Construye la URL pública (con token) para mostrar en un código QR. */
+    fun buildUrl(pathAndQuery: String = "/"): String {
+        val p = if (pathAndQuery.startsWith("/")) pathAndQuery else "/$pathAndQuery"
+        val sep = if (p.contains("?")) "&" else "?"
+        return "http://${getLocalIpAddress()}:$activePort$p${sep}t=$accessToken"
+    }
+
+    private fun isAllowedBookFile(name: String): Boolean {
+        val ext = name.substringAfterLast('.', "").lowercase()
+        return ext in ALLOWED_EXTENSIONS
+    }
+
+    private fun sendStatus(output: OutputStream, code: Int, status: String, title: String, message: String) {
+        val html = """
+            <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>$title • CalibroTV</title>
+            <style>body{background:#0A0A0A;color:#fff;font-family:sans-serif;text-align:center;padding:40px 20px}
+            .box{background:#161616;border-radius:16px;padding:32px;max-width:440px;margin:auto}
+            h2{color:#FFA000;margin-top:0}p{color:#A0A0A0;line-height:1.5}</style></head>
+            <body><div class="box"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(message)}</p></div></body></html>
+        """.trimIndent()
+        val bytes = html.toByteArray(Charsets.UTF_8)
+        val header = "HTTP/1.1 $code $status\r\n" +
+                "Content-Type: text/html; charset=utf-8\r\n" +
+                "Content-Length: ${bytes.size}\r\n" +
+                "Connection: close\r\n\r\n"
+        try {
+            output.write(header.toByteArray(Charsets.UTF_8))
+            output.write(bytes)
+            output.flush()
+        } catch (_: Exception) {}
+    }
+
     companion object {
+        private const val COOKIE_NAME = "calibro_t"
+        private const val MAX_FORM_BYTES = 64 * 1024
+        private const val MAX_UPLOAD_BYTES = 300L * 1024 * 1024
+        private val ALLOWED_EXTENSIONS = setOf("epub", "pdf", "cbz", "cbr")
+
         @Volatile
         private var instance: WifiImportServer? = null
 
@@ -215,6 +260,30 @@ class WifiImportServer(private val context: Context, private val repository: Boo
                     }
                 }
 
+                // 🔐 Autenticación: token del QR (?t=) → cookie de sesión
+                val cookieToken = headers["cookie"]?.split(";")
+                    ?.map { it.trim() }
+                    ?.firstOrNull { it.startsWith("$COOKIE_NAME=") }
+                    ?.substringAfter("=")
+                val queryToken = queryParams["t"]
+
+                if (queryToken == accessToken && method == "GET") {
+                    // Fija la cookie y redirige a la URL limpia para que los enlaces relativos funcionen
+                    val cleanQuery = queryString.split("&").filterNot { it.startsWith("t=") }.joinToString("&")
+                    val location = if (cleanQuery.isBlank()) path else "$path?$cleanQuery"
+                    val redirect = "HTTP/1.1 302 Found\r\n" +
+                            "Location: $location\r\n" +
+                            "Set-Cookie: $COOKIE_NAME=$accessToken; Path=/; HttpOnly; SameSite=Strict\r\n" +
+                            "Content-Length: 0\r\nConnection: close\r\n\r\n"
+                    output.write(redirect.toByteArray(Charsets.UTF_8))
+                    output.flush()
+                    return@withContext
+                }
+                if (cookieToken != accessToken && queryToken != accessToken) {
+                    sendStatus(output, 403, "Forbidden", "Acceso no autorizado", "Escanea el código QR que aparece en la pantalla de tu TV para conectarte.")
+                    return@withContext
+                }
+
                 when {
                     method == "GET" && path == "/note" -> {
                         val bookId = queryParams["bookId"] ?: ""
@@ -222,7 +291,11 @@ class WifiImportServer(private val context: Context, private val repository: Boo
                         serveNotePage(output, bookId, profileId)
                     }
                     (method == "POST") && (path == "/note" || path == "/api/note") -> {
-                        val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
+                        val contentLength = headers["content-length"]?.toIntOrNull() ?: -1
+                        if (contentLength <= 0 || contentLength > MAX_FORM_BYTES) {
+                            sendStatus(output, 413, "Payload Too Large", "Nota demasiado larga", "La nota supera el tamaño máximo permitido.")
+                            return@withContext
+                        }
                         val bodyBytes = ByteArray(contentLength)
                         var readTotal = 0
                         while (readTotal < contentLength) {
@@ -237,7 +310,7 @@ class WifiImportServer(private val context: Context, private val repository: Boo
                         val noteText = formParams["noteText"] ?: formParams["content"] ?: formParams["note"] ?: ""
                         val spreadIndex = (formParams["spreadIndex"] ?: "0").toIntOrNull() ?: 0
                         if (bookId.isNotBlank() && noteText.isNotBlank()) {
-                            repository.addNote(bookId = bookId, text = noteText, spreadIndex = spreadIndex, profileId = profileId)
+                            repository.addNote(bookId = bookId, text = noteText.take(5000), spreadIndex = spreadIndex, profileId = profileId)
                         }
                         serveNoteSuccessPage(output, bookId, profileId)
                     }
@@ -250,10 +323,15 @@ class WifiImportServer(private val context: Context, private val repository: Boo
                         serveQuotePreviewPage(output, cardId)
                     }
                     method == "POST" && path.startsWith("/upload") -> {
-                        val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
+                        val contentLength = headers["content-length"]?.toLongOrNull() ?: -1L
                         val contentType = headers["content-type"] ?: ""
                         val filename = queryParams["filename"]
-                        handleFileUpload(input, output, contentLength, contentType, filename)
+                        when {
+                            contentLength <= 0L -> sendStatus(output, 411, "Length Required", "Archivo inválido", "No se recibió el tamaño del archivo.")
+                            contentLength > MAX_UPLOAD_BYTES -> sendStatus(output, 413, "Payload Too Large", "Archivo demasiado grande", "El tamaño máximo es ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB.")
+                            filename != null && !isAllowedBookFile(filename) -> sendStatus(output, 415, "Unsupported Media Type", "Formato no soportado", "Solo se aceptan archivos EPUB, PDF, CBZ o CBR.")
+                            else -> handleFileUpload(input, output, contentLength.toInt(), contentType, filename)
+                        }
                     }
                     else -> {
                         serveMainPage(output)
@@ -810,6 +888,12 @@ class WifiImportServer(private val context: Context, private val repository: Boo
                         totalRead += bytesRead
                     }
                 }
+            }
+
+            if (originalName.contains('.') && !isAllowedBookFile(originalName)) {
+                tempFile.delete()
+                sendStatus(output, 415, "Unsupported Media Type", "Formato no soportado", "Solo se aceptan archivos EPUB, PDF, CBZ o CBR.")
+                return
             }
 
             if (tempFile.exists() && tempFile.length() > 0) {

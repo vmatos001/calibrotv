@@ -60,12 +60,15 @@ import androidx.compose.ui.window.PopupProperties
 import com.example.calibretv.data.model.UserProfile
 import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.CyanElectric
+import com.example.calibretv.theme.InkPrimary
+import com.example.calibretv.theme.InkSecondary
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
 
 @Composable
 fun TvProfilePill(
     profile: UserProfile,
+    isDarkTheme: Boolean = true,
     onOpenProfileSwitcher: () -> Unit = {},
     onOpenOpds: () -> Unit = {},
     onOpenWifiImport: () -> Unit = {},
@@ -84,6 +87,13 @@ fun TvProfilePill(
         AmberWarm
     }
 
+    val pillBg = if (isDarkTheme) Color(0xFF131317) else Color.White
+    val pillBorderColor = if (isPillFocused) {
+        if (isDarkTheme) AmberWarm else CyanElectric
+    } else {
+        if (isDarkTheme) Color(0xFF2C2C34) else Color.Transparent
+    }
+
     Box(modifier = modifier) {
         // Encabezado Principal tipo Cápsula / Píldora (Rediseñada -30% compacta, solo Avatar + Nombre)
         Row(
@@ -91,12 +101,16 @@ fun TvProfilePill(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier
                 .scale(if (isPillFocused) 1.05f else 1.0f)
-                .shadow(if (isPillFocused) 12.dp else 2.dp, RoundedCornerShape(16.dp), spotColor = AmberWarm)
+                .shadow(
+                    elevation = if (isPillFocused) 12.dp else (if (isDarkTheme) 2.dp else 4.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    spotColor = if (isPillFocused) (if (isDarkTheme) AmberWarm else CyanElectric) else Color.Black.copy(alpha = 0.2f)
+                )
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF131317))
+                .background(pillBg)
                 .border(
-                    width = if (isPillFocused) 1.5.dp else 1.dp,
-                    color = if (isPillFocused) AmberWarm else Color(0xFF2C2C34),
+                    width = if (isPillFocused) 2.dp else (if (isDarkTheme) 1.dp else 0.dp),
+                    color = pillBorderColor,
                     shape = RoundedCornerShape(16.dp)
                 )
                 .onFocusChanged { isPillFocused = it.isFocused }
@@ -150,7 +164,7 @@ fun TvProfilePill(
             // Saludo personalizado: "Hi, [Nombre]" (-30% tamaño: 11sp)
             Text(
                 text = "Hi, ${profile.name}",
-                color = TextPrimary,
+                color = if (isDarkTheme) TextPrimary else InkPrimary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(start = 1.dp, end = 5.dp)
@@ -167,6 +181,7 @@ fun TvProfilePill(
             ) {
                 ProfileDropdownMenuCard(
                     profile = profile,
+                    isDarkTheme = isDarkTheme,
                     onViewProfile = {
                         isExpandedMenuOpen = false
                         onOpenProfileSwitcher()
@@ -194,19 +209,24 @@ fun TvProfilePill(
 @Composable
 private fun ProfileDropdownMenuCard(
     profile: UserProfile,
+    isDarkTheme: Boolean = true,
     onViewProfile: () -> Unit,
     onOpenOpds: () -> Unit,
     onOpenWifiImport: () -> Unit,
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val cardBg = if (isDarkTheme) Color(0xFF1A1715) else Color.White
+    val cardBorder = if (isDarkTheme) Color(0xFF332D28) else Color(0xFFE5E7EB)
+    val dividerColor = if (isDarkTheme) Color(0xFF2E2925) else Color(0xFFEFEFEF)
+
     Box(
         modifier = Modifier
             .width(260.dp)
-            .shadow(20.dp, RoundedCornerShape(16.dp), spotColor = Color.Black)
+            .shadow(20.dp, RoundedCornerShape(16.dp), spotColor = Color.Black.copy(alpha = 0.35f))
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF1A1715)) // Fondo carbón cálido idéntico al mockup
-            .border(1.dp, Color(0xFF332D28), RoundedCornerShape(16.dp))
+            .background(cardBg)
+            .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
             .padding(16.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -220,14 +240,14 @@ private fun ProfileDropdownMenuCard(
             ) {
                 Text(
                     text = "Profile Settings",
-                    color = TextMuted,
+                    color = if (isDarkTheme) TextMuted else InkSecondary,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "View Profile (${profile.name})",
-                    color = TextPrimary,
+                    color = if (isDarkTheme) TextPrimary else InkPrimary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -235,7 +255,7 @@ private fun ProfileDropdownMenuCard(
 
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 2.dp),
-                color = Color(0xFF2E2925),
+                color = dividerColor,
                 thickness = 1.dp
             )
 
@@ -243,30 +263,34 @@ private fun ProfileDropdownMenuCard(
             ProfileDropdownMenuItem(
                 title = "Cambiar Perfil",
                 icon = Icons.Default.PersonOutline,
+                isDarkTheme = isDarkTheme,
                 onClick = onViewProfile
             )
 
             ProfileDropdownMenuItem(
                 title = "Conexión OPDS / Calibre",
                 icon = Icons.Default.Dns,
+                isDarkTheme = isDarkTheme,
                 onClick = onOpenOpds
             )
 
             ProfileDropdownMenuItem(
                 title = "Importar por Wi-Fi",
                 icon = Icons.Default.Wifi,
+                isDarkTheme = isDarkTheme,
                 onClick = onOpenWifiImport
             )
 
             ProfileDropdownMenuItem(
                 title = "Ajustes de Lectura",
                 icon = Icons.Default.Settings,
+                isDarkTheme = isDarkTheme,
                 onClick = onOpenSettings
             )
 
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 2.dp),
-                color = Color(0xFF2E2925),
+                color = dividerColor,
                 thickness = 1.dp
             )
 
@@ -275,6 +299,7 @@ private fun ProfileDropdownMenuCard(
                 title = "Cambiar de Usuario",
                 icon = Icons.AutoMirrored.Filled.Logout,
                 isDestructive = true,
+                isDarkTheme = isDarkTheme,
                 onClick = onViewProfile
             )
         }
@@ -286,9 +311,13 @@ private fun ProfileDropdownMenuItem(
     title: String,
     icon: ImageVector,
     isDestructive: Boolean = false,
+    isDarkTheme: Boolean = true,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+
+    val unfocusedTextColor = if (isDarkTheme) TextPrimary else InkPrimary
+    val unfocusedIconTint = if (isDarkTheme) Color(0xFFD6D0C7) else InkSecondary
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -296,7 +325,7 @@ private fun ProfileDropdownMenuItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(if (isFocused) AmberWarm.copy(alpha = 0.2f) else Color.Transparent)
+            .background(if (isFocused) AmberWarm.copy(alpha = if (isDarkTheme) 0.2f else 0.15f) else Color.Transparent)
             .border(
                 width = if (isFocused) 1.dp else 0.dp,
                 color = if (isFocused) AmberWarm else Color.Transparent,
@@ -313,7 +342,7 @@ private fun ProfileDropdownMenuItem(
             tint = when {
                 isDestructive -> Color(0xFFFF6B6B)
                 isFocused -> AmberWarm
-                else -> Color(0xFFD6D0C7)
+                else -> unfocusedIconTint
             },
             modifier = Modifier.size(18.dp)
         )
@@ -322,7 +351,7 @@ private fun ProfileDropdownMenuItem(
             color = when {
                 isDestructive -> Color(0xFFFF6B6B)
                 isFocused -> AmberWarm
-                else -> TextPrimary
+                else -> unfocusedTextColor
             },
             fontSize = 12.sp,
             fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Medium

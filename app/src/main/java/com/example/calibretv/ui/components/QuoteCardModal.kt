@@ -61,9 +61,12 @@ import com.example.calibretv.data.model.Book
 import com.example.calibretv.data.quote.QuoteCardGenerator
 import com.example.calibretv.data.server.QrCodeGenerator
 import com.example.calibretv.data.server.WifiImportServer
+import com.example.calibretv.data.storage.PreferencesManager
 import com.example.calibretv.theme.AccentGold
 import com.example.calibretv.theme.AntiqueIvory
 import com.example.calibretv.theme.BackgroundDark
+import com.example.calibretv.theme.InkPrimary
+import com.example.calibretv.theme.InkSecondary
 import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.TextMuted
@@ -81,6 +84,7 @@ fun QuoteCardModal(
     book: Book,
     repository: BookRepository,
     selectedQuote: String? = null,
+    isDarkTheme: Boolean = PreferencesManager(LocalContext.current).isDarkTheme(),
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -121,17 +125,24 @@ fun QuoteCardModal(
         QuoteCardGenerator.storeCard(cardId, stream.toByteArray())
 
         // 3. Generar código QR apuntando al preview de descarga móvil
-        val ip = wifiServer.getLocalIpAddress()
-        val previewUrl = "http://$ip:8080/quote-preview?cardId=$cardId"
+        if (!wifiServer.isRunning) wifiServer.startServer()
+        val previewUrl = wifiServer.buildUrl("/quote-preview?cardId=$cardId")
         qrBitmap = QrCodeGenerator.generateQrBitmap(previewUrl, 320, 320)
 
         closeFocusRequester.requestFocus()
     }
 
+    val modalBg = if (isDarkTheme) SurfaceContainer else Color(0xFFF7F5F0)
+    val cardBg = if (isDarkTheme) SurfaceContainerHigh else Color.White
+    val textPrimary = if (isDarkTheme) TextPrimary else InkPrimary
+    val textSecondary = if (isDarkTheme) TextMuted else InkSecondary
+    val badgeBg = if (isDarkTheme) SurfaceContainerHigh else Color(0xFFE2E7E2)
+    val badgeText = if (isDarkTheme) AntiqueIvory else InkPrimary
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.90f))
+            .background(Color.Black.copy(alpha = if (isDarkTheme) 0.90f else 0.65f))
             .clickable { onDismiss() }
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown && (event.key == Key.Back || event.key == Key.Escape)) {
@@ -147,8 +158,7 @@ fun QuoteCardModal(
                 .fillMaxHeight(0.86f)
                 .shadow(28.dp, RoundedCornerShape(16.dp))
                 .clip(RoundedCornerShape(16.dp))
-                .background(BackgroundDark)
-                .border(1.dp, AccentGold.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                .background(modalBg)
                 .clickable(enabled = false) {}
                 .padding(28.dp)
         ) {
@@ -179,13 +189,12 @@ fun QuoteCardModal(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(SurfaceContainerHigh)
-                            .border(1.dp, AccentGold.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            .background(badgeBg)
                             .padding(horizontal = 14.dp, vertical = 6.dp)
                     ) {
                         Text(
                             text = "1080 × 1920 PX",
-                            color = AntiqueIvory,
+                            color = badgeText,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
@@ -217,7 +226,6 @@ fun QuoteCardModal(
                                     .aspectRatio(9f / 16f)
                                     .shadow(16.dp, RoundedCornerShape(12.dp))
                                     .clip(RoundedCornerShape(12.dp))
-                                    .border(1.5.dp, AccentGold, RoundedCornerShape(12.dp))
                             ) {
                                 Image(
                                     bitmap = cardBitmap!!.asImageBitmap(),
@@ -232,12 +240,12 @@ fun QuoteCardModal(
                                     .fillMaxHeight(0.9f)
                                     .aspectRatio(9f / 16f)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(SurfaceContainer),
+                                    .background(cardBg),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = "Generando tarjeta...",
-                                    color = TextMuted,
+                                    color = textSecondary,
                                     fontSize = 14.sp
                                 )
                             }
@@ -249,9 +257,9 @@ fun QuoteCardModal(
                         modifier = Modifier
                             .weight(0.60f)
                             .fillMaxHeight()
+                            .shadow(if (isDarkTheme) 0.dp else 4.dp, RoundedCornerShape(14.dp))
                             .clip(RoundedCornerShape(14.dp))
-                            .background(SurfaceContainer)
-                            .border(1.dp, Color(0xFF2A2826), RoundedCornerShape(14.dp))
+                            .background(cardBg)
                             .padding(24.dp),
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -268,7 +276,7 @@ fun QuoteCardModal(
 
                         Text(
                             text = "Escanea el código QR para abrir y descargar la tarjeta en formato PNG de alta resolución sin cables.",
-                            color = TextMuted,
+                            color = textSecondary,
                             fontSize = 13.sp,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth(0.85f)
@@ -294,7 +302,7 @@ fun QuoteCardModal(
                                 modifier = Modifier
                                     .size(175.dp)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(SurfaceContainerHigh),
+                                    .background(if (isDarkTheme) SurfaceContainerHigh else Color(0xFFE8ECE8)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -321,7 +329,7 @@ fun QuoteCardModal(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Optimizado para Instagram Stories, WhatsApp Status y X",
-                                color = TextPrimary,
+                                color = textPrimary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -338,14 +346,23 @@ fun QuoteCardModal(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     var isCloseFocused by remember { mutableStateOf(false) }
+                    val closeBtnBg = if (isCloseFocused) AccentGold else (if (isDarkTheme) SurfaceContainerHigh else Color(0xFFE2E7E2))
+                    val closeBtnText = if (isCloseFocused) Color(0xFF111317) else (if (isDarkTheme) AntiqueIvory else InkPrimary)
+
                     Button(
                         onClick = onDismiss,
                         modifier = Modifier
                             .focusRequester(closeFocusRequester)
-                            .onFocusChanged { isCloseFocused = it.isFocused },
+                            .onFocusChanged { isCloseFocused = it.isFocused }
+                            .onKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown &&
+                                    (event.key == Key.DirectionUp || event.key == Key.DirectionDown)) {
+                                    true
+                                } else false
+                            },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isCloseFocused) AccentGold else SurfaceContainerHigh,
-                            contentColor = if (isCloseFocused) BackgroundDark else AntiqueIvory
+                            containerColor = closeBtnBg,
+                            contentColor = closeBtnText
                         ),
                         shape = RoundedCornerShape(24.dp)
                     ) {

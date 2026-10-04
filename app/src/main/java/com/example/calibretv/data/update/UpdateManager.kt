@@ -197,7 +197,16 @@ object UpdateManager {
             }
 
             destFile.setReadable(true, false)
-            Log.i(TAG, "APK descargado con éxito: ${destFile.absolutePath} (${destFile.length()} bytes)")
+
+            // 🔐 Verificación de integridad: paquete, versión y certificado de firma
+            val verifyError = verifyApk(context, destFile)
+            if (verifyError != null) {
+                Log.e(TAG, "APK rechazado: $verifyError")
+                destFile.delete()
+                return@withContext DownloadResult.Error(verifyError)
+            }
+
+            Log.i(TAG, "APK descargado y verificado: ${destFile.absolutePath} (${destFile.length()} bytes)")
             DownloadResult.Success(destFile)
         } catch (e: Exception) {
             Log.e(TAG, "Error in downloadApk: ${e.message}", e)
@@ -307,6 +316,68 @@ object UpdateManager {
         // Progreso final 100%
         onProgress(100, downloadedBytes, if (totalBytes > 0) totalBytes else downloadedBytes)
         return downloadedBytes > 1024L
+    }
+
+    /**
+     * Verifica que el APK descargado sea legítimo antes de instalarlo:
+     * 1. Mismo applicationId que la app instalada.
+     * 2. versionCode estrictamente mayor (evita downgrades).
+     * 3. Certificado de firma idéntico (SHA-256) al de la app instalada.
+     * @return null si es válido, o un mensaje de error legible.
+     */
+    @Suppress("DEPRECATION")
+    fun verifyApk(context: Context, apkFile: File): String? {
+        return try {
+            val pm = context.packageManager
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+                PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
+
+            val archiveInfo = pm.getPackageArchiveInfo(apkFile.absolutePath, flags)
+                ?: return "El archivo descargado no es un APK válido."
+            archiveInfo.applicationInfo?.let {
+                it.sourceDir = apkFile.absolutePath
+                it.publicSourceDir = apkFile.absolutePath
+            }
+
+            if (archiveInfo.packageName != context.packageName) {
+                return "El APK pertenece a otra aplicación (${archiveInfo.packageName})."
+            }
+
+            val (_, currentCode) = getCurrentVersion(context)
+            val newCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+                archiveInfo.longVersionCode else archiveInfo.versionCode.toLong()
+            if (newCode <= currentCode) {
+                return "La versión descargada ($newCode) no es más reciente que la instalada ($currentCode)."
+            }
+
+            val installedInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(flags.toLong()))
+            } else {
+                pm.getPackageInfo(context.packageName, flags)
+            }
+
+            val newCerts = signatureDigests(archiveInfo)
+            val installedCerts = signatureDigests(installedInfo)
+            if (newCerts.isEmpty() || newCerts != installedCerts) {
+                return "La firma del APK no coincide con la app instalada. Actualización bloqueada por seguridad."
+            }
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "verifyApk error: ${e.message}", e)
+            "No se pudo verificar la integridad del APK."
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun signatureDigests(info: android.content.pm.PackageInfo): Set<String> {
+        val sigs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val si = info.signingInfo ?: return emptySet()
+            if (si.hasMultipleSigners()) si.apkContentsSigners else si.signingCertificateHistory
+        } else {
+            info.signatures
+        } ?: return emptySet()
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        return sigs.map { sig -> md.digest(sig.toByteArray()).joinToString("") { "%02x".format(it) } }.toSet()
     }
 
     fun installApk(context: Context, apkFile: File) {

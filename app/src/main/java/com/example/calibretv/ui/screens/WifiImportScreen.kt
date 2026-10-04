@@ -90,7 +90,7 @@ fun WifiImportScreen(
         isServerRunning = success
         val ip = wifiServer.getLocalIpAddress()
         val port = wifiServer.activePort
-        serverUrl = "http://$ip:$port"
+        serverUrl = wifiServer.buildUrl("/")
         if (success) {
             qrBitmap = QrCodeGenerator.generateQrBitmap(serverUrl, 360, 360)
         }
@@ -190,7 +190,7 @@ fun WifiImportScreen(
                             isServerRunning = success
                             val ip = wifiServer.getLocalIpAddress()
                             val port = wifiServer.activePort
-                            serverUrl = "http://$ip:$port"
+                            serverUrl = wifiServer.buildUrl("/")
                             if (success) {
                                 qrBitmap = QrCodeGenerator.generateQrBitmap(serverUrl, 360, 360)
                             }

@@ -12,8 +12,8 @@ android {
         applicationId = "com.calibrotv.app"
         minSdk = 23
         targetSdk = 34
-        versionCode = 43
-        versionName = "3.29"
+        versionCode = 44
+        versionName = "3.30"
     }
 
     signingConfigs {
@@ -66,6 +66,10 @@ android {
 
 kotlin {
     jvmToolchain(17)
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {

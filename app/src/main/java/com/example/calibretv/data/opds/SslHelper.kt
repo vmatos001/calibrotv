@@ -35,8 +35,8 @@ object SslHelper {
             val addr = InetAddress.getByName(host)
             addr.isSiteLocalAddress || addr.isLoopbackAddress || addr.isLinkLocalAddress
         } catch (_: Exception) {
-            // Si no se puede resolver, asume que podría ser local (DuckDNS en LAN, etc.)
-            host.contains("local") || host.contains("home") || host.contains("duckdns")
+            // Seguro por defecto: si no resuelve, NO se omite la validación TLS (evita MITM en dominios públicos)
+            false
         }
     }
 

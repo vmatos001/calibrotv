@@ -62,9 +62,13 @@ import com.example.calibretv.data.model.Book
 import com.example.calibretv.data.server.QrCodeGenerator
 import com.example.calibretv.data.server.WifiImportServer
 import com.example.calibretv.data.storage.BookNoteEntity
+import com.example.calibretv.data.storage.PreferencesManager
 import com.example.calibretv.theme.AccentGold
 import com.example.calibretv.theme.AntiqueIvory
 import com.example.calibretv.theme.BackgroundDark
+import com.example.calibretv.theme.CyanElectric
+import com.example.calibretv.theme.InkPrimary
+import com.example.calibretv.theme.InkSecondary
 import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.SurfaceContainerHighest
@@ -85,6 +89,7 @@ import java.util.Locale
 fun NotesModal(
     book: Book,
     repository: BookRepository,
+    isDarkTheme: Boolean = PreferencesManager(LocalContext.current).isDarkTheme(),
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -105,8 +110,7 @@ fun NotesModal(
         if (!wifiServer.isRunning) {
             wifiServer.startServer(8080)
         }
-        val ip = wifiServer.getLocalIpAddress()
-        serverUrl = "http://$ip:8080/note?bookId=${book.id}&profileId=${activeProfile.id}"
+        serverUrl = wifiServer.buildUrl("/note?bookId=${book.id}&profileId=${activeProfile.id}")
         qrBitmap = QrCodeGenerator.generateQrBitmap(serverUrl, 320, 320)
 
         notesList = repository.getNotes(book.id, activeProfile.id)
@@ -122,11 +126,16 @@ fun NotesModal(
         }
     }
 
+    val modalBg = if (isDarkTheme) SurfaceContainer else Color(0xFFF7F5F0)
+    val cardBg = if (isDarkTheme) SurfaceContainerHigh else Color.White
+    val textPrimary = if (isDarkTheme) TextPrimary else InkPrimary
+    val textSecondary = if (isDarkTheme) TextMuted else InkSecondary
+
     // Overlay oscurecido modal
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.88f))
+            .background(Color.Black.copy(alpha = if (isDarkTheme) 0.88f else 0.65f))
             .clickable { onDismiss() }
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown && (event.key == Key.Back || event.key == Key.Escape)) {
@@ -142,8 +151,7 @@ fun NotesModal(
                 .fillMaxHeight(0.84f)
                 .shadow(24.dp, RoundedCornerShape(16.dp))
                 .clip(RoundedCornerShape(16.dp))
-                .background(BackgroundDark)
-                .border(1.dp, AccentGold.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                .background(modalBg)
                 .clickable(enabled = false) {} // Evitar dismiss al hacer clic dentro
                 .padding(28.dp)
         ) {
@@ -174,7 +182,7 @@ fun NotesModal(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "${book.title} — Lector: ${activeProfile.name}",
-                            color = TextMuted,
+                            color = textSecondary,
                             fontSize = 14.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -185,13 +193,12 @@ fun NotesModal(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(SurfaceContainerHigh)
-                            .border(1.dp, AccentGold.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            .background(if (isDarkTheme) SurfaceContainerHigh else Color(0xFFE2E7E2))
                             .padding(horizontal = 14.dp, vertical = 6.dp)
                     ) {
                         Text(
                             text = "${notesList.size} ${if (notesList.size == 1) "nota" else "notas"}",
-                            color = AntiqueIvory,
+                            color = textPrimary,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -212,9 +219,9 @@ fun NotesModal(
                         modifier = Modifier
                             .weight(0.42f)
                             .fillMaxHeight()
+                            .shadow(if (isDarkTheme) 0.dp else 4.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.05f))
                             .clip(RoundedCornerShape(12.dp))
-                            .background(SurfaceContainer)
-                            .border(1.dp, Color(0xFF2A2826), RoundedCornerShape(12.dp))
+                            .background(cardBg)
                             .padding(20.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -240,7 +247,7 @@ fun NotesModal(
                                     modifier = Modifier
                                         .size(190.dp)
                                         .clip(RoundedCornerShape(8.dp))
-                                        .background(SurfaceContainerHigh),
+                                        .background(if (isDarkTheme) SurfaceContainerHigh else Color(0xFFF1F5F1)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
@@ -263,7 +270,7 @@ fun NotesModal(
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "Escanea el código con tu teléfono para escribir cómodamente con teclado táctil.",
-                                color = TextMuted,
+                                color = textSecondary,
                                 fontSize = 12.sp,
                                 lineHeight = 16.sp,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -276,9 +283,9 @@ fun NotesModal(
                         modifier = Modifier
                             .weight(0.58f)
                             .fillMaxHeight()
+                            .shadow(if (isDarkTheme) 0.dp else 4.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.05f))
                             .clip(RoundedCornerShape(12.dp))
-                            .background(SurfaceContainer)
-                            .border(1.dp, Color(0xFF2A2826), RoundedCornerShape(12.dp))
+                            .background(cardBg)
                             .padding(16.dp)
                     ) {
                         if (notesList.isEmpty()) {
@@ -290,20 +297,20 @@ fun NotesModal(
                                 Icon(
                                     imageVector = Icons.Filled.Edit,
                                     contentDescription = null,
-                                    tint = TextMuted.copy(alpha = 0.5f),
+                                    tint = textSecondary.copy(alpha = 0.5f),
                                     modifier = Modifier.size(54.dp)
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
                                     text = "Aún no hay anotaciones para este libro",
-                                    color = TextPrimary,
+                                    color = textPrimary,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Medium
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     text = "Escanea el código QR de la izquierda para guardar tu primera cita o reflexión.",
-                                    color = TextMuted,
+                                    color = textSecondary,
                                     fontSize = 12.sp,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
@@ -315,14 +322,22 @@ fun NotesModal(
                             ) {
                                 items(notesList, key = { it.id }) { note ->
                                     var isFocused by remember { mutableStateOf(false) }
+                                    val itemBg = when {
+                                        isFocused -> if (isDarkTheme) SurfaceContainerHighest else Color.White
+                                        else -> if (isDarkTheme) SurfaceContainerHigh else Color(0xFFF1F5F1)
+                                    }
+                                    val focusBorder = if (isFocused) {
+                                        if (isDarkTheme) AccentGold else CyanElectric
+                                    } else Color.Transparent
+
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(if (isFocused) SurfaceContainerHighest else SurfaceContainerHigh)
+                                            .background(itemBg)
                                             .border(
-                                                width = if (isFocused) 1.5.dp else 1.dp,
-                                                color = if (isFocused) AccentGold else Color(0xFF33302E),
+                                                width = if (isFocused) 1.5.dp else 0.dp,
+                                                color = focusBorder,
                                                 shape = RoundedCornerShape(8.dp)
                                             )
                                             .focusable()
@@ -354,7 +369,7 @@ fun NotesModal(
                                                     Icon(
                                                         imageVector = Icons.Filled.Delete,
                                                         contentDescription = "Eliminar nota",
-                                                        tint = TextMuted,
+                                                        tint = textSecondary,
                                                         modifier = Modifier.size(16.dp)
                                                     )
                                                 }
@@ -364,7 +379,7 @@ fun NotesModal(
 
                                             Text(
                                                 text = note.noteText,
-                                                color = AntiqueIvory,
+                                                color = textPrimary,
                                                 fontSize = 14.sp,
                                                 lineHeight = 20.sp,
                                                 fontFamily = FontFamily.Serif
@@ -386,14 +401,27 @@ fun NotesModal(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     var isCloseFocused by remember { mutableStateOf(false) }
+                    val closeBtnBg = if (isCloseFocused) {
+                        AccentGold
+                    } else (if (isDarkTheme) SurfaceContainerHigh else Color(0xFFE2E7E2))
+                    val closeBtnText = if (isCloseFocused) {
+                        Color(0xFF111317)
+                    } else (if (isDarkTheme) AntiqueIvory else InkPrimary)
+
                     Button(
                         onClick = onDismiss,
                         modifier = Modifier
                             .focusRequester(closeFocusRequester)
-                            .onFocusChanged { isCloseFocused = it.isFocused },
+                            .onFocusChanged { isCloseFocused = it.isFocused }
+                            .onKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown &&
+                                    (event.key == Key.DirectionUp || event.key == Key.DirectionDown)) {
+                                    true
+                                } else false
+                            },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isCloseFocused) AccentGold else SurfaceContainerHigh,
-                            contentColor = if (isCloseFocused) BackgroundDark else AntiqueIvory
+                            containerColor = closeBtnBg,
+                            contentColor = closeBtnText
                         ),
                         shape = RoundedCornerShape(24.dp)
                     ) {

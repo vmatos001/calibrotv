@@ -112,7 +112,7 @@ interface BookNoteDao {
 @Database(
     entities = [BookEntity::class, ReadingProgressEntity::class, FavoriteEntity::class, BookNoteEntity::class],
     version = 3,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
@@ -123,13 +123,31 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
 
+        /**
+         * Migraciones explícitas. Al subir `version`, añade aquí una Migration(n, n+1)
+         * para conservar progreso de lectura, favoritos y notas de los usuarios.
+         * Ejemplo:
+         *   val MIGRATION_3_4 = object : Migration(3, 4) {
+         *       override fun migrate(db: SupportSQLiteDatabase) {
+         *           db.execSQL("ALTER TABLE books ADD COLUMN language TEXT NOT NULL DEFAULT ''")
+         *       }
+         *   }
+         */
+        private val MIGRATIONS: Array<androidx.room.migration.Migration> = arrayOf()
+
         fun getInstance(context: Context): AppDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "calibrotv.db"
-                ).fallbackToDestructiveMigration().build().also { INSTANCE = it }
+                )
+                    .addMigrations(*MIGRATIONS)
+                    // Solo se recrea la BD desde esquemas antiguos (v1, v2) o en downgrade.
+                    // Desde v3 en adelante, cualquier cambio de esquema exige una Migration explícita.
+                    .fallbackToDestructiveMigrationFrom(true, 1, 2)
+                    .fallbackToDestructiveMigrationOnDowngrade(true)
+                    .build().also { INSTANCE = it }
             }
     }
 }

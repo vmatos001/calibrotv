@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -47,12 +48,16 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.calibretv.data.BookRepository
 import com.example.calibretv.data.quiz.QuizRepository
+import com.example.calibretv.data.storage.PreferencesManager
 import com.example.calibretv.theme.AccentGold
+import com.example.calibretv.theme.InkPrimary
+import com.example.calibretv.theme.InkSecondary
 import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.SurfaceRaised
@@ -64,6 +69,7 @@ import kotlinx.coroutines.delay
 fun QuizDialog(
     bookTitle: String,
     repository: BookRepository,
+    isDarkTheme: Boolean = PreferencesManager(LocalContext.current).isDarkTheme(),
     onDismiss: () -> Unit
 ) {
     val quiz = remember(bookTitle) { QuizRepository.getQuizForBook(bookTitle) }
@@ -88,19 +94,26 @@ fun QuizDialog(
         } catch (_: Exception) {}
     }
 
+    val modalBg = if (isDarkTheme) SurfaceContainer else Color(0xFFF7F5F0)
+    val textPrimary = if (isDarkTheme) TextPrimary else InkPrimary
+    val textSecondary = if (isDarkTheme) TextMuted else InkSecondary
+    val optionUnselectedBg = if (isDarkTheme) SurfaceContainerHigh else Color.White
+    val optionUnselectedBorder = if (isDarkTheme) Color(0xFF2C2825) else Color(0xFFE2E7E2)
+    val explanationBg = if (isDarkTheme) Color(0xFF201D1A) else Color(0xFFEAEFEA)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.88f))
+            .background(Color.Black.copy(alpha = if (isDarkTheme) 0.88f else 0.65f))
             .clickable { onDismiss() },
         contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
                 .width(680.dp)
+                .shadow(24.dp, RoundedCornerShape(24.dp))
                 .clip(RoundedCornerShape(24.dp))
-                .background(SurfaceContainer)
-                .border(1.5.dp, AccentGold.copy(alpha = 0.6f), RoundedCornerShape(24.dp))
+                .background(modalBg)
                 .clickable(enabled = false) {}
                 .padding(32.dp),
             contentAlignment = Alignment.Center
@@ -130,14 +143,14 @@ fun QuizDialog(
 
                     Text(
                         text = if (correctAnswersCount >= 2) "¡Misión Cumplida!" else "¡Buen Intento!",
-                        color = TextPrimary,
+                        color = textPrimary,
                         fontSize = 26.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
 
                     Text(
                         text = "Acertaste $correctAnswersCount de ${quiz.questions.size} preguntas sobre «$bookTitle».",
-                        color = TextMuted,
+                        color = textSecondary,
                         fontSize = 15.sp
                     )
 
@@ -168,10 +181,10 @@ fun QuizDialog(
                         modifier = Modifier
                             .scale(if (isCloseFocused) 1.08f else 1.0f)
                             .clip(RoundedCornerShape(14.dp))
-                            .background(if (isCloseFocused) AccentGold else SurfaceRaised)
+                            .background(if (isCloseFocused) AccentGold else (if (isDarkTheme) SurfaceRaised else Color.White))
                             .border(
                                 width = if (isCloseFocused) 2.dp else 1.dp,
-                                color = if (isCloseFocused) Color.White else Color(0xFF383842),
+                                color = if (isCloseFocused) Color.White else (if (isDarkTheme) Color(0xFF383842) else Color(0xFFD4D8D4)),
                                 shape = RoundedCornerShape(14.dp)
                             )
                             .onFocusChanged { isCloseFocused = it.isFocused }
@@ -190,7 +203,7 @@ fun QuizDialog(
                     ) {
                         Text(
                             text = "Continuar Leyendo",
-                            color = if (isCloseFocused) Color(0xFF0C0A09) else TextPrimary,
+                            color = if (isCloseFocused) Color(0xFF0C0A09) else textPrimary,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -262,7 +275,7 @@ fun QuizDialog(
                     // Question text
                     Text(
                         text = currentQ.question,
-                        color = TextPrimary,
+                        color = textPrimary,
                         fontSize = 19.sp,
                         fontWeight = FontWeight.Bold,
                         lineHeight = 26.sp,
@@ -283,15 +296,15 @@ fun QuizDialog(
                             val optionBg = when {
                                 isAnswerSubmitted && isCorrect -> Color(0xFF1B4D2E)
                                 isAnswerSubmitted && isSelected && !isCorrect -> Color(0xFF5A1E1E)
-                                isFocused -> SurfaceRaised
-                                else -> SurfaceContainerHigh
+                                isFocused -> if (isDarkTheme) SurfaceRaised else Color.White
+                                else -> optionUnselectedBg
                             }
 
                             val optionBorder = when {
                                 isAnswerSubmitted && isCorrect -> Color(0xFF4CAF50)
                                 isAnswerSubmitted && isSelected && !isCorrect -> Color(0xFFEF5350)
                                 isFocused -> AccentGold
-                                else -> Color(0xFF2C2825)
+                                else -> optionUnselectedBorder
                             }
 
                             val rowModifier = Modifier
@@ -346,7 +359,7 @@ fun QuizDialog(
 
                                 Text(
                                     text = optionText,
-                                    color = TextPrimary,
+                                    color = if (isAnswerSubmitted && (isCorrect || isSelected)) Color.White else textPrimary,
                                     fontSize = 15.sp,
                                     modifier = Modifier.weight(1f)
                                 )
@@ -377,12 +390,12 @@ fun QuizDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFF201D1A))
+                                .background(explanationBg)
                                 .padding(12.dp)
                         ) {
                             Text(
                                 text = currentQ.explanation,
-                                color = TextMuted,
+                                color = textSecondary,
                                 fontSize = 13.sp,
                                 lineHeight = 18.sp
                             )
@@ -393,10 +406,10 @@ fun QuizDialog(
                                     .align(Alignment.End)
                                     .scale(if (isNextFocused) 1.08f else 1.0f)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(if (isNextFocused) AccentGold else SurfaceRaised)
+                                    .background(if (isNextFocused) AccentGold else (if (isDarkTheme) SurfaceRaised else Color.White))
                                     .border(
                                         width = if (isNextFocused) 2.dp else 1.dp,
-                                        color = if (isNextFocused) Color.White else Color(0xFF383842),
+                                        color = if (isNextFocused) Color.White else (if (isDarkTheme) Color(0xFF383842) else Color(0xFFD4D8D4)),
                                         shape = RoundedCornerShape(10.dp)
                                     )
                                     .onFocusChanged { isNextFocused = it.isFocused }
@@ -438,7 +451,7 @@ fun QuizDialog(
                                 val isLast = currentQuestionIndex + 1 >= quiz.questions.size
                                 Text(
                                     text = if (isLast) "Ver Resultado" else "Siguiente Pregunta ➔",
-                                    color = if (isNextFocused) Color(0xFF0C0A09) else TextPrimary,
+                                    color = if (isNextFocused) Color(0xFF0C0A09) else textPrimary,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold
                                 )

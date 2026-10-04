@@ -428,6 +428,7 @@ fun HomeScreen(
 
                                 TvProfilePill(
                                     profile = activeProfile,
+                                    isDarkTheme = isDarkTheme,
                                     onOpenProfileSwitcher = { showUserProfilesModal = true },
                                     onOpenOpds = onNavigateToOpds,
                                     onOpenWifiImport = onNavigateToWifiImport,
