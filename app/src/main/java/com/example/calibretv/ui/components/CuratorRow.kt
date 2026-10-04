@@ -91,13 +91,15 @@ fun CuratorRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Avatar circular del arquetipo con aro dorado
+                // Avatar circular del arquetipo:
+                // - Versión oscura: quitar aro naranja y fondo blanco (conservando icono naranja) -> fondo blanco, sin borde
+                // - Versión light: quitar borde naranja, conservar fondo oscuro y el icono naranja
+                val avatarBg = if (isDarkTheme) Color.White else Color(0xFF202020)
                 Box(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(SurfaceContainerHigh)
-                        .border(1.5.dp, AccentGold, CircleShape),
+                        .background(avatarBg),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(

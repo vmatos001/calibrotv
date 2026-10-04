@@ -59,6 +59,7 @@ import com.example.calibretv.data.server.QrCodeGenerator
 import com.example.calibretv.theme.AccentGold
 import com.example.calibretv.theme.AntiqueIvory
 import com.example.calibretv.theme.BackgroundDark
+import com.example.calibretv.theme.InkPrimary
 import com.example.calibretv.theme.StarGold
 import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceContainerHigh
@@ -72,6 +73,7 @@ fun CuratedBookModal(
     book: CuratedBook,
     isDownloaded: Boolean,
     isDownloading: Boolean,
+    isDarkTheme: Boolean = true,
     onDownload: () -> Unit,
     onRead: () -> Unit,
     onDismiss: () -> Unit
@@ -92,7 +94,7 @@ fun CuratedBookModal(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.88f))
+            .background(Color.Black.copy(alpha = if (isDarkTheme) 0.88f else 0.65f))
             .clickable { onDismiss() }
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown && (event.key == Key.Back || event.key == Key.Escape)) {
@@ -102,13 +104,17 @@ fun CuratedBookModal(
             },
         contentAlignment = Alignment.Center
     ) {
+        // Tarjeta principal de descripción: Fondo oscuro en Dark Mode, o color papel claro en Light Mode
+        val modalBg = if (isDarkTheme) SurfaceContainer else Color(0xFFF7F5F0) // Papel claro suave
+        val modalBorder = if (isDarkTheme) AccentGold.copy(alpha = 0.5f) else Color(0xFFE2DDD5)
+
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.86f)
                 .fillMaxHeight(0.82f)
                 .clip(RoundedCornerShape(18.dp))
-                .background(SurfaceContainer)
-                .border(1.5.dp, AccentGold.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
+                .background(modalBg)
+                .border(1.5.dp, modalBorder, RoundedCornerShape(18.dp))
                 .clickable(enabled = false) {}
                 .padding(28.dp)
         ) {
@@ -139,14 +145,15 @@ fun CuratedBookModal(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            val categoryBg = if (isDarkTheme) SurfaceContainerHigh else Color(0xFFE8E3D8)
                             Box(
                                 modifier = Modifier
-                                    .background(SurfaceContainerHigh, RoundedCornerShape(6.dp))
+                                    .background(categoryBg, RoundedCornerShape(6.dp))
                                     .padding(horizontal = 8.dp, vertical = 3.dp)
                             ) {
                                 Text(
                                     text = book.category.uppercase(),
-                                    color = AccentGold,
+                                    color = if (isDarkTheme) AccentGold else Color(0xFFB45309),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -154,19 +161,19 @@ fun CuratedBookModal(
                             if (book.year != null) {
                                 Text(
                                     text = book.year,
-                                    color = TextMuted,
+                                    color = if (isDarkTheme) TextMuted else Color(0xFF78716C),
                                     fontSize = 11.sp
                                 )
                             }
                             if (book.isPublicDomain) {
                                 Box(
                                     modifier = Modifier
-                                        .background(Color(0xFF1E3A2F), RoundedCornerShape(6.dp))
+                                        .background(if (isDarkTheme) Color(0xFF1E3A2F) else Color(0xFFDCFCE7), RoundedCornerShape(6.dp))
                                         .padding(horizontal = 8.dp, vertical = 3.dp)
-                                ) {
+                                    ) {
                                     Text(
                                         text = "LIBRE ACCESO",
-                                        color = Color(0xFF34D399),
+                                        color = if (isDarkTheme) Color(0xFF34D399) else Color(0xFF15803D),
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.ExtraBold
                                     )
@@ -177,7 +184,7 @@ fun CuratedBookModal(
                         // Título
                         Text(
                             text = book.title,
-                            color = AntiqueIvory,
+                            color = if (isDarkTheme) AntiqueIvory else InkPrimary,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 2,
@@ -187,7 +194,7 @@ fun CuratedBookModal(
                         // Autor
                         Text(
                             text = book.author,
-                            color = AccentGold,
+                            color = if (isDarkTheme) AccentGold else Color(0xFFB45309),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -206,14 +213,18 @@ fun CuratedBookModal(
                             )
                             Text(
                                 text = "${book.rating}",
-                                color = TextPrimary,
+                                color = if (isDarkTheme) TextPrimary else InkPrimary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
-                            Text(text = "•", color = TextMuted, fontSize = 12.sp)
+                            Text(text = "•", color = if (isDarkTheme) TextMuted else Color(0xFF78716C), fontSize = 12.sp)
                             Text(
                                 text = book.approximatePrice ?: "Consultar",
-                                color = if (book.isPublicDomain) Color(0xFF34D399) else AccentGold,
+                                color = if (book.isPublicDomain) {
+                                    if (isDarkTheme) Color(0xFF34D399) else Color(0xFF15803D)
+                                } else {
+                                    if (isDarkTheme) AccentGold else Color(0xFFB45309)
+                                },
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -224,13 +235,13 @@ fun CuratedBookModal(
                         // Sinopsis
                         Text(
                             text = "Sinopsis:",
-                            color = TextMuted,
+                            color = if (isDarkTheme) TextMuted else Color(0xFF57534E),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = book.summary,
-                            color = TextSecondary,
+                            color = if (isDarkTheme) TextSecondary else Color(0xFF44403C),
                             fontSize = 12.5.sp,
                             lineHeight = 18.sp,
                             maxLines = 5,
@@ -249,6 +260,7 @@ fun CuratedBookModal(
                                     title = "Leer en Pliego Dual",
                                     icon = Icons.Default.MenuBook,
                                     isPrimary = true,
+                                    isDarkTheme = isDarkTheme,
                                     focusRequester = actionFocusRequester,
                                     onClick = onRead
                                 )
@@ -257,6 +269,7 @@ fun CuratedBookModal(
                                     title = if (isDownloading) "Descargando..." else "Descargar Gratis a la TV",
                                     icon = Icons.Default.Download,
                                     isPrimary = true,
+                                    isDarkTheme = isDarkTheme,
                                     isLoading = isDownloading,
                                     focusRequester = actionFocusRequester,
                                     onClick = {
@@ -270,6 +283,7 @@ fun CuratedBookModal(
                             title = "Volver",
                             icon = Icons.AutoMirrored.Filled.ArrowBack,
                             isPrimary = !book.isPublicDomain,
+                            isDarkTheme = isDarkTheme,
                             focusRequester = if (!book.isPublicDomain) actionFocusRequester else null,
                             onClick = onDismiss
                         )
@@ -277,21 +291,25 @@ fun CuratedBookModal(
                 }
 
                 // Lado derecho: Si es comercial, Código QR dinámico para comprar con el móvil
+                // En modo light, esta tarjeta interna es blanca pura. En modo oscuro, mantiene SurfaceContainerHigh
                 if (!book.isPublicDomain) {
+                    val qrCardBg = if (isDarkTheme) SurfaceContainerHigh else Color.White
+                    val qrCardBorder = if (isDarkTheme) Color(0xFF423419) else Color(0xFFE2DDD5)
+
                     Column(
                         modifier = Modifier
                             .width(220.dp)
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(SurfaceContainerHigh)
-                            .border(1.dp, Color(0xFF423419), RoundedCornerShape(12.dp))
+                            .background(qrCardBg)
+                            .border(1.dp, qrCardBorder, RoundedCornerShape(12.dp))
                             .padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
                         Text(
                             text = "COMPRA OFICIAL",
-                            color = AccentGold,
+                            color = if (isDarkTheme) AccentGold else Color(0xFFB45309),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.ExtraBold,
                             letterSpacing = 1.sp
@@ -319,7 +337,7 @@ fun CuratedBookModal(
 
                         Text(
                             text = "📱 Escanea con tu móvil para adquirir el libro en la librería oficial.",
-                            color = TextMuted,
+                            color = if (isDarkTheme) TextMuted else Color(0xFF78716C),
                             fontSize = 10.5.sp,
                             lineHeight = 14.sp
                         )
@@ -335,11 +353,30 @@ private fun ModalActionButton(
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     isPrimary: Boolean,
+    isDarkTheme: Boolean = true,
     isLoading: Boolean = false,
     focusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+
+    val unfocusedBg = if (isDarkTheme) {
+        if (isPrimary) Color(0xFF423419) else SurfaceContainerHighest
+    } else {
+        if (isPrimary) Color(0xFF111317) else Color(0xFFE5E0D8)
+    }
+
+    val unfocusedBorder = if (isDarkTheme) {
+        Color(0xFF453F39)
+    } else {
+        if (isPrimary) Color(0xFF111317) else Color(0xFFD6D0C7)
+    }
+
+    val unfocusedTextColor = if (isDarkTheme) {
+        if (isPrimary) AccentGold else TextPrimary
+    } else {
+        if (isPrimary) Color.White else InkPrimary
+    }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -347,16 +384,10 @@ private fun ModalActionButton(
         modifier = Modifier
             .scale(if (isFocused) 1.05f else 1.0f)
             .clip(RoundedCornerShape(10.dp))
-            .background(
-                when {
-                    isFocused -> AccentGold
-                    isPrimary -> Color(0xFF423419)
-                    else -> SurfaceContainerHighest
-                }
-            )
+            .background(if (isFocused) AccentGold else unfocusedBg)
             .border(
                 width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) AccentGold else Color(0xFF453F39),
+                color = if (isFocused) AccentGold else unfocusedBorder,
                 shape = RoundedCornerShape(10.dp)
             )
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
@@ -374,7 +405,7 @@ private fun ModalActionButton(
     ) {
         if (isLoading) {
             CircularProgressIndicator(
-                color = if (isFocused) BackgroundDark else AccentGold,
+                color = if (isFocused) BackgroundDark else unfocusedTextColor,
                 modifier = Modifier.size(16.dp),
                 strokeWidth = 2.dp
             )
@@ -382,13 +413,13 @@ private fun ModalActionButton(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isFocused) BackgroundDark else if (isPrimary) AccentGold else TextPrimary,
+                tint = if (isFocused) BackgroundDark else unfocusedTextColor,
                 modifier = Modifier.size(16.dp)
             )
         }
         Text(
             text = title,
-            color = if (isFocused) BackgroundDark else if (isPrimary) AccentGold else TextPrimary,
+            color = if (isFocused) BackgroundDark else unfocusedTextColor,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
         )

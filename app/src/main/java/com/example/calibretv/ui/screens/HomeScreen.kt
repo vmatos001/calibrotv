@@ -833,6 +833,7 @@ fun HomeScreen(
                 book = curatedBook,
                 isDownloaded = isDownloaded,
                 isDownloading = isDownloadingCuratedBook,
+                isDarkTheme = isDarkTheme,
                 onDownload = {
                     isDownloadingCuratedBook = true
                     coroutineScope.launch {
