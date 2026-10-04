@@ -335,7 +335,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(verticalScrollState)
-                            .padding(bottom = 60.dp),
+                            .padding(top = 12.dp, bottom = 60.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         // ==========================================
@@ -344,8 +344,8 @@ fun HomeScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(210.dp)
-                                .padding(horizontal = 28.dp, vertical = 6.dp)
+                                .height(232.dp)
+                                .padding(horizontal = 28.dp)
                                 .clip(RoundedCornerShape(26.dp))
                                 .background(Color(0xFF12141A))
                                 .shadow(
@@ -1562,7 +1562,7 @@ private fun HomeHeroBanner(
                 Text(
                     text = "★ BESTSELLER DEL MES",
                     color = AmberWarm,
-                    fontSize = 9.sp,
+                    fontSize = 9.5.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 0.8.sp
                 )
@@ -1574,7 +1574,7 @@ private fun HomeHeroBanner(
             Text(
                 text = heroBanner.title,
                 color = Color.White,
-                fontSize = 20.sp,
+                fontSize = 21.sp,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.3.sp,
@@ -1586,7 +1586,7 @@ private fun HomeHeroBanner(
             Text(
                 text = heroBanner.author.ifBlank { "Cixin Liu" },
                 color = AmberWarm,
-                fontSize = 12.sp,
+                fontSize = 12.5.sp,
                 fontWeight = FontWeight.SemiBold
             )
 
@@ -1596,7 +1596,7 @@ private fun HomeHeroBanner(
             Text(
                 text = "“${heroBanner.tagline.ifBlank { heroBanner.synopsis }}”",
                 color = Color(0xFFCBD5E1),
-                fontSize = 10.5.sp,
+                fontSize = 11.sp,
                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -1608,8 +1608,8 @@ private fun HomeHeroBanner(
             Text(
                 text = heroBanner.synopsis.ifBlank { heroBanner.tagline },
                 color = Color(0xFF94A3B8),
-                fontSize = 10.sp,
-                lineHeight = 14.sp,
+                fontSize = 10.5.sp,
+                lineHeight = 14.5.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1651,7 +1651,7 @@ private fun HomeHeroBanner(
                     }
                     .focusable()
                     .clickable { onReadSample() }
-                    .padding(horizontal = 20.dp, vertical = 9.dp),
+                    .padding(horizontal = 22.dp, vertical = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
@@ -1662,19 +1662,19 @@ private fun HomeHeroBanner(
                         imageVector = Icons.Default.MenuBook,
                         contentDescription = null,
                         tint = Color(0xFF111317),
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                     Text(
                         text = "Leer Muestra EPUB (Capítulo 1)",
                         color = Color(0xFF111317),
-                        fontSize = 12.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Icon(
                         imageVector = Icons.Default.ArrowForward,
                         contentDescription = null,
                         tint = Color(0xFF111317),
-                        modifier = Modifier.size(13.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                 }
             }
