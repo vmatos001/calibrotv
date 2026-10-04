@@ -332,36 +332,15 @@ fun LibraryGridScreen(
     val screenBg = if (isDarkTheme) BackgroundDark else CanvasBackgroundLight
 
     CalibreTVTheme(isDarkTheme = isDarkTheme) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(screenBg)
         ) {
-            // Rail de Navegación Lateral (Letra A: 68dp, Letra B al desplegar: 215dp)
-            TvSidebar(
-                currentTab = TvNavTab.BIBLIOTECA,
-                isDarkTheme = isDarkTheme,
-                onToggleTheme = {
-                    val newTheme = !isDarkTheme
-                    isDarkTheme = newTheme
-                    prefsManager.setDarkTheme(newTheme)
-                },
-                focusRequester = sidebarFocusRequester,
-                onTabSelected = { tab ->
-                    when (tab) {
-                        TvNavTab.HOME -> onNavigateToHome()
-                        TvNavTab.BIBLIOTECA -> {}
-                        TvNavTab.TUS_LIBROS -> onNavigateToYourBooks()
-                        TvNavTab.LECTOR_3D -> onNavigateToReader()
-                        TvNavTab.AJUSTES -> onNavigateToSettings()
-                    }
-                }
-            )
-
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
+                    .fillMaxSize()
+                    .padding(start = 68.dp)
             ) {
                 Column(modifier = Modifier.fillMaxSize().background(screenBg)) {
                     // Header Bar
@@ -696,6 +675,28 @@ fun LibraryGridScreen(
                 }
             }
         }
+
+        // Rail de Navegación Lateral Flotante (Overlay)
+        TvSidebar(
+            modifier = Modifier.align(Alignment.CenterStart),
+            currentTab = TvNavTab.BIBLIOTECA,
+            isDarkTheme = isDarkTheme,
+            onToggleTheme = {
+                val newTheme = !isDarkTheme
+                isDarkTheme = newTheme
+                prefsManager.setDarkTheme(newTheme)
+            },
+            focusRequester = sidebarFocusRequester,
+            onTabSelected = { tab ->
+                when (tab) {
+                    TvNavTab.HOME -> onNavigateToHome()
+                    TvNavTab.BIBLIOTECA -> {}
+                    TvNavTab.TUS_LIBROS -> onNavigateToYourBooks()
+                    TvNavTab.LECTOR_3D -> onNavigateToReader()
+                    TvNavTab.AJUSTES -> onNavigateToSettings()
+                }
+            }
+        )
     }
 }
 }

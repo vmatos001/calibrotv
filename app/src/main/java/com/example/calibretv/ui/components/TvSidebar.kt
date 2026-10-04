@@ -93,27 +93,22 @@ fun TvSidebar(
 
     Box(
         modifier = modifier
-            .width(68.dp)
+            .width(sidebarWidth)
             .fillMaxHeight()
+            .padding(vertical = 12.dp, horizontal = 6.dp)
+            .zIndex(100f)
+            .shadow(
+                elevation = if (isExpanded) 24.dp else 16.dp,
+                shape = RoundedCornerShape(22.dp),
+                spotColor = if (isDarkTheme) Color.Black.copy(alpha = 0.35f) else Color.Black
+            )
+            .clip(RoundedCornerShape(22.dp))
+            .background(sidebarBg)
+            .border(1.dp, sidebarBorder, RoundedCornerShape(22.dp))
+            .onFocusChanged { isSidebarFocused = it.hasFocus }
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .width(sidebarWidth)
-                .fillMaxHeight()
-                .padding(vertical = 12.dp, horizontal = 6.dp)
-                .zIndex(100f)
-                .shadow(
-                    elevation = if (isExpanded) 24.dp else 16.dp,
-                    shape = RoundedCornerShape(22.dp),
-                    spotColor = if (isDarkTheme) Color.Black.copy(alpha = 0.35f) else Color.Black
-                )
-                .clip(RoundedCornerShape(22.dp))
-                .background(sidebarBg)
-                .border(1.dp, sidebarBorder, RoundedCornerShape(22.dp))
-                .onFocusChanged { isSidebarFocused = it.hasFocus }
-        ) {
-            Column(
-                modifier = Modifier
                     .fillMaxHeight()
                     .padding(vertical = 18.dp, horizontal = if (isExpanded) 12.dp else 8.dp),
                 horizontalAlignment = if (isExpanded) Alignment.Start else Alignment.CenterHorizontally,
@@ -236,7 +231,6 @@ fun TvSidebar(
             }
         }
     }
-}
 }
 
 @Composable

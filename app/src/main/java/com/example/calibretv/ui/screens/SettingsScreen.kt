@@ -185,30 +185,22 @@ fun SettingsScreen(
     val sidebarFocusRequester = remember { FocusRequester() }
     val screenBg = if (isDarkTheme) BackgroundDark else CanvasBackgroundLight
 
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(screenBg)
     ) {
-        TvSidebar(
-            currentTab = TvNavTab.AJUSTES,
-            onTabSelected = onTabSelected,
-            isDarkTheme = isDarkTheme,
-            onToggleTheme = {
-                val newTheme = !isDarkTheme
-                isDarkTheme = newTheme
-                scope.launch { prefs.setDarkTheme(newTheme) }
-            },
-            focusRequester = sidebarFocusRequester
-        )
-
-        Column(
+        Box(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .verticalScroll(scrollState)
-                .padding(horizontal = 36.dp, vertical = 16.dp)
+                .fillMaxSize()
+                .padding(start = 68.dp)
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 36.dp, vertical = 16.dp)
+            ) {
             // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -893,6 +885,21 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+        // Rail de Navegación Lateral Flotante (Overlay)
+        TvSidebar(
+            modifier = Modifier.align(Alignment.CenterStart),
+            currentTab = TvNavTab.AJUSTES,
+            onTabSelected = onTabSelected,
+            isDarkTheme = isDarkTheme,
+            onToggleTheme = {
+                val newTheme = !isDarkTheme
+                isDarkTheme = newTheme
+                scope.launch { prefs.setDarkTheme(newTheme) }
+            },
+            focusRequester = sidebarFocusRequester
+        )
     }
 
     if (showUserProfilesModal) {

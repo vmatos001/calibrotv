@@ -170,36 +170,20 @@ fun YourBooksScreen(
         onNavigateToHome()
     }
 
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(screenBg)
     ) {
-        TvSidebar(
-            currentTab = TvNavTab.TUS_LIBROS,
-            onTabSelected = { tab ->
-                when (tab) {
-                    TvNavTab.HOME -> onNavigateToHome()
-                    TvNavTab.BIBLIOTECA -> onNavigateToLibrary()
-                    TvNavTab.TUS_LIBROS -> {}
-                    TvNavTab.LECTOR_3D -> onNavigateToReader()
-                    TvNavTab.AJUSTES -> onNavigateToSettings()
-                }
-            },
-            isDarkTheme = isDarkTheme,
-            onToggleTheme = {
-                val newTheme = !isDarkTheme
-                isDarkTheme = newTheme
-                coroutineScope.launch { prefs.setDarkTheme(newTheme) }
-            },
-            focusRequester = sidebarFocusRequester
-        )
-
-        Column(
+        Box(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
+                .fillMaxSize()
+                .padding(start = 68.dp)
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+            ) {
             // Header Bar
             Row(
                 modifier = Modifier
@@ -368,6 +352,29 @@ fun YourBooksScreen(
                 }
             }
         }
+    }
+
+        // Rail de Navegación Lateral Flotante (Overlay)
+        TvSidebar(
+            modifier = Modifier.align(Alignment.CenterStart),
+            currentTab = TvNavTab.TUS_LIBROS,
+            onTabSelected = { tab ->
+                when (tab) {
+                    TvNavTab.HOME -> onNavigateToHome()
+                    TvNavTab.BIBLIOTECA -> onNavigateToLibrary()
+                    TvNavTab.TUS_LIBROS -> {}
+                    TvNavTab.LECTOR_3D -> onNavigateToReader()
+                    TvNavTab.AJUSTES -> onNavigateToSettings()
+                }
+            },
+            isDarkTheme = isDarkTheme,
+            onToggleTheme = {
+                val newTheme = !isDarkTheme
+                isDarkTheme = newTheme
+                coroutineScope.launch { prefs.setDarkTheme(newTheme) }
+            },
+            focusRequester = sidebarFocusRequester
+        )
     }
 
     // Modal de Gestión / Lectura

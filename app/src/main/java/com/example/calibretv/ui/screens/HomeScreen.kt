@@ -279,42 +279,15 @@ fun HomeScreen(
     val heroBg = if (isDarkTheme) BackgroundDark else Color(0xFF141619)
 
     CalibreTVTheme(isDarkTheme = isDarkTheme) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(screenBg)
         ) {
-            // Rail de Navegación Lateral (Letra A: 68dp, Letra B al desplegar: 215dp)
-            TvSidebar(
-                currentTab = TvNavTab.HOME,
-                isDarkTheme = isDarkTheme,
-                onToggleTheme = {
-                    val newTheme = !isDarkTheme
-                    isDarkTheme = newTheme
-                    prefsManager.setDarkTheme(newTheme)
-                },
-                focusRequester = sidebarFocusRequester,
-                onTabSelected = { tab ->
-                    when (tab) {
-                        TvNavTab.HOME -> {}
-                        TvNavTab.BIBLIOTECA -> onNavigateToLibrary()
-                        TvNavTab.TUS_LIBROS -> onNavigateToYourBooks()
-                        TvNavTab.LECTOR_3D -> onNavigateToReader()
-                        TvNavTab.AJUSTES -> {
-                            if (activeProfile.isKidsMode && householdPin != null) {
-                                pendingProtectedAction = { onNavigateToSettings() }
-                            } else {
-                                onNavigateToSettings()
-                            }
-                        }
-                    }
-                }
-            )
-
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
+                    .fillMaxSize()
+                    .padding(start = 68.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -628,7 +601,36 @@ fun HomeScreen(
                         }
                     }
                 }
+            }
         }
+
+            // Rail de Navegación Lateral Flotante (Overlay)
+            TvSidebar(
+                modifier = Modifier.align(Alignment.CenterStart),
+                currentTab = TvNavTab.HOME,
+                isDarkTheme = isDarkTheme,
+                onToggleTheme = {
+                    val newTheme = !isDarkTheme
+                    isDarkTheme = newTheme
+                    prefsManager.setDarkTheme(newTheme)
+                },
+                focusRequester = sidebarFocusRequester,
+                onTabSelected = { tab ->
+                    when (tab) {
+                        TvNavTab.HOME -> {}
+                        TvNavTab.BIBLIOTECA -> onNavigateToLibrary()
+                        TvNavTab.TUS_LIBROS -> onNavigateToYourBooks()
+                        TvNavTab.LECTOR_3D -> onNavigateToReader()
+                        TvNavTab.AJUSTES -> {
+                            if (activeProfile.isKidsMode && householdPin != null) {
+                                pendingProtectedAction = { onNavigateToSettings() }
+                            } else {
+                                onNavigateToSettings()
+                            }
+                        }
+                    }
+                }
+            )
 
         // ==========================================
         // PIN PAD DIALOG PARA ACCIONES PROTEGIDAS EN MODO KIDS
@@ -854,7 +856,6 @@ fun HomeScreen(
             )
         }
     }
-}
 }
 }
 
