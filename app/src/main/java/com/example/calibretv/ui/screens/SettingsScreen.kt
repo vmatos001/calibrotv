@@ -210,102 +210,120 @@ fun SettingsScreen(
                         .verticalScroll(scrollState)
                         .padding(horizontal = 36.dp, vertical = 16.dp)
                 ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Header (Título centrado, sin texto azul ni píldora flotante)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 14.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Tune,
-                                contentDescription = null,
-                                tint = CyanElectric,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = "CONTROL REMOTO TV • AJUSTES DIRECTOS",
-                                color = CyanElectric,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Ajustes",
-                            color = contentPrimary,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Text(
+                        text = "Ajustes",
+                        color = contentPrimary,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
 
-                    // Profile and TV Info
-                    var isProfilePillFocused by remember { mutableStateOf(false) }
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Bento Grid: Row 1 (Perfil de Usuario y Modo de Proyección balanceados 50/50)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Perfil de Usuario Integrado
+                CleanBentoCard(
+                    modifier = Modifier.weight(0.5f),
+                    title = "Perfil de Usuario",
+                    icon = Icons.Default.Person
+                ) {
+                    var isProfileCardFocused by remember { mutableStateOf(false) }
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier
-                            .scale(if (isProfilePillFocused) 1.05f else 1.0f)
+                            .fillMaxWidth()
+                            .scale(if (isProfileCardFocused) 1.02f else 1.0f)
                             .shadow(
-                                elevation = if (isDarkTheme) 0.dp else 2.dp,
-                                shape = RoundedCornerShape(12.dp),
-                                spotColor = Color.Black.copy(alpha = 0.06f)
+                                elevation = if (isProfileCardFocused) 8.dp else (if (isDarkTheme) 0.dp else 2.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                spotColor = CyanElectric
                             )
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .background(
-                                if (isProfilePillFocused) {
+                                if (isProfileCardFocused) {
                                     if (isDarkTheme) SurfaceContainerHigh else Color(0xFFE2E7E2)
                                 } else {
-                                    if (isDarkTheme) SurfaceContainer else Color.White
+                                    if (isDarkTheme) SurfaceContainer else Color(0xFFF7F8F7)
                                 }
                             )
                             .border(
-                                width = if (isProfilePillFocused) 2.dp else 0.dp,
-                                color = if (isProfilePillFocused) CyanElectric else Color.Transparent,
-                                shape = RoundedCornerShape(12.dp)
+                                width = if (isProfileCardFocused) 2.dp else 0.dp,
+                                color = if (isProfileCardFocused) CyanElectric else Color.Transparent,
+                                shape = RoundedCornerShape(10.dp)
                             )
-                            .onFocusChanged { isProfilePillFocused = it.isFocused }
+                            .onFocusChanged { isProfileCardFocused = it.isFocused }
                             .focusable(enabled = !isAnyModalOpen)
                             .clickable(enabled = !isAnyModalOpen) { showUserProfilesModal = true }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Tv,
-                            contentDescription = null,
-                            tint = AmberWarm,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Column {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(AmberWarm.copy(alpha = 0.15f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Tv,
+                                    contentDescription = null,
+                                    tint = AmberWarm,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "Perfil: ${activeProfile.name}",
+                                    color = contentPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "HDMI • 1080p @ 60Hz",
+                                    color = contentSecondary,
+                                    fontSize = 11.sp,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    if (isProfileCardFocused) AmberWarm else (if (isDarkTheme) Color(0xFF262629) else Color(0xFFE4E9E4)),
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
                             Text(
-                                text = "Perfil Activo: ${activeProfile.name}",
-                                color = contentPrimary,
-                                fontSize = 12.sp,
+                                text = "Cambiar",
+                                color = if (isProfileCardFocused) Color(0xFF131315) else contentPrimary,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = "HDMI • 1080p @ 60Hz • Presiona para cambiar",
-                                color = contentSecondary,
-                                fontSize = 10.sp
                             )
                         }
                     }
                 }
 
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // Bento Grid: Row 1
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Modo de Proyección Card (ETIQUETAS ELIMINADAS - Requisito A)
+                // Modo de Proyección Card
                 CleanBentoCard(
-                    modifier = Modifier.weight(0.38f),
+                    modifier = Modifier.weight(0.5f),
                     title = "Modo de Proyección",
                     icon = Icons.Default.Flip
                 ) {
@@ -339,72 +357,68 @@ fun SettingsScreen(
                         )
                     }
                 }
+            }
 
-                // Temas de Color Ópticos (INCLUYE PERGAMINO CLÁSICO APPLE - Requisito B)
-                CleanBentoCard(
-                    modifier = Modifier.weight(0.62f),
-                    title = "Temas de Color Ópticos",
-                    icon = Icons.Default.Palette
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Bento Grid: Row 2 (Temas de Color Ópticos a ancho completo, 1 sola línea por opción)
+            CleanBentoCard(
+                modifier = Modifier.fillMaxWidth(),
+                title = "Temas de Color Ópticos",
+                icon = Icons.Default.Palette
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        ThemeOptionItem(
-                            modifier = Modifier.weight(1f),
-                            title = "Pergamino",
-                            subtitle = "Papel Clásico",
-                            bgColor = Color(0xFFF4F1EA),
-                            textColor = Color(0xFF2C2A29),
-                            isSelected = settings.theme == ReadingTheme.PERGAMINO,
-                            onClick = { settings = settings.copy(theme = ReadingTheme.PERGAMINO) }
-                        )
-                        ThemeOptionItem(
-                            modifier = Modifier.weight(1f),
-                            title = "OLED Puro",
-                            subtitle = "Negro Total",
-                            bgColor = Color(0xFF000000),
-                            textColor = Color(0xFFE5E1E4),
-                            isSelected = settings.theme == ReadingTheme.OLED_PURE,
-                            onClick = { settings = settings.copy(theme = ReadingTheme.OLED_PURE) }
-                        )
-                        ThemeOptionItem(
-                            modifier = Modifier.weight(1f),
-                            title = "Sepia Cine",
-                            subtitle = "Cálido",
-                            bgColor = Color(0xFF26201A),
-                            textColor = Color(0xFFE6DBCC),
-                            isSelected = settings.theme == ReadingTheme.SEPIA_CINE,
-                            onClick = { settings = settings.copy(theme = ReadingTheme.SEPIA_CINE) }
-                        )
-                        ThemeOptionItem(
-                            modifier = Modifier.weight(1f),
-                            title = "Ámbar Noche",
-                            subtitle = "Cero Azul",
-                            bgColor = Color(0xFF1C140C),
-                            textColor = Color(0xFFFFC664),
-                            isSelected = settings.theme == ReadingTheme.NIGHT_AMBER,
-                            onClick = { settings = settings.copy(theme = ReadingTheme.NIGHT_AMBER) }
-                        )
-                        ThemeOptionItem(
-                            modifier = Modifier.weight(1f),
-                            title = "Proyector",
-                            subtitle = "Blanco",
-                            bgColor = Color(0xFFFFFFFF),
-                            textColor = Color(0xFF1A1A1A),
-                            isSelected = settings.theme == ReadingTheme.PROYECTOR_BLANCO,
-                            onClick = { settings = settings.copy(theme = ReadingTheme.PROYECTOR_BLANCO) }
-                        )
-                        ThemeOptionItem(
-                            modifier = Modifier.weight(1f),
-                            title = "Cine Oscuro",
-                            subtitle = "Ámbar Tenue",
-                            bgColor = Color(0xFF000000),
-                            textColor = Color(0xFF8B7355),
-                            isSelected = settings.theme == ReadingTheme.CINE_OSCURO,
-                            onClick = { settings = settings.copy(theme = ReadingTheme.CINE_OSCURO) }
-                        )
-                    }
+                    ThemeOptionItem(
+                        modifier = Modifier.weight(1f),
+                        title = "Pergamino",
+                        bgColor = Color(0xFFF4F1EA),
+                        textColor = Color(0xFF2C2A29),
+                        isSelected = settings.theme == ReadingTheme.PERGAMINO,
+                        onClick = { settings = settings.copy(theme = ReadingTheme.PERGAMINO) }
+                    )
+                    ThemeOptionItem(
+                        modifier = Modifier.weight(1f),
+                        title = "OLED Puro",
+                        bgColor = Color(0xFF000000),
+                        textColor = Color(0xFFE5E1E4),
+                        isSelected = settings.theme == ReadingTheme.OLED_PURE,
+                        onClick = { settings = settings.copy(theme = ReadingTheme.OLED_PURE) }
+                    )
+                    ThemeOptionItem(
+                        modifier = Modifier.weight(1f),
+                        title = "Sepia Cine",
+                        bgColor = Color(0xFF26201A),
+                        textColor = Color(0xFFE6DBCC),
+                        isSelected = settings.theme == ReadingTheme.SEPIA_CINE,
+                        onClick = { settings = settings.copy(theme = ReadingTheme.SEPIA_CINE) }
+                    )
+                    ThemeOptionItem(
+                        modifier = Modifier.weight(1f),
+                        title = "Ámbar Noche",
+                        bgColor = Color(0xFF1C140C),
+                        textColor = Color(0xFFFFC664),
+                        isSelected = settings.theme == ReadingTheme.NIGHT_AMBER,
+                        onClick = { settings = settings.copy(theme = ReadingTheme.NIGHT_AMBER) }
+                    )
+                    ThemeOptionItem(
+                        modifier = Modifier.weight(1f),
+                        title = "Proyector",
+                        bgColor = Color(0xFFFFFFFF),
+                        textColor = Color(0xFF1A1A1A),
+                        isSelected = settings.theme == ReadingTheme.PROYECTOR_BLANCO,
+                        onClick = { settings = settings.copy(theme = ReadingTheme.PROYECTOR_BLANCO) }
+                    )
+                    ThemeOptionItem(
+                        modifier = Modifier.weight(1f),
+                        title = "Cine Oscuro",
+                        bgColor = Color(0xFF000000),
+                        textColor = Color(0xFF8B7355),
+                        isSelected = settings.theme == ReadingTheme.CINE_OSCURO,
+                        onClick = { settings = settings.copy(theme = ReadingTheme.CINE_OSCURO) }
+                    )
                 }
             }
 
@@ -572,95 +586,154 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Sonido de Paso de Página (Foley)
-            CleanBentoCard(
+            // Bento Grid: Row 5 (Efectos de Sonido y Temporizador de Apagado balanceados 50/50)
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                title = "Efectos de Sonido (Paso de Página)",
-                icon = Icons.Filled.VolumeUp
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Sonido de Paso de Página (Foley)
+                CleanBentoCard(
+                    modifier = Modifier.weight(0.5f),
+                    title = "Efectos de Sonido (Paso de Página)",
+                    icon = Icons.Filled.VolumeUp
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            text = "Sonido Foley de papel al pasar la hoja",
-                            color = contentPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Reproduce un crujido orgánico aleatorizado que simula el roce físico del papel.",
+                            text = "Reproduce sonido Foley orgánico de papel al voltear la hoja.",
                             color = contentSecondary,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SegmentedOption(
+                                modifier = Modifier.weight(1f),
+                                title = "🔊 Activado",
+                                isSelected = settings.pageSoundEnabled,
+                                onClick = {
+                                    settings = settings.copy(pageSoundEnabled = true)
+                                    repository.saveReadingSettings(settings)
+                                }
+                            )
+                            SegmentedOption(
+                                modifier = Modifier.weight(1f),
+                                title = "🔇 Desactivado",
+                                isSelected = !settings.pageSoundEnabled,
+                                onClick = {
+                                    settings = settings.copy(pageSoundEnabled = false)
+                                    repository.saveReadingSettings(settings)
+                                }
+                            )
+                        }
                     }
-                    Row(
-                        modifier = Modifier.width(260.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        SegmentedOption(
-                            modifier = Modifier.weight(1f),
-                            title = "🔊 Activado",
-                            isSelected = settings.pageSoundEnabled,
-                            onClick = {
-                                settings = settings.copy(pageSoundEnabled = true)
-                                repository.saveReadingSettings(settings)
+                }
+
+                // Sleep Timer
+                CleanBentoCard(
+                    modifier = Modifier.weight(0.5f),
+                    title = "Temporizador de Apagado",
+                    icon = Icons.Filled.Timer
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "Apaga el lector con atenuación progresiva en los últimos 2 min.",
+                            color = contentSecondary,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf(0 to "Off", 15 to "15m", 30 to "30m", 45 to "45m", 60 to "1h").forEach { (min, label) ->
+                                SegmentedOption(
+                                    modifier = Modifier.weight(1f),
+                                    title = label,
+                                    isSelected = settings.sleepTimerMinutes == min,
+                                    onClick = {
+                                        settings = settings.copy(sleepTimerMinutes = min)
+                                        repository.saveReadingSettings(settings)
+                                    }
+                                )
                             }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Bento Grid: Row 6 (Lectura en Voz Alta y Brillo del Lector balanceados 50/50)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Lectura en Voz Alta (TTS)
+                CleanBentoCard(
+                    modifier = Modifier.weight(0.5f),
+                    title = "Lectura en Voz Alta (TTS)",
+                    icon = Icons.Filled.RecordVoiceOver
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "Velocidad de locución de texto a voz con resaltado activo.",
+                            color = contentSecondary,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        SegmentedOption(
-                            modifier = Modifier.weight(1f),
-                            title = "🔇 Desactivado",
-                            isSelected = !settings.pageSoundEnabled,
-                            onClick = {
-                                settings = settings.copy(pageSoundEnabled = false)
-                                repository.saveReadingSettings(settings)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf(0.75f to "0.75x", 1.0f to "1.0x", 1.25f to "1.25x", 1.5f to "1.5x").forEach { (speed, label) ->
+                                SegmentedOption(
+                                    modifier = Modifier.weight(1f),
+                                    title = label,
+                                    isSelected = settings.ttsSpeedRate == speed,
+                                    onClick = {
+                                        settings = settings.copy(ttsSpeedRate = speed)
+                                        repository.saveReadingSettings(settings)
+                                    }
+                                )
                             }
-                        )
+                        }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Sleep Timer
-            CleanBentoCard(
-                modifier = Modifier.fillMaxWidth(),
-                title = "Temporizador de Apagado (Sleep Timer)",
-                icon = Icons.Filled.Timer
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Brillo del Lector y Modo Cine
+                CleanBentoCard(
+                    modifier = Modifier.weight(0.5f),
+                    title = "Brillo del Lector y Modo Cine",
+                    icon = Icons.Filled.Brightness4
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            text = "Apaga automáticamente el lector tras el tiempo seleccionado",
-                            color = contentPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                            text = "Control de brillo interno para sala de TV oscura (independiente).",
+                            color = contentSecondary,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "La pantalla se atenúa progresivamente en los últimos 2 minutos antes de cerrar.",
-                            color = contentSecondary, fontSize = 11.sp
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.width(320.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        listOf(0 to "Apagado", 15 to "15 min", 30 to "30 min", 45 to "45 min", 60 to "1 hora").forEach { (min, label) ->
-                            SegmentedOption(
-                                modifier = Modifier.weight(1f),
-                                title = label,
-                                isSelected = settings.sleepTimerMinutes == min,
-                                onClick = {
-                                    settings = settings.copy(sleepTimerMinutes = min)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf(1.0f to "100%", 0.70f to "70%", 0.50f to "50%", 0.30f to "30%").forEach { (brightness, label) ->
+                                SegmentedOption(
+                                    modifier = Modifier.weight(1f),
+                                    title = label,
+                                    isSelected = settings.readerBrightness == brightness,
+                                    onClick = {
+                                        settings = settings.copy(readerBrightness = brightness)
+                                        repository.saveReadingSettings(settings)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -668,116 +741,18 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Lectura en Voz Alta (TTS)
-            CleanBentoCard(
-                modifier = Modifier.fillMaxWidth(),
-                title = "Lectura en Voz Alta (TTS)",
-                icon = Icons.Filled.RecordVoiceOver
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Lee el libro en voz alta con resaltado de oración activa",
-                            color = contentPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Activa desde el HUD del lector (botón ▶ Leer). Ajusta aquí la velocidad.",
-                            color = contentSecondary, fontSize = 11.sp
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.width(260.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        listOf(0.75f to "Lento", 1.0f to "Normal", 1.25f to "Rápido", 1.5f to "Veloz").forEach { (speed, label) ->
-                            SegmentedOption(
-                                modifier = Modifier.weight(1f),
-                                title = label,
-                                isSelected = settings.ttsSpeedRate == speed,
-                                onClick = {
-                                    settings = settings.copy(ttsSpeedRate = speed)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Brillo del Lector y Modo Cine
-            CleanBentoCard(
-                modifier = Modifier.fillMaxWidth(),
-                title = "Brillo del Lector y Modo Cine",
-                icon = Icons.Filled.Brightness4
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Control de brillo interno independiente del brillo del TV",
-                            color = contentPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "También ajustable desde el HUD del lector. Combinar con tema 'Cine Oscuro' para sala oscura.",
-                            color = contentSecondary, fontSize = 11.sp
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.width(260.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        listOf(1.0f to "100%", 0.70f to "70%", 0.50f to "50%", 0.30f to "30%").forEach { (brightness, label) ->
-                            SegmentedOption(
-                                modifier = Modifier.weight(1f),
-                                title = label,
-                                isSelected = settings.readerBrightness == brightness,
-                                onClick = {
-                                    settings = settings.copy(readerBrightness = brightness)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Sonido Ambiental
+            // Bento Grid: Row 7 (Sonido Ambiental)
             CleanBentoCard(
                 modifier = Modifier.fillMaxWidth(),
                 title = "Sonido Ambiental de Lectura",
                 icon = Icons.Filled.MusicNote
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Reproduce ambiente sonoro continuo durante la lectura",
-                                color = contentPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Diseñado para TV en sala. Cicla entre sonidos desde el HUD del lector.",
-                                color = contentSecondary, fontSize = 11.sp
-                            )
-                        }
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Ambiente sonoro inmersivo continuo para acompañar la lectura en el televisor.",
+                        color = contentSecondary,
+                        fontSize = 11.sp
+                    )
                     // Selector de tipo de sonido
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -807,7 +782,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Actualizaciones de Software (OTA)
+            // Bento Grid: Row 8 (Actualizaciones de Software OTA)
             CleanBentoCard(
                 modifier = Modifier.fillMaxWidth(),
                 title = "Actualizaciones de Software (OTA)",
@@ -856,21 +831,28 @@ fun SettingsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(22.dp))
 
-            // Footer Actions
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Footer Actions (Centrado para evitar deformación de botones)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
                     text = if (saveFeedback.isNotBlank()) saveFeedback else "ⓘ Aplicación instantánea con 1 solo click del control remoto.",
                     color = if (saveFeedback.isNotBlank()) CyanElectric else contentSecondary,
-                    fontSize = 12.sp
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     TvActionButton(
                         title = "Asistente Inicial",
                         icon = Icons.Default.Tune,
@@ -1212,7 +1194,6 @@ private fun SettingToggleButton(
 private fun ThemeOptionItem(
     modifier: Modifier = Modifier,
     title: String,
-    subtitle: String,
     bgColor: Color,
     textColor: Color,
     isSelected: Boolean,
@@ -1228,19 +1209,19 @@ private fun ThemeOptionItem(
             .background(bgColor)
             .border(
                 width = if (isFocused) 2.dp else if (isSelected) 2.dp else 1.dp,
-                color = if (isFocused) CyanElectric else if (isSelected) CyanElectric else Color(0xFF333333),
+                color = if (isFocused) CyanElectric else if (isSelected) AmberWarm else Color(0xFF333333).copy(alpha = 0.25f),
                 shape = RoundedCornerShape(10.dp)
             )
             .onFocusChanged { isFocused = it.isFocused }
             .clickable { onClick() }
             .padding(10.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(
                 modifier = Modifier
                     .size(20.dp)
-                    .background(if (isSelected) CyanElectric else Color.Transparent, CircleShape)
-                    .border(1.dp, if (isSelected) CyanElectric else Color(0xFF666666), CircleShape),
+                    .background(if (isSelected) AmberWarm else Color.Transparent, CircleShape)
+                    .border(1.5.dp, if (isSelected) AmberWarm else textColor.copy(alpha = 0.4f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 if (isSelected) {
@@ -1248,20 +1229,18 @@ private fun ThemeOptionItem(
                         imageVector = Icons.Default.Check,
                         contentDescription = null,
                         tint = Color(0xFF131315),
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(13.dp)
                     )
                 }
             }
             Text(
                 text = title,
                 color = textColor,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = subtitle,
-                color = textColor.copy(alpha = 0.7f),
-                fontSize = 10.sp
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
