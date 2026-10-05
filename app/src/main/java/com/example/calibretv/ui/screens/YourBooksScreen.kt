@@ -202,31 +202,35 @@ fun YourBooksScreen(
                     .fillMaxSize()
             ) {
             // Header Bar
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 20.dp, end = 36.dp, top = 14.dp, bottom = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(start = 20.dp, end = 36.dp, top = 14.dp, bottom = 10.dp)
             ) {
                 Text(
                     text = "TUS LIBROS • MEMORIA TV",
                     color = textPrimaryColor,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 1.sp
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.align(Alignment.Center)
                 )
 
-                TvProfilePill(
-                    profile = activeProfile,
-                    isDarkTheme = isDarkTheme,
-                    onOpenProfileSwitcher = { showUserProfilesModal = true },
-                    onOpenOpds = {},
-                    onOpenWifiImport = onNavigateToWifiImport,
-                    onOpenSettings = onNavigateToSettings,
-                    onQuickSync = { refreshStorageInfo() },
-                    onNotificationsClick = onNavigateToSettings
-                )
+                Row(
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TvProfilePill(
+                        profile = activeProfile,
+                        isDarkTheme = isDarkTheme,
+                        onOpenProfileSwitcher = { showUserProfilesModal = true },
+                        onOpenOpds = {},
+                        onOpenWifiImport = onNavigateToWifiImport,
+                        onOpenSettings = onNavigateToSettings,
+                        onQuickSync = { refreshStorageInfo() },
+                        onNotificationsClick = onNavigateToSettings
+                    )
+                }
             }
 
             // Panel de información de memoria física en TV (Bento Style, limpio sin bordes duros)

@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.layout.ContentScale
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Contrast
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FirstPage
 import androidx.compose.material.icons.filled.Flip
@@ -47,7 +49,9 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -109,6 +113,8 @@ import com.example.calibretv.theme.FontProvider
 import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
+import com.example.calibretv.ui.components.NotesModal
+import com.example.calibretv.ui.components.QuoteCardModal
 import com.example.calibretv.ui.components.TvNavTab
 import com.example.calibretv.ui.components.TvTopBar
 import kotlinx.coroutines.launch
@@ -146,7 +152,9 @@ fun ReaderScreen(
     // Navigation and HUD visibility
     var showBottomHud by remember { mutableStateOf(false) } // Triggered by DPAD_DOWN
     var showTopBar by remember { mutableStateOf(false) }    // Triggered by DPAD_UP
-    var selectedHudCategory by remember { mutableStateOf<ReaderHudCategory?>(ReaderHudCategory.APARIENCIA) }
+    var selectedHudCategory by remember { mutableStateOf<ReaderHudCategory?>(null) }
+    var showNotesModal by remember { mutableStateOf(false) }
+    var showQuoteCardModal by remember { mutableStateOf(false) }
 
     val curlAnim = remember { Animatable(0f) }
     val readerFocusRequester = remember { FocusRequester() }
@@ -328,8 +336,12 @@ fun ReaderScreen(
                     if (showBottomHud) {
                         when (keyEvent.key) {
                             Key.Back, Key.Escape -> {
-                                showBottomHud = false
-                                readerFocusRequester.requestFocus()
+                                if (selectedHudCategory != null) {
+                                    selectedHudCategory = null
+                                } else {
+                                    showBottomHud = false
+                                    readerFocusRequester.requestFocus()
+                                }
                                 true
                             }
                             // Allow D-Pad navigation between buttons in the HUD!
@@ -361,6 +373,7 @@ fun ReaderScreen(
                             Key.DirectionDown -> {
                                 showBottomHud = true
                                 showTopBar = false
+                                selectedHudCategory = null
                                 scope.launch {
                                     kotlinx.coroutines.delay(80L) // Espera una recomposición
                                     try { hudInitialFocusRequester.requestFocus() } catch (_: Exception) {}
@@ -734,371 +747,494 @@ fun ReaderScreen(
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.85f)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(Color(0xFF131315).copy(alpha = 0.96f))
-                    .border(1.5.dp, CyanElectric.copy(alpha = 0.4f), RoundedCornerShape(18.dp))
-                    .padding(horizontal = 24.dp, vertical = 14.dp)
+            Column(
+                modifier = Modifier.fillMaxWidth(0.85f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    // Top Row: Chapter Info + Reading Telemetry
+                // PARTE B: Menú Desplegable Flotante (Por encima del HUD bar, NUNCA lo deforma)
+                AnimatedVisibility(
+                    visible = selectedHudCategory != null,
+                    enter = fadeIn(tween(120)) + slideInVertically(initialOffsetY = { it / 2 }),
+                    exit = fadeOut(tween(100)) + slideOutVertically(targetOffsetY = { it / 2 })
+                ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Bottom
                     ) {
+                        // Spacers alineados con Atrás, Salto Pág y Adelante
+                        Spacer(Modifier.width(70.dp))
+                        Spacer(Modifier.width(70.dp))
+                        Spacer(Modifier.width(70.dp))
+
+                        // Slot 4: Apariencia
+                        Box(modifier = Modifier.width(105.dp), contentAlignment = Alignment.BottomCenter) {
+                            if (selectedHudCategory == ReaderHudCategory.APARIENCIA) {
+                                FloatingHudMenuCard(width = 175.dp) {
+                                    val brightnessPercent = (settings.readerBrightness * 100).toInt()
+                                    VerticalHudOptionButton(
+                                        title = "Brillo: $brightnessPercent%",
+                                        icon = Icons.Filled.Brightness4,
+                                        isPrimary = settings.readerBrightness < 1.0f,
+                                        onClick = {
+                                            val nextBrightness = when {
+                                                settings.readerBrightness > 0.85f -> 0.70f
+                                                settings.readerBrightness > 0.60f -> 0.50f
+                                                settings.readerBrightness > 0.40f -> 0.30f
+                                                else -> 1.0f
+                                            }
+                                            settings = settings.copy(readerBrightness = nextBrightness)
+                                            repository.saveReadingSettings(settings)
+                                        }
+                                    )
+                                    val marginPct = settings.overscanPercent
+                                    VerticalHudOptionButton(
+                                        title = "Márgenes: $marginPct%",
+                                        icon = Icons.Default.AspectRatio,
+                                        isPrimary = settings.overscanPercent > 0,
+                                        onClick = {
+                                            val nextMargin = when (settings.overscanPercent) {
+                                                0 -> 4
+                                                4 -> 8
+                                                else -> 0
+                                            }
+                                            settings = settings.copy(overscanPercent = nextMargin)
+                                            repository.saveReadingSettings(settings)
+                                        }
+                                    )
+                                    val themeName = when (settings.theme) {
+                                        ReadingTheme.PERGAMINO -> "Pergamino"
+                                        ReadingTheme.OLED_PURE -> "OLED Puro"
+                                        ReadingTheme.SEPIA_CINE -> "Sepia"
+                                        ReadingTheme.NIGHT_AMBER -> "Ámbar Noche"
+                                        ReadingTheme.PROYECTOR_BLANCO -> "Proyector"
+                                        ReadingTheme.CINE_OSCURO -> "Cine Oscuro"
+                                    }
+                                    VerticalHudOptionButton(
+                                        title = "Tema: $themeName",
+                                        icon = Icons.Default.Palette,
+                                        onClick = {
+                                            val nextTheme = when (settings.theme) {
+                                                ReadingTheme.PERGAMINO -> ReadingTheme.OLED_PURE
+                                                ReadingTheme.OLED_PURE -> ReadingTheme.SEPIA_CINE
+                                                ReadingTheme.SEPIA_CINE -> ReadingTheme.NIGHT_AMBER
+                                                ReadingTheme.NIGHT_AMBER -> ReadingTheme.PROYECTOR_BLANCO
+                                                ReadingTheme.PROYECTOR_BLANCO -> ReadingTheme.CINE_OSCURO
+                                                ReadingTheme.CINE_OSCURO -> ReadingTheme.PERGAMINO
+                                            }
+                                            settings = settings.copy(theme = nextTheme)
+                                            repository.saveReadingSettings(settings)
+                                        }
+                                    )
+                                    VerticalHudOptionButton(
+                                        title = "Fuente: ${settings.fontSizeSp}sp",
+                                        icon = Icons.Default.FormatSize,
+                                        onClick = {
+                                            val nextSize = when (settings.fontSizeSp) {
+                                                16 -> 18
+                                                18 -> 20
+                                                20 -> 22
+                                                22 -> 24
+                                                else -> 16
+                                            }
+                                            settings = settings.copy(fontSizeSp = nextSize)
+                                            repository.saveReadingSettings(settings)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        // Slot 5: Voz TTS
+                        Box(modifier = Modifier.width(105.dp), contentAlignment = Alignment.BottomCenter) {
+                            if (selectedHudCategory == ReaderHudCategory.VOZ_TTS) {
+                                FloatingHudMenuCard(width = 180.dp) {
+                                    val pitchName = when (settings.ttsPitch) {
+                                        0.8f -> "Grave"
+                                        1.2f -> "Agudo"
+                                        else -> "Normal"
+                                    }
+                                    VerticalHudOptionButton(
+                                        title = "Tono: $pitchName",
+                                        icon = Icons.Filled.MusicNote,
+                                        onClick = {
+                                            val nextPitch = when (settings.ttsPitch) {
+                                                1.0f -> 1.2f
+                                                1.2f -> 0.8f
+                                                else -> 1.0f
+                                            }
+                                            settings = settings.copy(ttsPitch = nextPitch)
+                                            repository.saveReadingSettings(settings)
+                                        }
+                                    )
+                                    VerticalHudOptionButton(
+                                        title = "Velocidad: ${settings.ttsSpeedRate}x",
+                                        icon = Icons.Default.Timer,
+                                        isPrimary = settings.ttsSpeedRate != 1.0f,
+                                        onClick = {
+                                            val nextSpeed = when (settings.ttsSpeedRate) {
+                                                1.0f -> 1.25f
+                                                1.25f -> 1.5f
+                                                1.5f -> 0.75f
+                                                else -> 1.0f
+                                            }
+                                            settings = settings.copy(ttsSpeedRate = nextSpeed)
+                                            repository.saveReadingSettings(settings)
+                                        }
+                                    )
+                                    val voiceName = when (settings.ttsVoiceLocale) {
+                                        "es-ES" -> "España"
+                                        "es-MX" -> "México"
+                                        else -> "Latino"
+                                    }
+                                    VerticalHudOptionButton(
+                                        title = "Voz: $voiceName",
+                                        icon = Icons.Filled.RecordVoiceOver,
+                                        onClick = {
+                                            val nextLoc = when (settings.ttsVoiceLocale) {
+                                                "es-ES" -> "es-MX"
+                                                "es-MX" -> "es-US"
+                                                else -> "es-ES"
+                                            }
+                                            settings = settings.copy(ttsVoiceLocale = nextLoc)
+                                            repository.saveReadingSettings(settings)
+                                        }
+                                    )
+                                    val isTtsEngineAvailable by ttsController.isEngineAvailable.collectAsState()
+                                    VerticalHudOptionButton(
+                                        title = if (isTtsPlaying) "Pausar" else "Leer en Voz",
+                                        icon = Icons.Filled.RecordVoiceOver,
+                                        isPrimary = isTtsPlaying,
+                                        onClick = {
+                                            if (!isTtsEngineAvailable) {
+                                                android.widget.Toast.makeText(context, "Lectura en voz alta no disponible en este dispositivo.", android.widget.Toast.LENGTH_LONG).show()
+                                            } else if (isTtsPlaying) {
+                                                ttsController.stop()
+                                            } else {
+                                                val leftText = currentSpread?.leftPage?.paragraphs?.joinToString(" ") ?: ""
+                                                val rightText = currentSpread?.rightPage?.paragraphs?.joinToString(" ") ?: ""
+                                                val pageText = listOf(leftText, rightText).filter { it.isNotBlank() }.joinToString(" ")
+                                                if (pageText.isNotBlank()) {
+                                                    ttsController.readPage(pageText, settings.ttsSpeedRate, settings.ttsPitch, settings.ttsVoiceLocale)
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        // Slot 6: Ambiente
+                        Box(modifier = Modifier.width(105.dp), contentAlignment = Alignment.BottomCenter) {
+                            if (selectedHudCategory == ReaderHudCategory.AMBIENTE) {
+                                FloatingHudMenuCard(width = 175.dp) {
+                                    VerticalHudOptionButton(
+                                        title = "Paso Pág.: ${if (settings.pageSoundEnabled) "Activado" else "Silenciado"}",
+                                        icon = Icons.Default.Flip,
+                                        isPrimary = settings.pageSoundEnabled,
+                                        onClick = {
+                                            settings = settings.copy(pageSoundEnabled = !settings.pageSoundEnabled)
+                                            repository.saveReadingSettings(settings)
+                                        }
+                                    )
+                                    VerticalHudOptionButton(
+                                        title = "Volumen: ${(settings.ambientVolume * 100).toInt()}%",
+                                        icon = Icons.Filled.MusicNote,
+                                        onClick = {
+                                            val nextVol = when {
+                                                settings.ambientVolume < 0.35f -> 0.50f
+                                                settings.ambientVolume < 0.65f -> 0.80f
+                                                settings.ambientVolume < 0.95f -> 1.0f
+                                                else -> 0.20f
+                                            }
+                                            settings = settings.copy(ambientVolume = nextVol)
+                                            repository.saveReadingSettings(settings)
+                                        }
+                                    )
+                                    val ambientLabel = when (settings.ambientSound) {
+                                        AmbientSound.NONE -> "Silencio"
+                                        AmbientSound.RAIN -> "Lluvia"
+                                        AmbientSound.FIREPLACE -> "Chimenea"
+                                        AmbientSound.OCEAN -> "Mar"
+                                        AmbientSound.CAFE -> "Café"
+                                        AmbientSound.FOREST -> "Bosque"
+                                        AmbientSound.LOFI -> "Lo-Fi"
+                                    }
+                                    VerticalHudOptionButton(
+                                        title = "Sonido: $ambientLabel",
+                                        icon = Icons.Filled.MusicNote,
+                                        isPrimary = settings.ambientSound != AmbientSound.NONE,
+                                        onClick = {
+                                            val nextSound = when (settings.ambientSound) {
+                                                AmbientSound.NONE -> AmbientSound.RAIN
+                                                AmbientSound.RAIN -> AmbientSound.FIREPLACE
+                                                AmbientSound.FIREPLACE -> AmbientSound.OCEAN
+                                                AmbientSound.OCEAN -> AmbientSound.CAFE
+                                                AmbientSound.CAFE -> AmbientSound.FOREST
+                                                AmbientSound.FOREST -> AmbientSound.LOFI
+                                                AmbientSound.LOFI -> AmbientSound.NONE
+                                            }
+                                            settings = settings.copy(ambientSound = nextSound)
+                                            repository.saveReadingSettings(settings)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        // Slot 7: Herramientas
+                        Box(modifier = Modifier.width(105.dp), contentAlignment = Alignment.BottomCenter) {
+                            if (selectedHudCategory == ReaderHudCategory.HERRAMIENTAS) {
+                                FloatingHudMenuCard(width = 185.dp) {
+                                    VerticalHudOptionButton(
+                                        title = "Notas",
+                                        icon = Icons.Default.Edit,
+                                        onClick = {
+                                            selectedHudCategory = null
+                                            showBottomHud = false
+                                            showNotesModal = true
+                                        }
+                                    )
+                                    VerticalHudOptionButton(
+                                        title = "Compartir Frase",
+                                        icon = Icons.Default.Share,
+                                        onClick = {
+                                            selectedHudCategory = null
+                                            showBottomHud = false
+                                            showQuoteCardModal = true
+                                        }
+                                    )
+                                    val timerLabel = when {
+                                        !isSleepTimerActive -> "Off"
+                                        sleepTimerSecondsLeft > 60 -> "${sleepTimerSecondsLeft / 60}m"
+                                        else -> "${sleepTimerSecondsLeft}s"
+                                    }
+                                    VerticalHudOptionButton(
+                                        title = "Sleep: $timerLabel",
+                                        icon = Icons.Filled.Timer,
+                                        isPrimary = isSleepTimerActive,
+                                        onClick = {
+                                            val nextMinutes = when (settings.sleepTimerMinutes) {
+                                                0 -> 15
+                                                15 -> 30
+                                                30 -> 45
+                                                45 -> 60
+                                                else -> 0
+                                            }
+                                            settings = settings.copy(sleepTimerMinutes = nextMinutes)
+                                            repository.saveReadingSettings(settings)
+                                            isSleepTimerActive = nextMinutes > 0
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // PARTE A: Barra Inferior Fija (HUD Compacto, NUNCA se deforma)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color(0xFF131315).copy(alpha = 0.96f))
+                        .border(1.5.dp, CyanElectric.copy(alpha = 0.4f), RoundedCornerShape(18.dp))
+                        .padding(horizontal = 24.dp, vertical = 14.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        // Top Row: Chapter Info + Reading Telemetry
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.MenuBook,
-                                contentDescription = null,
-                                tint = AmberWarm,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            val leftPageNum = currentSpreadIndex * 2 + 1
-                            val rightPageNum = currentSpreadIndex * 2 + 2
-                            val chapterName = currentSpread?.leftPage?.chapterTitle ?: book.title
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MenuBook,
+                                    contentDescription = null,
+                                    tint = AmberWarm,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                val leftPageNum = currentSpreadIndex * 2 + 1
+                                val rightPageNum = currentSpreadIndex * 2 + 2
+                                val chapterName = currentSpread?.leftPage?.chapterTitle ?: book.title
+                                Text(
+                                    text = "$chapterName • Págs. $leftPageNum-$rightPageNum",
+                                    color = TextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
                             Text(
-                                text = "📖 $chapterName • Págs. $leftPageNum-$rightPageNum",
-                                color = TextPrimary,
-                                fontSize = 13.sp,
+                                text = "$currentProgressPct% • $remainingMin min restantes",
+                                color = CyanElectric,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
 
-                        Text(
-                            text = "$currentProgressPct% • $remainingMin min restantes",
-                            color = CyanElectric,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    // Progress bar
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .background(Color(0xFF26262A), RoundedCornerShape(2.dp))
-                    ) {
+                        // Progress bar
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth(currentProgressPct / 100f)
+                                .fillMaxWidth()
                                 .height(4.dp)
-                                .background(CyanElectric, RoundedCornerShape(2.dp))
-                        )
-                    }
-
-                    // Row A: 7 opciones (Atrás, Salto Pág, Adelante, Apariencia, Voz TTS, Ambiente, Herramientas)
-                    // con las opciones de B saliendo verticalmente ARRIBA de cada grupo
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        // 1. Atrás (1 solo click: pasa página atrás)
-                        HudActionButton(
-                            title = "‹ Atrás",
-                            icon = Icons.Default.ChevronLeft,
-                            onClick = { turnPage(forward = false) },
-                            onFocus = { selectedHudCategory = null }
-                        )
-
-                        // 2. Salto Pág (1 solo click: salta 5 páginas)
-                        HudActionButton(
-                            title = "Salto Pág",
-                            icon = Icons.Default.FastForward,
-                            onClick = {
-                                val jumpIdx = (currentSpreadIndex + 5).coerceAtMost(spreads.size - 1)
-                                currentSpreadIndex = jumpIdx
-                                repository.saveBookProgress(book.id, jumpIdx)
-                            },
-                            onFocus = { selectedHudCategory = null }
-                        )
-
-                        // 3. Adelante (1 solo click: pasa página adelante)
-                        HudActionButton(
-                            title = "Adelante ›",
-                            icon = Icons.Default.ChevronRight,
-                            isPrimary = true,
-                            onClick = { turnPage(forward = true) },
-                            onFocus = { selectedHudCategory = null }
-                        )
-
-                        // 4. Grupo Apariencia (Opciones verticales B salen arriba)
-                        HudGroupColumn(
-                            category = ReaderHudCategory.APARIENCIA,
-                            isSelected = selectedHudCategory == ReaderHudCategory.APARIENCIA,
-                            activeCategory = selectedHudCategory,
-                            modifier = Modifier.focusRequester(hudInitialFocusRequester),
-                            onSelect = { selectedHudCategory = ReaderHudCategory.APARIENCIA }
+                                .background(Color(0xFF26262A), RoundedCornerShape(2.dp))
                         ) {
-                            val brightnessPercent = (settings.readerBrightness * 100).toInt()
-                            VerticalHudOptionButton(
-                                title = "☀ Brillo: $brightnessPercent%",
-                                icon = Icons.Filled.Brightness4,
-                                isPrimary = settings.readerBrightness < 1.0f,
-                                onClick = {
-                                    val nextBrightness = when {
-                                        settings.readerBrightness > 0.85f -> 0.70f
-                                        settings.readerBrightness > 0.60f -> 0.50f
-                                        settings.readerBrightness > 0.40f -> 0.30f
-                                        else -> 1.0f
-                                    }
-                                    settings = settings.copy(readerBrightness = nextBrightness)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
-                            val marginPct = settings.overscanPercent
-                            VerticalHudOptionButton(
-                                title = "📐 Márgenes: $marginPct%",
-                                icon = Icons.Default.AspectRatio,
-                                isPrimary = settings.overscanPercent > 0,
-                                onClick = {
-                                    val nextMargin = when (settings.overscanPercent) {
-                                        0 -> 4
-                                        4 -> 8
-                                        else -> 0
-                                    }
-                                    settings = settings.copy(overscanPercent = nextMargin)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
-                            val themeName = when (settings.theme) {
-                                ReadingTheme.PERGAMINO -> "Pergamino"
-                                ReadingTheme.OLED_PURE -> "OLED Puro"
-                                ReadingTheme.SEPIA_CINE -> "Sepia"
-                                ReadingTheme.NIGHT_AMBER -> "Ámbar Noche"
-                                ReadingTheme.PROYECTOR_BLANCO -> "Proyector"
-                                ReadingTheme.CINE_OSCURO -> "Cine Oscuro"
-                            }
-                            VerticalHudOptionButton(
-                                title = "🎨 Tema: $themeName",
-                                icon = Icons.Default.Palette,
-                                onClick = {
-                                    val nextTheme = when (settings.theme) {
-                                        ReadingTheme.PERGAMINO -> ReadingTheme.OLED_PURE
-                                        ReadingTheme.OLED_PURE -> ReadingTheme.SEPIA_CINE
-                                        ReadingTheme.SEPIA_CINE -> ReadingTheme.NIGHT_AMBER
-                                        ReadingTheme.NIGHT_AMBER -> ReadingTheme.PROYECTOR_BLANCO
-                                        ReadingTheme.PROYECTOR_BLANCO -> ReadingTheme.CINE_OSCURO
-                                        ReadingTheme.CINE_OSCURO -> ReadingTheme.PERGAMINO
-                                    }
-                                    settings = settings.copy(theme = nextTheme)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
-                            VerticalHudOptionButton(
-                                title = "TT Fuente (${settings.fontSizeSp}sp)",
-                                icon = Icons.Default.FormatSize,
-                                onClick = {
-                                    val nextSize = when (settings.fontSizeSp) {
-                                        16 -> 18
-                                        18 -> 20
-                                        20 -> 22
-                                        22 -> 24
-                                        else -> 16
-                                    }
-                                    settings = settings.copy(fontSizeSp = nextSize)
-                                    repository.saveReadingSettings(settings)
-                                }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(currentProgressPct / 100f)
+                                    .height(4.dp)
+                                    .background(CyanElectric, RoundedCornerShape(2.dp))
                             )
                         }
 
-                        // 5. Grupo Voz TTS (Opciones verticales B salen arriba)
-                        HudGroupColumn(
-                            category = ReaderHudCategory.VOZ_TTS,
-                            isSelected = selectedHudCategory == ReaderHudCategory.VOZ_TTS,
-                            activeCategory = selectedHudCategory,
-                            onSelect = { selectedHudCategory = ReaderHudCategory.VOZ_TTS }
+                        // Row A: 7 opciones (Atrás, Salto Pág, Adelante, Apariencia, Voz TTS, Ambiente, Herramientas)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val pitchName = when (settings.ttsPitch) {
-                                0.8f -> "Grave"
-                                1.2f -> "Agudo"
-                                else -> "Normal"
-                            }
-                            VerticalHudOptionButton(
-                                title = "🎵 Tono: $pitchName",
-                                icon = Icons.Filled.MusicNote,
+                            // 1. Atrás (1 solo click: pasa página atrás)
+                            HudActionButton(
+                                title = "‹ Atrás",
+                                icon = Icons.Default.ChevronLeft,
+                                isPrimary = false,
                                 onClick = {
-                                    val nextPitch = when (settings.ttsPitch) {
-                                        1.0f -> 1.2f
-                                        1.2f -> 0.8f
-                                        else -> 1.0f
-                                    }
-                                    settings = settings.copy(ttsPitch = nextPitch)
-                                    repository.saveReadingSettings(settings)
-                                }
+                                    selectedHudCategory = null
+                                    turnPage(forward = false)
+                                },
+                                onFocus = { selectedHudCategory = null }
                             )
-                            VerticalHudOptionButton(
-                                title = "⏱ Velocidad: ${settings.ttsSpeedRate}x",
-                                icon = Icons.Default.Timer,
-                                isPrimary = settings.ttsSpeedRate != 1.0f,
-                                onClick = {
-                                    val nextSpeed = when (settings.ttsSpeedRate) {
-                                        1.0f -> 1.25f
-                                        1.25f -> 1.5f
-                                        1.5f -> 0.75f
-                                        else -> 1.0f
-                                    }
-                                    settings = settings.copy(ttsSpeedRate = nextSpeed)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
-                            val voiceName = when (settings.ttsVoiceLocale) {
-                                "es-ES" -> "España 🇪🇸"
-                                "es-MX" -> "México 🇲🇽"
-                                else -> "Latino 🌐"
-                            }
-                            VerticalHudOptionButton(
-                                title = "🗣 Voz: $voiceName",
-                                icon = Icons.Filled.RecordVoiceOver,
-                                onClick = {
-                                    val nextLoc = when (settings.ttsVoiceLocale) {
-                                        "es-ES" -> "es-MX"
-                                        "es-MX" -> "es-US"
-                                        else -> "es-ES"
-                                    }
-                                    settings = settings.copy(ttsVoiceLocale = nextLoc)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
-                            val isTtsEngineAvailable by ttsController.isEngineAvailable.collectAsState()
-                            VerticalHudOptionButton(
-                                title = if (isTtsPlaying) "⏸ Pausar" else "▶ Leer en Voz",
-                                icon = Icons.Filled.RecordVoiceOver,
-                                isPrimary = isTtsPlaying,
-                                onClick = {
-                                    if (!isTtsEngineAvailable) {
-                                        android.widget.Toast.makeText(context, "Lectura en voz alta no disponible en este dispositivo.", android.widget.Toast.LENGTH_LONG).show()
-                                    } else if (isTtsPlaying) {
-                                        ttsController.stop()
-                                    } else {
-                                        val leftText = currentSpread?.leftPage?.paragraphs?.joinToString(" ") ?: ""
-                                        val rightText = currentSpread?.rightPage?.paragraphs?.joinToString(" ") ?: ""
-                                        val pageText = listOf(leftText, rightText).filter { it.isNotBlank() }.joinToString(" ")
-                                        if (pageText.isNotBlank()) {
-                                            ttsController.readPage(pageText, settings.ttsSpeedRate, settings.ttsPitch, settings.ttsVoiceLocale)
-                                        }
-                                    }
-                                }
-                            )
-                        }
 
-                        // 6. Grupo Ambiente (Opciones verticales B salen arriba)
-                        HudGroupColumn(
-                            category = ReaderHudCategory.AMBIENTE,
-                            isSelected = selectedHudCategory == ReaderHudCategory.AMBIENTE,
-                            activeCategory = selectedHudCategory,
-                            onSelect = { selectedHudCategory = ReaderHudCategory.AMBIENTE }
-                        ) {
-                            VerticalHudOptionButton(
-                                title = "📖 Paso: ${if (settings.pageSoundEnabled) "Activado" else "Silenciado"}",
-                                icon = Icons.Default.Flip,
-                                isPrimary = settings.pageSoundEnabled,
+                            // 2. Salto Pág (1 solo click: salta 5 páginas)
+                            HudActionButton(
+                                title = "Salto Pág",
+                                icon = Icons.Default.FastForward,
+                                isPrimary = false,
                                 onClick = {
-                                    settings = settings.copy(pageSoundEnabled = !settings.pageSoundEnabled)
-                                    repository.saveReadingSettings(settings)
-                                }
+                                    selectedHudCategory = null
+                                    val jumpIdx = (currentSpreadIndex + 5).coerceAtMost(spreads.size - 1)
+                                    currentSpreadIndex = jumpIdx
+                                    repository.saveBookProgress(book.id, jumpIdx)
+                                },
+                                onFocus = { selectedHudCategory = null }
                             )
-                            VerticalHudOptionButton(
-                                title = "🔊 Volumen: ${(settings.ambientVolume * 100).toInt()}%",
-                                icon = Icons.Filled.MusicNote,
-                                onClick = {
-                                    val nextVol = when {
-                                        settings.ambientVolume < 0.35f -> 0.50f
-                                        settings.ambientVolume < 0.65f -> 0.80f
-                                        settings.ambientVolume < 0.95f -> 1.0f
-                                        else -> 0.20f
-                                    }
-                                    settings = settings.copy(ambientVolume = nextVol)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
-                            val ambientLabel = when (settings.ambientSound) {
-                                AmbientSound.NONE -> "🔕 Silencio"
-                                AmbientSound.RAIN -> "🌧 Lluvia"
-                                AmbientSound.FIREPLACE -> "🔥 Chimenea"
-                                AmbientSound.OCEAN -> "🌊 Mar"
-                                AmbientSound.CAFE -> "☕ Café"
-                                AmbientSound.FOREST -> "🌲 Bosque"
-                                AmbientSound.LOFI -> "🎧 Lo-Fi (432Hz)"
-                            }
-                            VerticalHudOptionButton(
-                                title = "Ambiente: $ambientLabel",
-                                icon = Icons.Filled.MusicNote,
-                                isPrimary = settings.ambientSound != AmbientSound.NONE,
-                                onClick = {
-                                    val nextSound = when (settings.ambientSound) {
-                                        AmbientSound.NONE -> AmbientSound.RAIN
-                                        AmbientSound.RAIN -> AmbientSound.FIREPLACE
-                                        AmbientSound.FIREPLACE -> AmbientSound.OCEAN
-                                        AmbientSound.OCEAN -> AmbientSound.CAFE
-                                        AmbientSound.CAFE -> AmbientSound.FOREST
-                                        AmbientSound.FOREST -> AmbientSound.LOFI
-                                        AmbientSound.LOFI -> AmbientSound.NONE
-                                    }
-                                    settings = settings.copy(ambientSound = nextSound)
-                                    repository.saveReadingSettings(settings)
-                                }
-                            )
-                        }
 
-                        // 7. Grupo Herramientas (Opciones verticales B salen arriba)
-                        HudGroupColumn(
-                            category = ReaderHudCategory.HERRAMIENTAS,
-                            isSelected = selectedHudCategory == ReaderHudCategory.HERRAMIENTAS,
-                            activeCategory = selectedHudCategory,
-                            onSelect = { selectedHudCategory = ReaderHudCategory.HERRAMIENTAS }
-                        ) {
-                            VerticalHudOptionButton(
-                                title = "👤 Perfil: ${activeProfile.name}",
-                                icon = Icons.Default.AccountCircle,
+                            // 3. Adelante (1 solo click: pasa página adelante)
+                            HudActionButton(
+                                title = "Adelante ›",
+                                icon = Icons.Default.ChevronRight,
+                                isPrimary = false,
                                 onClick = {
-                                    val profiles = repository.getProfiles()
-                                    val curIdx = profiles.indexOfFirst { it.id == activeProfile.id }
-                                    activeProfile = profiles[(curIdx + 1) % profiles.size]
-                                    repository.saveActiveProfile(activeProfile)
-                                }
+                                    selectedHudCategory = null
+                                    turnPage(forward = true)
+                                },
+                                onFocus = { selectedHudCategory = null }
                             )
-                            VerticalHudOptionButton(
-                                title = "⏮ Inicio (Pág. 1)",
-                                icon = Icons.Default.FirstPage,
-                                onClick = {
-                                    currentSpreadIndex = 0
-                                    repository.saveBookProgress(book.id, 0)
-                                }
-                            )
-                            val timerLabel = when {
-                                !isSleepTimerActive -> "Off"
-                                sleepTimerSecondsLeft > 60 -> "${sleepTimerSecondsLeft / 60}m"
-                                else -> "${sleepTimerSecondsLeft}s"
-                            }
-                            VerticalHudOptionButton(
-                                title = "⏱ Sleep: $timerLabel",
-                                icon = Icons.Filled.Timer,
-                                isPrimary = isSleepTimerActive,
-                                onClick = {
-                                    val nextMinutes = when (settings.sleepTimerMinutes) {
-                                        0 -> 15
-                                        15 -> 30
-                                        30 -> 45
-                                        45 -> 60
-                                        else -> 0
+
+                            // 4. Grupo Apariencia
+                            HudTabButton(
+                                title = ReaderHudCategory.APARIENCIA.title,
+                                icon = ReaderHudCategory.APARIENCIA.icon,
+                                isSelected = selectedHudCategory == ReaderHudCategory.APARIENCIA,
+                                modifier = Modifier.focusRequester(hudInitialFocusRequester),
+                                onFocus = {
+                                    if (selectedHudCategory != null) {
+                                        selectedHudCategory = ReaderHudCategory.APARIENCIA
                                     }
-                                    settings = settings.copy(sleepTimerMinutes = nextMinutes)
-                                    repository.saveReadingSettings(settings)
-                                    isSleepTimerActive = nextMinutes > 0
+                                },
+                                onClick = {
+                                    selectedHudCategory = if (selectedHudCategory == ReaderHudCategory.APARIENCIA) null else ReaderHudCategory.APARIENCIA
+                                }
+                            )
+
+                            // 5. Grupo Voz TTS
+                            HudTabButton(
+                                title = ReaderHudCategory.VOZ_TTS.title,
+                                icon = ReaderHudCategory.VOZ_TTS.icon,
+                                isSelected = selectedHudCategory == ReaderHudCategory.VOZ_TTS,
+                                onFocus = {
+                                    if (selectedHudCategory != null) {
+                                        selectedHudCategory = ReaderHudCategory.VOZ_TTS
+                                    }
+                                },
+                                onClick = {
+                                    selectedHudCategory = if (selectedHudCategory == ReaderHudCategory.VOZ_TTS) null else ReaderHudCategory.VOZ_TTS
+                                }
+                            )
+
+                            // 6. Grupo Ambiente
+                            HudTabButton(
+                                title = ReaderHudCategory.AMBIENTE.title,
+                                icon = ReaderHudCategory.AMBIENTE.icon,
+                                isSelected = selectedHudCategory == ReaderHudCategory.AMBIENTE,
+                                onFocus = {
+                                    if (selectedHudCategory != null) {
+                                        selectedHudCategory = ReaderHudCategory.AMBIENTE
+                                    }
+                                },
+                                onClick = {
+                                    selectedHudCategory = if (selectedHudCategory == ReaderHudCategory.AMBIENTE) null else ReaderHudCategory.AMBIENTE
+                                }
+                            )
+
+                            // 7. Grupo Herramientas
+                            HudTabButton(
+                                title = ReaderHudCategory.HERRAMIENTAS.title,
+                                icon = ReaderHudCategory.HERRAMIENTAS.icon,
+                                isSelected = selectedHudCategory == ReaderHudCategory.HERRAMIENTAS,
+                                onFocus = {
+                                    if (selectedHudCategory != null) {
+                                        selectedHudCategory = ReaderHudCategory.HERRAMIENTAS
+                                    }
+                                },
+                                onClick = {
+                                    selectedHudCategory = if (selectedHudCategory == ReaderHudCategory.HERRAMIENTAS) null else ReaderHudCategory.HERRAMIENTAS
                                 }
                             )
                         }
                     }
                 }
             }
+        }
+
+        // ==========================================
+        // MODALES INTEGRADOS EN EL LECTOR 3D
+        // ==========================================
+        if (showNotesModal) {
+            NotesModal(
+                book = book,
+                repository = repository,
+                isDarkTheme = true,
+                onDismiss = {
+                    showNotesModal = false
+                    try { readerFocusRequester.requestFocus() } catch (_: Exception) {}
+                }
+            )
+        }
+
+        if (showQuoteCardModal) {
+            val sampleQuote = currentSpread?.leftPage?.paragraphs?.firstOrNull { it.length > 30 }
+                ?: currentSpread?.rightPage?.paragraphs?.firstOrNull { it.length > 30 }
+                ?: book.summary?.takeIf { it.isNotBlank() }
+                ?: book.title
+            QuoteCardModal(
+                book = book,
+                repository = repository,
+                selectedQuote = sampleQuote,
+                isDarkTheme = true,
+                onDismiss = {
+                    showQuoteCardModal = false
+                    try { readerFocusRequester.requestFocus() } catch (_: Exception) {}
+                }
+            )
         }
     }
 }
@@ -1276,6 +1412,13 @@ private fun HudActionButton(
                 if (it.isFocused) onFocus()
             }
             .focusable()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)) {
+                    onClick()
+                    true
+                } else false
+            }
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
@@ -1301,11 +1444,12 @@ private fun HudTabButton(
     title: String,
     icon: ImageVector,
     isSelected: Boolean,
-    isFocused: Boolean,
-    onFocusChanged: (Boolean) -> Unit,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onFocus: () -> Unit = {},
+    onClick: () -> Unit
 ) {
+    var isFocused by remember { mutableStateOf(false) }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1325,8 +1469,22 @@ private fun HudTabButton(
                 color = if (isFocused) Color.White else if (isSelected) AmberWarm else Color.Transparent,
                 shape = RoundedCornerShape(8.dp)
             )
-            .onFocusChanged { onFocusChanged(it.isFocused) }
+            .onFocusChanged {
+                isFocused = it.isFocused
+                if (it.isFocused) onFocus()
+            }
             .focusable()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
+                        onClick()
+                        true
+                    } else if (event.key == Key.DirectionUp && !isSelected) {
+                        onClick()
+                        true
+                    } else false
+                } else false
+            }
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
@@ -1348,48 +1506,25 @@ private fun HudTabButton(
 }
 
 @Composable
-private fun HudGroupColumn(
-    category: ReaderHudCategory,
-    isSelected: Boolean,
-    activeCategory: ReaderHudCategory?,
-    onSelect: () -> Unit,
-    modifier: Modifier = Modifier,
+private fun FloatingHudMenuCard(
+    width: Dp = 180.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    var isFocused by remember { mutableStateOf(false) }
-
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Bottom
+    Box(
+        modifier = Modifier
+            .wrapContentWidth(unbounded = true, align = Alignment.CenterHorizontally)
+            .width(width)
+            .shadow(16.dp, RoundedCornerShape(14.dp), spotColor = CyanElectric.copy(alpha = 0.4f))
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF161619).copy(alpha = 0.98f))
+            .border(1.2.dp, CyanElectric.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+            .padding(8.dp)
     ) {
-        // Opciones verticales ARRIBA del grupo (Parte B)
-        if (activeCategory == category) {
-            Column(
-                modifier = Modifier
-                    .padding(bottom = 8.dp)
-                    .width(155.dp)
-                    .background(Color(0xFF1E1E22).copy(alpha = 0.98f), RoundedCornerShape(12.dp))
-                    .border(1.dp, CyanElectric.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
-                    .padding(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                content()
-            }
-        }
-
-        // Botón del grupo en la fila A
-        HudTabButton(
-            title = category.title,
-            icon = category.icon,
-            isSelected = isSelected,
-            isFocused = isFocused,
-            onFocusChanged = { focused ->
-                isFocused = focused
-                if (focused) onSelect()
-            },
-            onClick = onSelect
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            content = content
         )
     }
 }
@@ -1408,8 +1543,8 @@ private fun VerticalHudOptionButton(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .scale(if (isFocused) 1.05f else 1.0f)
-            .shadow(if (isFocused) 8.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = CyanElectric)
+            .scale(if (isFocused) 1.04f else 1.0f)
+            .shadow(if (isFocused) 6.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = CyanElectric)
             .clip(RoundedCornerShape(8.dp))
             .background(
                 when {
@@ -1425,6 +1560,13 @@ private fun VerticalHudOptionButton(
             )
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)) {
+                    onClick()
+                    true
+                } else false
+            }
             .clickable { onClick() }
             .padding(horizontal = 10.dp, vertical = 7.dp)
     ) {
