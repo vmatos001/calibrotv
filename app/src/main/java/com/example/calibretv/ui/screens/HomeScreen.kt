@@ -344,24 +344,24 @@ fun HomeScreen(
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .graphicsLayer { alpha = if (isDarkTheme) 0.28f else 0.12f }
+                                        .graphicsLayer { alpha = 0.95f }
                                 )
                             }
 
+                            // Sombra tenue sobre los textos para garantizar perfecta lectura sin ocultar la imagen de fondo
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .background(
                                         Brush.horizontalGradient(
                                             colors = listOf(
-                                                heroBg,
-                                                heroBg.copy(alpha = 0.95f),
-                                                heroBg.copy(alpha = 0.70f),
-                                                heroBg.copy(alpha = 0.30f),
+                                                Color.Black.copy(alpha = 0.70f),
+                                                Color.Black.copy(alpha = 0.40f),
+                                                Color.Black.copy(alpha = 0.15f),
                                                 Color.Transparent
                                             ),
                                             startX = 0f,
-                                            endX = 1100f
+                                            endX = 750f
                                         )
                                     )
                             )
@@ -429,7 +429,7 @@ fun HomeScreen(
                             ) {
                                 Text(
                                     text = currentTime,
-                                    color = if (isDarkTheme) Color.White.copy(alpha = 0.85f) else InkSecondary,
+                                    color = Color.White.copy(alpha = 0.90f),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
                                 )
@@ -1641,7 +1641,7 @@ private fun HomeHeroBanner(
             // Título Principal
             Text(
                 text = heroBanner.title,
-                color = if (isDarkTheme) Color.White else InkPrimary,
+                color = Color.White,
                 fontSize = 21.sp,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
@@ -1663,7 +1663,7 @@ private fun HomeHeroBanner(
             // Cita editorial destacada
             Text(
                 text = "“${heroBanner.tagline.ifBlank { heroBanner.synopsis }}”",
-                color = if (isDarkTheme) Color(0xFFCBD5E1) else InkSecondary,
+                color = Color(0xFFF1F5F9),
                 fontSize = 11.sp,
                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                 maxLines = 1,
@@ -1675,7 +1675,7 @@ private fun HomeHeroBanner(
             // Sinopsis breve
             Text(
                 text = heroBanner.synopsis.ifBlank { heroBanner.tagline },
-                color = if (isDarkTheme) Color(0xFF94A3B8) else InkMuted,
+                color = Color(0xFFE2E8F0),
                 fontSize = 10.5.sp,
                 lineHeight = 14.5.sp,
                 maxLines = 2,

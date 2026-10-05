@@ -90,7 +90,9 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 
@@ -130,15 +132,16 @@ fun YourBooksScreen(
 
         allBooks.forEach { book ->
             val path = book.epubUrl
+            var size = 0L
             if (!path.isNullOrBlank()) {
                 val cleanPath = path.removePrefix("file://")
                 val f = File(cleanPath)
                 if (f.exists() && f.isFile) {
-                    val size = f.length()
-                    localList.add(Pair(book, size))
+                    size = f.length()
                     sumBytes += size
                 }
             }
+            localList.add(Pair(book, size))
         }
 
         localBooksWithFiles = localList
@@ -154,6 +157,16 @@ fun YourBooksScreen(
 
     LaunchedEffect(Unit) {
         refreshStorageInfo()
+        withContext(Dispatchers.IO) {
+            try {
+                val feed = repository.getFeed()
+                if (feed.books.isNotEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        refreshStorageInfo()
+                    }
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     val prefs = remember { PreferencesManager(context) }
@@ -260,7 +273,7 @@ fun YourBooksScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "${localBooksWithFiles.size} libros descargados en la memoria interna",
+                            text = "${localBooksWithFiles.size} libros en tu colección personal",
                             color = textSecondaryColor,
                             fontSize = 13.sp
                         )
@@ -317,7 +330,7 @@ fun YourBooksScreen(
                         )
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            text = "No tienes libros descargados en este televisor",
+                            text = "No tienes libros sincronizados ni descargados en este televisor",
                             color = textPrimaryColor,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold

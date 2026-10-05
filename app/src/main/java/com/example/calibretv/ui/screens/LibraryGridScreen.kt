@@ -71,6 +71,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.calibretv.data.BookRepository
+import com.example.calibretv.data.curator.CuratedBook
+import com.example.calibretv.data.curator.CuratorRepository
 import com.example.calibretv.data.image.CoverLoader
 import com.example.calibretv.data.image.rememberCoverImage
 import com.example.calibretv.data.model.Book
@@ -91,14 +93,50 @@ import com.example.calibretv.theme.SurfaceRaised
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
 import com.example.calibretv.ui.components.Book3DView
+import com.example.calibretv.ui.components.CuratedBookModal
 import com.example.calibretv.ui.components.TvNavTab
 import com.example.calibretv.ui.components.TvSidebar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+fun CuratedBook.toBook(): Book = Book(
+    id = this.id,
+    title = this.title,
+    author = this.author,
+    coverUrl = this.coverUrl,
+    summary = this.summary,
+    category = this.category,
+    shelves = listOf(this.category, "Nivel ${this.difficultyLevel}"),
+    tags = listOf(this.category, "Nivel ${this.difficultyLevel}"),
+    epubUrl = if (this.isPublicDomain) this.publicDownloadUrl else null
+)
+
+fun Book.toCuratedBook(): CuratedBook {
+    val curated = CuratorRepository.findCuratedBook(this.id)
+        ?: CuratorRepository.getAllCuratedBooks().find { it.title.equals(this.title, ignoreCase = true) }
+    if (curated != null) return curated
+
+    val isPublic = !this.epubUrl.isNullOrBlank()
+    return CuratedBook(
+        id = this.id,
+        title = this.title,
+        author = this.author,
+        coverUrl = this.coverUrl ?: "",
+        summary = this.summary,
+        category = this.category.ifBlank { "Literatura" },
+        isPublicDomain = isPublic,
+        affiliateQrUrl = null,
+        publicDownloadUrl = this.epubUrl,
+        approximatePrice = if (isPublic) "Gratis" else "Consultar",
+        rating = 4.8f,
+        difficultyLevel = getBookDifficultyLevel(this)
+    )
+}
 
 enum class CircleShelfType {
     ALL,
@@ -175,49 +213,34 @@ fun LibraryGridScreen(
     var showUserProfilesModal by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
-    // Modal state for Book Details
-    var showDetailsModal by remember { mutableStateOf(false) }
-    var detailsBook by remember { mutableStateOf<Book?>(null) }
-    var modalDescription by remember { mutableStateOf("") }
-    val modalReadFocusRequester = remember { FocusRequester() }
+    // Modal state for Curated Book Details (Cloud inspiration showcase)
+    var selectedCuratedBook by remember { mutableStateOf<CuratedBook?>(null) }
+    var isDownloadingCuratedBook by remember { mutableStateOf(false) }
+    var curatedSections by remember { mutableStateOf(CuratorRepository.getCuratedSections()) }
     val bookFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
 
     BackHandler {
-        if (showDetailsModal) {
-            showDetailsModal = false
-            detailsBook = null
-        }
-        else if (showUserProfilesModal) showUserProfilesModal = false
-        else onBack()
-    }
-
-    LaunchedEffect(showDetailsModal) {
-        if (showDetailsModal) {
-            modalReadFocusRequester.requestFocus()
-        } else if (detailsBook != null) {
-            val lastId = detailsBook?.id
-            if (lastId != null) {
-                kotlinx.coroutines.delay(80L)
-                try {
-                    bookFocusRequesters[lastId]?.requestFocus()
-                } catch (_: Exception) {}
-            }
-        }
-    }
-
-    LaunchedEffect(detailsBook) {
-        detailsBook?.let { b ->
-            modalDescription = "Cargando sinopsis..."
-            modalDescription = repository.getOrFetchBookDescription(b)
+        if (selectedCuratedBook != null) {
+            selectedCuratedBook = null
+        } else if (showUserProfilesModal) {
+            showUserProfilesModal = false
+        } else {
+            onBack()
         }
     }
 
     val config = remember { repository.getServerConfig() }
     val authHeader = remember(config) { CoverLoader.buildBasicAuth(config.username, config.password) }
 
-    // Load full catalog and enrich shelves
+    // Load full catalog, sync with Cloud Firestore and enrich shelves
     LaunchedEffect(activeProfile) {
         isLoading = true
+        withContext(Dispatchers.IO) {
+            val synced = CuratorRepository.syncWithCms()
+            if (synced) {
+                curatedSections = CuratorRepository.getCuratedSections()
+            }
+        }
         val result = repository.getFeed()
         feedContent = result
         if (config.serverUrl.isNotBlank()) {
@@ -234,10 +257,15 @@ fun LibraryGridScreen(
         isLoading = false
     }
 
-    val allBooks = feedContent?.books ?: emptyList()
+    // Escaparate de Inspiración: Combina las obras curadas de la nube con las sincronizadas de OPDS
+    val allBooks = remember(curatedSections, feedContent) {
+        val cloudBooks = CuratorRepository.getAllCuratedBooks().map { it.toBook() }
+        val feedBooks = feedContent?.books ?: emptyList()
+        (cloudBooks + feedBooks).distinctBy { it.id }
+    }
 
-    // Circular Shelf Filters (Section A: Netflix Kids style)
-    val circleFilters = remember(allBooks) {
+    // Circular Shelf Filters (Sección A: Estanterías de Personajes y Dificultad)
+    val circleFilters = remember(allBooks, curatedSections) {
         val list = mutableListOf<CircleShelfFilter>()
         // 1. Todos los libros
         list.add(
@@ -249,12 +277,30 @@ fun LibraryGridScreen(
             )
         )
 
-        // 2. Shelves de Personajes de TV (desde Calibre-Web, ubicados entre TODOS y NIVEL 1)
+        // 2. Shelves de Personajes desde Cloud Firestore (cartelera_shelves) y curaduría
+        curatedSections.forEach { section ->
+            val matchingCount = allBooks.count { b ->
+                b.shelves.any { it.equals(section.name, ignoreCase = true) } ||
+                b.category.equals(section.name, ignoreCase = true) ||
+                section.books.any { it.id == b.id }
+            }
+            list.add(
+                CircleShelfFilter(
+                    id = section.name,
+                    title = section.name,
+                    type = CircleShelfType.CHARACTER,
+                    coverUrl = section.avatarUrl ?: section.books.firstOrNull()?.coverUrl,
+                    bookCount = matchingCount
+                )
+            )
+        }
+
+        // Shelves de Personajes adicionales desde Calibre-Web si existen
         val cachedShelves = repository.getShelves()
         val shelvesFromBooks = allBooks.flatMap { it.shelves }.distinct()
             .filter { it.isNotBlank() && !it.equals("null", ignoreCase = true) && !it.matches(Regex("""^\d+\s*nivel.*""", RegexOption.IGNORE_CASE)) && !it.contains("ingl", ignoreCase = true) && !it.matches(Regex("""^[1-5]$""")) }
 
-        val charShelves = shelvesFromBooks.filter { OpdsClient.isCharacterShelfName(it) }.sorted()
+        val charShelves = shelvesFromBooks.filter { OpdsClient.isCharacterShelfName(it) && curatedSections.none { s -> s.name.equals(it, ignoreCase = true) } }.sorted()
 
         charShelves.forEach { shelfName ->
             val matchingBooks = allBooks.filter { b ->
@@ -289,27 +335,36 @@ fun LibraryGridScreen(
 
         // 4. Estantería Inglés
         val englishBooks = allBooks.filter { isEnglishBook(it) }
-        list.add(
-            CircleShelfFilter(
-                id = "ingles",
-                title = "Inglés",
-                type = CircleShelfType.TAG,
-                coverUrl = englishBooks.firstOrNull { !it.coverUrl.isNullOrBlank() }?.coverUrl,
-                bookCount = englishBooks.size
+        if (englishBooks.isNotEmpty()) {
+            list.add(
+                CircleShelfFilter(
+                    id = "ingles",
+                    title = "Inglés",
+                    type = CircleShelfType.TAG,
+                    coverUrl = englishBooks.firstOrNull { !it.coverUrl.isNullOrBlank() }?.coverUrl,
+                    bookCount = englishBooks.size
+                )
             )
-        )
+        }
 
         list
     }
 
-    val filteredBooks = remember(allBooks, selectedFilterId) {
+    val filteredBooks = remember(allBooks, selectedFilterId, curatedSections) {
         val selected = circleFilters.firstOrNull { it.id == selectedFilterId } ?: circleFilters.first()
         when (selected.type) {
             CircleShelfType.ALL -> allBooks
             CircleShelfType.LEVEL -> allBooks.filter { getBookDifficultyLevel(it) == selected.levelNumber }
             CircleShelfType.CHARACTER, CircleShelfType.TAG -> {
+                val sec = curatedSections.firstOrNull { it.name.equals(selected.id, ignoreCase = true) }
                 val matches = if (selected.id == "ingles") {
                     allBooks.filter { isEnglishBook(it) }
+                } else if (sec != null) {
+                    allBooks.filter { b ->
+                        sec.books.any { it.id == b.id } ||
+                        b.shelves.any { it.equals(sec.name, ignoreCase = true) } ||
+                        b.category.equals(sec.name, ignoreCase = true)
+                    }
                 } else {
                     allBooks.filter { b ->
                         b.shelves.any { it.equals(selected.id, ignoreCase = true) } ||
@@ -332,7 +387,7 @@ fun LibraryGridScreen(
     val COLUMNS = 7
 
     val screenBg = if (isDarkTheme) BackgroundDark else CanvasBackgroundLight
-    val isAnyModalOpen = showDetailsModal || showUserProfilesModal
+    val isAnyModalOpen = selectedCuratedBook != null || showUserProfilesModal
 
     CalibreTVTheme(isDarkTheme = isDarkTheme) {
         Box(
@@ -346,93 +401,92 @@ fun LibraryGridScreen(
                     .padding(start = 68.dp)
             ) {
                 Column(modifier = Modifier.fillMaxSize().background(screenBg)) {
-                    // Header Bar
-                    Row(
+                    // Header Bar (Título centrado, sin texto azul, reloj y perfil a la derecha)
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 20.dp, end = 36.dp, top = 14.dp, bottom = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = "ESTANTERÍA DE LIBROS",
-                                    color = if (isDarkTheme) TextPrimary else InkPrimary,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 1.sp
-                                )
-                                Text(
-                                    text = "• ${filteredBooks.size} libros sincronizados",
-                                    color = if (isDarkTheme) CyanElectric else Color(0xFF0284C7),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-
-                    // Clock and profile
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            .padding(start = 20.dp, end = 36.dp, top = 14.dp, bottom = 10.dp)
                     ) {
                         Text(
-                            text = currentTime,
-                            color = if (isDarkTheme) Color.White.copy(alpha = 0.85f) else InkPrimary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
+                            text = "ESTANTERÍA DE LIBROS",
+                            color = if (isDarkTheme) TextPrimary else InkPrimary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 1.sp,
+                            modifier = Modifier.align(Alignment.Center)
                         )
 
-                        TvProfilePill(
-                            profile = activeProfile,
-                            isDarkTheme = isDarkTheme,
-                            onOpenProfileSwitcher = { showUserProfilesModal = true },
-                            onOpenOpds = onNavigateToOpds,
-                            onOpenWifiImport = onNavigateToWifiImport,
-                            onOpenSettings = onNavigateToSettings,
-                            onQuickSync = {
-                                coroutineScope.launch {
-                                    isLoading = true
-                                    feedContent = repository.getFeed()
-                                    isLoading = false
-                                }
-                            },
-                            onNotificationsClick = onNavigateToSettings
-                        )
-                    }
-                }
+                        // Clock and profile
+                        Row(
+                            modifier = Modifier.align(Alignment.CenterEnd),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Text(
+                                text = currentTime,
+                                color = if (isDarkTheme) Color.White.copy(alpha = 0.85f) else InkPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
 
-                // Section A: Netflix Kids Circular Shelves & Difficulty Badges
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(108.dp)
-                        .padding(horizontal = 32.dp, vertical = 4.dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        itemsIndexed(circleFilters) { index, filter ->
-                            val isFirst = index == 0
-                            NetflixShelfCircleItem(
-                                filter = filter,
-                                isSelected = selectedFilterId == filter.id,
-                                authHeader = authHeader,
-                                isFirst = isFirst,
+                            TvProfilePill(
+                                profile = activeProfile,
                                 isDarkTheme = isDarkTheme,
-                                isInteractive = !isAnyModalOpen,
-                                onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
-                                onClick = { selectedFilterId = filter.id }
+                                onOpenProfileSwitcher = { showUserProfilesModal = true },
+                                onOpenOpds = onNavigateToOpds,
+                                onOpenWifiImport = onNavigateToWifiImport,
+                                onOpenSettings = onNavigateToSettings,
+                                onQuickSync = {
+                                    coroutineScope.launch {
+                                        isLoading = true
+                                        feedContent = repository.getFeed()
+                                        isLoading = false
+                                    }
+                                },
+                                onNotificationsClick = onNavigateToSettings
                             )
                         }
                     }
-                }
+
+                    // Section A: Netflix Kids Circular Shelves & Difficulty Badges (Contenedor Bento con estilo del proyecto)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 32.dp, vertical = 6.dp)
+                            .shadow(
+                                elevation = if (isDarkTheme) 0.dp else 4.dp,
+                                shape = RoundedCornerShape(16.dp),
+                                spotColor = Color.Black.copy(alpha = 0.05f)
+                            )
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (isDarkTheme) SurfaceContainer else Color.White)
+                            .border(
+                                width = 1.dp,
+                                color = if (isDarkTheme) Color(0xFF26262A) else Color.Transparent,
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            itemsIndexed(circleFilters) { index, filter ->
+                                val isFirst = index == 0
+                                NetflixShelfCircleItem(
+                                    filter = filter,
+                                    isSelected = selectedFilterId == filter.id,
+                                    authHeader = authHeader,
+                                    isFirst = isFirst,
+                                    isDarkTheme = isDarkTheme,
+                                    isInteractive = !isAnyModalOpen,
+                                    onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
+                                    onClick = { selectedFilterId = filter.id }
+                                )
+                            }
+                        }
+                    }
 
                 // Books Grid
                 Box(
@@ -478,8 +532,7 @@ fun LibraryGridScreen(
                                     modifier = Modifier.focusRequester(bookFocusRequesters.getOrPut(book.id) { FocusRequester() }),
                                     onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
                                     onSelected = {
-                                        detailsBook = book
-                                        showDetailsModal = true
+                                        selectedCuratedBook = book.toCuratedBook()
                                     }
                                 )
                             }
@@ -501,191 +554,47 @@ fun LibraryGridScreen(
             )
         }
 
-        // Book Details Dialog
-        // Book Details Dialog (Sin bordes, superficie adaptativa al tema)
-        if (showDetailsModal && detailsBook != null) {
-            val book = detailsBook!!
-            val modalCover = rememberCoverImage(book.coverUrl, authHeader)
-            val modalBg = if (isDarkTheme) SurfaceContainer else Color(0xFFF7F5F0)
-            val synopsisBg = if (isDarkTheme) SurfaceContainerHigh.copy(alpha = 0.5f) else Color.White
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = if (isDarkTheme) 0.88f else 0.65f))
-                    .onKeyEvent { keyEvent ->
-                        if (keyEvent.type == KeyEventType.KeyDown && (keyEvent.key == Key.Back || keyEvent.key == Key.Escape)) {
-                            showDetailsModal = false
-                            detailsBook = null
-                            true
-                        } else false
-                    }
-                    .clickable {
-                        showDetailsModal = false
-                        detailsBook = null
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.78f)
-                        .fillMaxHeight(0.80f)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(modalBg)
-                        .clickable(enabled = false) {}
-                        .padding(28.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(28.dp)
-                    ) {
-                        // Cover on the left
-                        Book3DView(
-                            coverBitmap = modalCover,
-                            title = book.title,
-                            width = 180.dp,
-                            height = 265.dp,
-                            isFocused = false,
-                            enable3DStandby = false
-                        )
-
-                        // Details & Actions on the right
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = book.title,
-                                    color = if (isDarkTheme) TextPrimary else InkPrimary,
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-
-                                Text(
-                                    text = "${book.author} • ${book.category}",
-                                    color = AmberWarm,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-
-                                val modalLevel = remember(book) { getBookDifficultyLevel(book) }
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (modalLevel in 1..5) {
-                                        Box(
-                                            modifier = Modifier
-                                                .background(CyanElectric.copy(alpha = 0.20f), RoundedCornerShape(6.dp))
-                                                .border(1.dp, CyanElectric, RoundedCornerShape(6.dp))
-                                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = "⭐ Dificultad: Nivel $modalLevel",
-                                                color = CyanElectric,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                    book.shelves.take(3).forEach { shelf ->
-                                        Box(
-                                            modifier = Modifier
-                                                .background(AmberWarm.copy(alpha = 0.20f), RoundedCornerShape(6.dp))
-                                                .border(1.dp, AmberWarm, RoundedCornerShape(6.dp))
-                                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = "🏷 $shelf",
-                                                color = AmberWarm,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                Text(
-                                    text = "Sinopsis:",
-                                    color = if (isDarkTheme) TextMuted else InkSecondary,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(synopsisBg)
-                                        .padding(12.dp)
-                                        .verticalScroll(rememberScrollState())
-                                ) {
-                                    Text(
-                                        text = if (modalDescription.isNotBlank()) modalDescription else book.summary.ifBlank { "Sin descripción disponible." },
-                                        color = if (isDarkTheme) TextPrimary.copy(alpha = 0.9f) else Color(0xFF44403C),
-                                        fontSize = 13.sp,
-                                        lineHeight = 18.sp
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            var isFav by remember(book.id) { mutableStateOf(repository.isFavorite(book.id)) }
-
-                            // Modal Buttons strictly FIXED at the bottom
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                GridActionCapsule(
-                                    title = "Leer en 3D",
-                                    icon = Icons.Default.MenuBook,
-                                    isPrimary = true,
-                                    isDarkTheme = isDarkTheme,
-                                    modifier = Modifier.focusRequester(modalReadFocusRequester),
-                                    onClick = {
-                                        showDetailsModal = false
-                                        detailsBook = null
-                                        onBookSelected(book)
-                                    }
-                                )
-                                GridActionCapsule(
-                                    title = if (isFav) "En Favoritos" else "Añadir a Favoritos",
-                                    icon = Icons.Default.Star,
-                                    isPrimary = isFav,
-                                    isDarkTheme = isDarkTheme,
-                                    onClick = {
-                                        repository.toggleFavorite(book.id)
-                                        isFav = repository.isFavorite(book.id)
-                                    }
-                                )
-                                GridActionCapsule(
-                                    title = "Cerrar",
-                                    icon = Icons.Default.Close,
-                                    isPrimary = false,
-                                    isDarkTheme = isDarkTheme,
-                                    onClick = {
-                                        showDetailsModal = false
-                                        detailsBook = null
-                                    }
-                                )
-                            }
-                        }
-                    }
+        // Modal de Ficha Curada (Descarga, Compra QR o Lectura directa en 3D)
+        selectedCuratedBook?.let { curatedBook ->
+            val cachedBooks = repository.getCachedBooks()
+            val isDownloaded = remember(curatedBook.id, cachedBooks) {
+                CuratorRepository.isBookDownloaded(curatedBook.id, repository) ||
+                cachedBooks.any { 
+                    (it.id == curatedBook.id || it.title.equals(curatedBook.title, ignoreCase = true)) &&
+                    (!it.epubUrl.isNullOrBlank() && File(it.epubUrl.removePrefix("file://")).exists())
                 }
             }
+
+            CuratedBookModal(
+                book = curatedBook,
+                isDownloaded = isDownloaded,
+                isDownloading = isDownloadingCuratedBook,
+                isDarkTheme = isDarkTheme,
+                onDownload = {
+                    isDownloadingCuratedBook = true
+                    coroutineScope.launch {
+                        val res = CuratorRepository.downloadPublicDomainBook(context, curatedBook, repository)
+                        if (res.isSuccess) {
+                            feedContent = repository.getFeed()
+                        }
+                        isDownloadingCuratedBook = false
+                    }
+                },
+                onRead = {
+                    val localBook = repository.getCachedBooks().find { 
+                        it.id == curatedBook.id || it.title.equals(curatedBook.title, ignoreCase = true)
+                    }
+                    selectedCuratedBook = null
+                    if (localBook != null) {
+                        onBookSelected(localBook)
+                    } else {
+                        onBookSelected(curatedBook.toBook())
+                    }
+                },
+                onDismiss = {
+                    selectedCuratedBook = null
+                }
+            )
         }
 
         // Rail de Navegación Lateral Flotante (Overlay)

@@ -255,7 +255,7 @@ fun CuratedBookModal(
                         if (book.isPublicDomain) {
                             if (isDownloaded) {
                                 ModalActionButton(
-                                    title = "Leer en Pliego Dual",
+                                    title = "Leer en 3D",
                                     icon = Icons.Default.MenuBook,
                                     isPrimary = true,
                                     isDarkTheme = isDarkTheme,
@@ -266,7 +266,7 @@ fun CuratedBookModal(
                                 )
                             } else {
                                 ModalActionButton(
-                                    title = if (isDownloading) "Descargando..." else "Descargar Gratis a la TV",
+                                    title = if (isDownloading) "Descargando..." else "Descargar Libro",
                                     icon = Icons.Default.Download,
                                     isPrimary = true,
                                     isDarkTheme = isDarkTheme,

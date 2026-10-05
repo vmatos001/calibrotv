@@ -23,6 +23,7 @@ object CuratorRepository {
 
     private var cachedCmsSections: List<CuratorSection>? = null
     private var cachedHeroBanner: HeroBanner? = null
+    private var cachedHomeData: HomeCarteleraData? = null
 
     /**
      * Retorna las secciones curadas para la pantalla principal.
@@ -37,59 +38,107 @@ object CuratorRepository {
         return getOfflineCuratedSections()
     }
 
-    private var cachedHomeData: HomeCarteleraData? = null
+    private const val FIRESTORE_BASE = "https://firestore.googleapis.com/v1/projects/bookspread-app-2026/databases/(default)/documents"
+    private const val FIRESTORE_HERO_ES = "$FIRESTORE_BASE/cartelera_hero/main_hero_es"
+    private const val FIRESTORE_HERO_EN = "$FIRESTORE_BASE/cartelera_hero/main_hero_en"
+    private const val FIRESTORE_OFFERS = "$FIRESTORE_BASE/cartelera_offers"
+    private const val FIRESTORE_SHELVES = "$FIRESTORE_BASE/cartelera_shelves"
+    private const val FIRESTORE_SOUNDS = "$FIRESTORE_BASE/cartelera_sounds"
 
-    suspend fun fetchHomeCartelera(cmsUrl: String = "http://192.168.1.89:4000"): HomeCarteleraData = withContext(Dispatchers.IO) {
-        try {
-            val endpoint = if (cmsUrl.endsWith("/")) "${cmsUrl}api/v1/cartelera/home" else "$cmsUrl/api/v1/cartelera/home"
-            val conn = URL(endpoint).openConnection() as HttpURLConnection
-            conn.connectTimeout = 3000
-            conn.readTimeout = 5000
+    private fun org.json.JSONObject.getFsString(field: String, default: String = ""): String {
+        val f = optJSONObject(field) ?: return default
+        return f.optString("stringValue", default)
+    }
+
+    private fun org.json.JSONObject.getFsInt(field: String, default: Int = 0): Int {
+        val f = optJSONObject(field) ?: return default
+        return f.optString("integerValue", default.toString()).toIntOrNull() ?: f.optInt("integerValue", default)
+    }
+
+    private fun org.json.JSONObject.getFsBoolean(field: String, default: Boolean = false): Boolean {
+        val f = optJSONObject(field) ?: return default
+        return f.optBoolean("booleanValue", default)
+    }
+
+    private fun fetchJsonFromUrl(urlString: String): org.json.JSONObject? {
+        return try {
+            val conn = URL(urlString).openConnection() as HttpURLConnection
+            conn.connectTimeout = 4000
+            conn.readTimeout = 7000
             conn.requestMethod = "GET"
             conn.connect()
             if (conn.responseCode in 200..299) {
-                val json = org.json.JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
-                val heroObj = json.optJSONObject("hero_banner")
-                val banner = if (heroObj != null) {
-                    HeroBanner(
-                        id = heroObj.optString("id", "main_hero"),
-                        title = heroObj.optString("title", ""),
-                        author = heroObj.optString("author", ""),
-                        tagline = heroObj.optString("tagline", ""),
-                        synopsis = heroObj.optString("synopsis", ""),
-                        backdropUrl = heroObj.optString("backdrop_url", ""),
-                        coverUrl = heroObj.optString("cover_url", ""),
-                        sampleEpubUrl = heroObj.optString("sample_epub_url").takeIf { it.isNotBlank() },
-                        affiliatePurchaseUrl = heroObj.optString("affiliate_purchase_url").takeIf { it.isNotBlank() }
-                    )
-                } else null
+                val text = conn.inputStream.bufferedReader().use { it.readText() }
+                org.json.JSONObject(text)
+            } else null
+        } catch (_: Exception) {
+            null
+        }
+    }
 
-                val offersList = mutableListOf<BookOffer>()
-                val offersArr = json.optJSONArray("offers_carousel")
-                if (offersArr != null) {
-                    for (i in 0 until offersArr.length()) {
-                        val o = offersArr.getJSONObject(i)
-                        offersList.add(
-                            BookOffer(
-                                id = o.optString("id", "offer_$i"),
-                                title = o.optString("title", ""),
-                                author = o.optString("author", ""),
-                                coverUrl = o.optString("cover_url", ""),
-                                discountTag = o.optString("discount_tag", "-30%"),
-                                affiliateUrl = o.optString("affiliate_url", "")
-                            )
-                        )
-                    }
-                }
-
-                val data = HomeCarteleraData(heroBanner = banner, offers = offersList)
-                cachedHomeData = data
-                data
-            } else {
-                cachedHomeData ?: getOfflineHomeData()
-            }
+    suspend fun fetchHeroFromFirestore(isSpanish: Boolean = true): HeroBanner? = withContext(Dispatchers.IO) {
+        try {
+            val url = if (isSpanish) FIRESTORE_HERO_ES else FIRESTORE_HERO_EN
+            val json = fetchJsonFromUrl(url) ?: return@withContext null
+            val fields = json.optJSONObject("fields") ?: return@withContext null
+            HeroBanner(
+                id = fields.getFsString("id", "main_hero"),
+                title = fields.getFsString("title"),
+                author = fields.getFsString("author"),
+                tagline = fields.getFsString("tagline"),
+                synopsis = fields.getFsString("synopsis"),
+                backdropUrl = fields.getFsString("backdrop_url"),
+                coverUrl = fields.getFsString("cover_url"),
+                sampleEpubUrl = fields.getFsString("sample_epub_url").takeIf { it.isNotBlank() },
+                affiliatePurchaseUrl = fields.getFsString("affiliate_purchase_url").takeIf { it.isNotBlank() }
+            )
         } catch (e: Exception) {
-            Log.d(TAG, "Home cartelera fetch failed or offline: ${e.message}")
+            Log.d(TAG, "Hero banner fetch from Firestore failed: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun fetchOffersFromFirestore(): List<BookOffer> = withContext(Dispatchers.IO) {
+        try {
+            val json = fetchJsonFromUrl(FIRESTORE_OFFERS) ?: return@withContext emptyList()
+            val docs = json.optJSONArray("documents") ?: return@withContext emptyList()
+            val list = mutableListOf<BookOffer>()
+            for (i in 0 until docs.length()) {
+                val d = docs.getJSONObject(i)
+                val fields = d.optJSONObject("fields") ?: continue
+                list.add(
+                    BookOffer(
+                        id = fields.getFsString("id", "offer_$i"),
+                        title = fields.getFsString("title"),
+                        author = fields.getFsString("author"),
+                        coverUrl = fields.getFsString("cover_url"),
+                        discountTag = fields.getFsString("discount_tag", "-30%"),
+                        affiliateUrl = fields.getFsString("affiliate_url")
+                    )
+                )
+            }
+            list
+        } catch (e: Exception) {
+            Log.d(TAG, "Offers fetch from Firestore failed: ${e.message}")
+            emptyList()
+        }
+    }
+
+    suspend fun fetchHomeCartelera(cmsUrl: String? = null): HomeCarteleraData = withContext(Dispatchers.IO) {
+        try {
+            val hero = fetchHeroFromFirestore()
+            val offers = fetchOffersFromFirestore()
+            if (hero != null || offers.isNotEmpty()) {
+                val data = HomeCarteleraData(
+                    heroBanner = hero ?: getOfflineHomeData().heroBanner,
+                    offers = if (offers.isNotEmpty()) offers else getOfflineHomeData().offers
+                )
+                cachedHomeData = data
+                return@withContext data
+            }
+            cachedHomeData ?: getOfflineHomeData()
+        } catch (e: Exception) {
+            Log.d(TAG, "fetchHomeCartelera failed: ${e.message}")
             cachedHomeData ?: getOfflineHomeData()
         }
     }
@@ -128,83 +177,86 @@ object CuratorRepository {
         )
     }
 
-    suspend fun fetchHeroBanner(cmsUrl: String = "http://192.168.1.89:4000"): HeroBanner? {
+    fun findCuratedBook(bookId: String): CuratedBook? {
+        return getCuratedSections().flatMap { it.books }.firstOrNull { it.id == bookId }
+    }
+
+    fun getAllCuratedBooks(): List<CuratedBook> {
+        return getCuratedSections().flatMap { it.books }.distinctBy { it.id }
+    }
+
+    suspend fun fetchHeroBanner(cmsUrl: String? = null): HeroBanner? {
         return fetchHomeCartelera(cmsUrl).heroBanner
     }
 
-    suspend fun syncWithCms(cmsUrl: String = "http://192.168.1.89:4000"): Boolean = withContext(Dispatchers.IO) {
+    suspend fun syncWithCms(cmsUrl: String? = null): Boolean = withContext(Dispatchers.IO) {
         try {
-            val endpoint = if (cmsUrl.endsWith("/")) "${cmsUrl}api/v1/cartelera/shelves" else "$cmsUrl/api/v1/cartelera/shelves"
-            val conn = URL(endpoint).openConnection() as HttpURLConnection
-            conn.connectTimeout = 3000
-            conn.readTimeout = 6000
-            conn.requestMethod = "GET"
-            conn.connect()
-            if (conn.responseCode in 200..299) {
-                val json = org.json.JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
-                val shelvesArr = json.optJSONArray("shelves") ?: return@withContext false
+            // 1. Intentar cargar estanterías de la nube desde Cloud Firestore
+            val json = fetchJsonFromUrl(FIRESTORE_SHELVES)
+            val docs = json?.optJSONArray("documents")
+            if (docs != null && docs.length() > 0) {
                 val sections = mutableListOf<CuratorSection>()
+                for (i in 0 until docs.length()) {
+                    val d = docs.getJSONObject(i)
+                    val fields = d.optJSONObject("fields") ?: continue
+                    val sId = fields.getFsString("id", "shelf_$i")
+                    val name = fields.getFsString("name").ifBlank { fields.getFsString("character_name") }
+                    val tagline = fields.getFsString("tagline").ifBlank { fields.getFsString("quote") }
+                    val avatarUrl = fields.getFsString("avatar_url")
+                    val quote = fields.getFsString("quote")
+                    val archetypeStr = fields.getFsString("archetype")
 
-                for (i in 0 until shelvesArr.length()) {
-                    val sObj = shelvesArr.getJSONObject(i)
-                    val sId = sObj.optString("shelf_id")
-                    val charName = sObj.optString("character_name")
-                    val avatarUrl = sObj.optString("avatar_url")
-                    val quote = sObj.optString("quote")
+                    val archetype = when {
+                        archetypeStr.contains("prodigy", true) || sId.contains("prodigy") || name.contains("Lisa") || name.contains("Matilda") || name.contains("Hermione") -> CuratorArchetype.PRODIGY
+                        archetypeStr.contains("detective", true) || sId.contains("detective") || name.contains("House") || name.contains("Patrick") || name.contains("Rust") -> CuratorArchetype.DETECTIVE
+                        archetypeStr.contains("cosmic", true) || sId.contains("cosmic") || name.contains("Dune") || name.contains("Stark") -> CuratorArchetype.COSMIC
+                        archetypeStr.contains("classic", true) || sId.contains("classic") || name.contains("Quijote") -> CuratorArchetype.CLASSICS
+                        else -> CuratorArchetype.GENERAL
+                    }
 
-                    val booksArr = sObj.optJSONArray("books")
                     val booksList = mutableListOf<CuratedBook>()
-                    if (booksArr != null) {
-                        for (j in 0 until booksArr.length()) {
-                            val bObj = booksArr.getJSONObject(j)
-                            val isPub = bObj.optBoolean("is_public_domain", false)
+                    val booksField = fields.optJSONObject("books")?.optJSONObject("arrayValue")?.optJSONArray("values")
+                    if (booksField != null) {
+                        for (j in 0 until booksField.length()) {
+                            val bFields = booksField.getJSONObject(j).optJSONObject("mapValue")?.optJSONObject("fields") ?: continue
                             booksList.add(
                                 CuratedBook(
-                                    id = bObj.optString("book_id"),
-                                    title = bObj.optString("title"),
-                                    author = bObj.optString("author"),
-                                    coverUrl = bObj.optString("cover_url"),
-                                    summary = bObj.optString("synopsis"),
-                                    category = charName,
-                                    isPublicDomain = isPub,
-                                    affiliateQrUrl = bObj.optString("affiliate_url").takeIf { it.isNotBlank() },
-                                    publicDownloadUrl = bObj.optString("download_url").takeIf { it.isNotBlank() },
-                                    difficultyLevel = bObj.optInt("difficulty_level", 1)
+                                    id = bFields.getFsString("id", "book_${i}_$j"),
+                                    title = bFields.getFsString("title"),
+                                    author = bFields.getFsString("author"),
+                                    coverUrl = bFields.getFsString("cover_url"),
+                                    summary = bFields.getFsString("synopsis").ifBlank { bFields.getFsString("summary") },
+                                    category = name,
+                                    isPublicDomain = bFields.getFsBoolean("is_public_domain", false),
+                                    affiliateQrUrl = bFields.getFsString("affiliate_url").takeIf { it.isNotBlank() },
+                                    publicDownloadUrl = bFields.getFsString("download_url").takeIf { it.isNotBlank() },
+                                    difficultyLevel = bFields.getFsInt("difficulty_level", 1)
                                 )
                             )
                         }
-                    }
-
-                    val archetype = when {
-                        sId.contains("prodigy") || sId.contains("lisa") || sId.contains("matilda") || sId.contains("hermione") -> CuratorArchetype.PRODIGY
-                        sId.contains("detective") || sId.contains("house") || sId.contains("holmes") || sId.contains("jane") -> CuratorArchetype.DETECTIVE
-                        sId.contains("cosmic") || sId.contains("dune") || sId.contains("stark") -> CuratorArchetype.COSMIC
-                        sId.contains("classic") || sId.contains("quijote") -> CuratorArchetype.CLASSICS
-                        else -> CuratorArchetype.GENERAL
                     }
 
                     sections.add(
                         CuratorSection(
                             id = sId,
                             archetype = archetype,
-                            name = charName,
-                            tagline = quote.ifBlank { archetype.subtitle },
+                            name = name,
+                            tagline = tagline,
                             books = booksList,
                             avatarUrl = avatarUrl.takeIf { it.isNotBlank() },
                             quote = quote.takeIf { it.isNotBlank() }
                         )
                     )
                 }
-
                 if (sections.isNotEmpty()) {
                     cachedCmsSections = sections
-                    Log.d(TAG, "Successfully synced ${sections.size} shelves from CMS: $cmsUrl")
+                    Log.d(TAG, "Sincronizadas ${sections.size} estanterías desde Cloud Firestore")
                     return@withContext true
                 }
             }
             false
         } catch (e: Exception) {
-            Log.d(TAG, "CMS sync offline or failed: ${e.message}")
+            Log.d(TAG, "Cloud Firestore shelves sync error: ${e.message}")
             false
         }
     }
