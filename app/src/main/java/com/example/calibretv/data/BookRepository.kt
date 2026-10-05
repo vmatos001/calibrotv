@@ -118,8 +118,9 @@ class BookRepository(private val context: Context) {
         name: String,
         colorHex: String = "#FFA000",
         isKidsMode: Boolean = false,
-        parentalPin: String? = null
-    ): UserProfile = prefs.createProfile(name, colorHex, isKidsMode, parentalPin)
+        parentalPin: String? = null,
+        preferredLanguage: String = "es"
+    ): UserProfile = prefs.createProfile(name, colorHex, isKidsMode, parentalPin, preferredLanguage)
     fun updateProfile(updated: UserProfile) = prefs.updateProfile(updated)
     fun deleteProfile(profileId: String): Boolean = prefs.deleteProfile(profileId)
     fun awardStarToProfile(profileId: String, count: Int = 1): Int = prefs.awardStarToProfile(profileId, count)

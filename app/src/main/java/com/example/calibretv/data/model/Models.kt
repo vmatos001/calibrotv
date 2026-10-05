@@ -100,7 +100,8 @@ data class UserProfile(
     val isKidsMode: Boolean = false,
     val parentalPin: String? = null,
     val starsCount: Int = 0,
-    val whitelistBookIds: List<String> = emptyList()
+    val whitelistBookIds: List<String> = emptyList(),
+    val preferredLanguage: String = "es" // "es" o "en"
 )
 
 @Serializable

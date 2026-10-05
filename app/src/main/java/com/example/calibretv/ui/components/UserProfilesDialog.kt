@@ -89,6 +89,7 @@ fun UserProfilesDialog(
     var selectedColorHex by remember { mutableStateOf("#C5A059") }
     var isNewUserKidsMode by remember { mutableStateOf(false) }
     var newUserPin by remember { mutableStateOf<String?>(null) }
+    var newUserLanguage by remember { mutableStateOf("es") }
 
     // PIN Pad states
     var showPinPadForTargetProfile by remember { mutableStateOf<UserProfile?>(null) }
@@ -218,6 +219,16 @@ fun UserProfilesDialog(
                         ) {
                             Text("Activo: ", color = if (isDarkTheme) TextMuted else InkSecondary, fontSize = 12.sp)
                             Text(currentActive.name, color = AccentGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = currentActive.preferredLanguage.uppercase(),
+                                color = if (isDarkTheme) Color(0xFF90CAF9) else Color(0xFF1976D2),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(if (isDarkTheme) Color(0xFF152642) else Color(0xFFE3F2FD))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            )
                             if (currentActive.isKidsMode) {
                                 Text("🎈", fontSize = 12.sp)
                             }
@@ -322,11 +333,21 @@ fun UserProfilesDialog(
                                         maxLines = 1
                                     )
 
-                                    // Badges row: Kids, Stars, Pin Lock
+                                    // Badges row: Language, Kids, Stars, Pin Lock
                                     Row(
                                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
+                                        Text(
+                                            text = profile.preferredLanguage.uppercase(),
+                                            color = if (isDarkTheme) Color(0xFF90CAF9) else Color(0xFF1976D2),
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(3.dp))
+                                                .background(if (isDarkTheme) Color(0xFF152642) else Color(0xFFE3F2FD))
+                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                        )
                                         if (profile.isKidsMode) {
                                             Text(
                                                 text = "🎈 Kids",
@@ -532,6 +553,46 @@ fun UserProfilesDialog(
                                 )
                             }
 
+                            // Language Preference Toggle Button
+                            var isLangBtnFocused by remember { mutableStateOf(false) }
+                            Box(
+                                modifier = Modifier
+                                    .height(50.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        when {
+                                            isLangBtnFocused -> AccentGold
+                                            newUserLanguage == "en" -> Color(0xFF152642)
+                                            else -> if (isDarkTheme) SurfaceRaised else Color(0xFFF3F5F3)
+                                        }
+                                    )
+                                    .border(
+                                        width = if (isLangBtnFocused || newUserLanguage == "en") 1.5.dp else if (isDarkTheme) 1.dp else 0.dp,
+                                        color = if (isLangBtnFocused) Color.White else if (newUserLanguage == "en") Color(0xFF64B5F6) else if (isDarkTheme) Color(0xFF383842) else Color.Transparent,
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .onFocusChanged { isLangBtnFocused = it.isFocused }
+                                    .onKeyEvent { event ->
+                                        if (event.type == KeyEventType.KeyDown &&
+                                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                        ) {
+                                            newUserLanguage = if (newUserLanguage == "en") "es" else "en"
+                                            true
+                                        } else false
+                                    }
+                                    .focusable()
+                                    .clickable { newUserLanguage = if (newUserLanguage == "en") "es" else "en" }
+                                    .padding(horizontal = 14.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (newUserLanguage == "en") "Idioma: English (EN)" else "Idioma: Español (ES)",
+                                    color = if (isLangBtnFocused) Color(0xFF0C0A09) else if (newUserLanguage == "en") Color(0xFF90CAF9) else (if (isDarkTheme) TextMuted else InkSecondary),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
                             // Save button
                             var isSaveFocused by remember { mutableStateOf(false) }
                             Box(
@@ -549,7 +610,8 @@ fun UserProfilesDialog(
                                                     name = newUserName.trim(),
                                                     colorHex = selectedColorHex,
                                                     isKidsMode = isNewUserKidsMode,
-                                                    parentalPin = newUserPin
+                                                    parentalPin = newUserPin,
+                                                    preferredLanguage = newUserLanguage
                                                 )
                                                 profiles = repository.getProfiles()
                                                 currentActive = created
@@ -558,6 +620,7 @@ fun UserProfilesDialog(
                                                 newUserName = ""
                                                 isNewUserKidsMode = false
                                                 newUserPin = null
+                                                newUserLanguage = "es"
                                             }
                                             true
                                         } else false
@@ -569,7 +632,8 @@ fun UserProfilesDialog(
                                                 name = newUserName.trim(),
                                                 colorHex = selectedColorHex,
                                                 isKidsMode = isNewUserKidsMode,
-                                                parentalPin = newUserPin
+                                                parentalPin = newUserPin,
+                                                preferredLanguage = newUserLanguage
                                             )
                                             profiles = repository.getProfiles()
                                             currentActive = created
@@ -578,6 +642,7 @@ fun UserProfilesDialog(
                                             newUserName = ""
                                             isNewUserKidsMode = false
                                             newUserPin = null
+                                            newUserLanguage = "es"
                                         }
                                     }
                                     .padding(horizontal = 18.dp),
@@ -677,6 +742,53 @@ fun UserProfilesDialog(
                         Text(
                             text = if (showCreateField) "Cancelar" else "Crear Nuevo Perfil",
                             color = if (isAddFocused) Color(0xFF0C0A09) else (if (isDarkTheme) TextPrimary else InkPrimary),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // Active Profile Language Switcher Button
+                    var isLangToggleFocused by remember { mutableStateOf(false) }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier
+                            .shadow(if (isDarkTheme) 0.dp else 2.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.08f))
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isLangToggleFocused) AccentGold else (if (isDarkTheme) SurfaceContainerHigh else Color.White))
+                            .border(
+                                width = if (isLangToggleFocused) 2.dp else if (isDarkTheme) 1.dp else 0.dp,
+                                color = if (isLangToggleFocused) Color.White else if (isDarkTheme) Color(0xFF383842) else Color.Transparent,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .onFocusChanged { isLangToggleFocused = it.isFocused }
+                            .onKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown &&
+                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                ) {
+                                    val nextLang = if (currentActive.preferredLanguage == "en") "es" else "en"
+                                    val updated = currentActive.copy(preferredLanguage = nextLang)
+                                    repository.updateProfile(updated)
+                                    currentActive = updated
+                                    profiles = repository.getProfiles()
+                                    onProfileChanged(updated)
+                                    true
+                                } else false
+                            }
+                            .focusable()
+                            .clickable {
+                                val nextLang = if (currentActive.preferredLanguage == "en") "es" else "en"
+                                val updated = currentActive.copy(preferredLanguage = nextLang)
+                                repository.updateProfile(updated)
+                                currentActive = updated
+                                profiles = repository.getProfiles()
+                                onProfileChanged(updated)
+                            }
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                    ) {
+                        Text(
+                            text = if (currentActive.preferredLanguage == "en") "Idioma: English (EN)" else "Idioma: Español (ES)",
+                            color = if (isLangToggleFocused) Color(0xFF0C0A09) else (if (isDarkTheme) TextPrimary else InkPrimary),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )

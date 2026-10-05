@@ -160,7 +160,8 @@ class PreferencesManager(context: Context) {
                         isKidsMode = o.optBoolean("isKidsMode", false),
                         parentalPin = if (o.has("parentalPin") && !o.isNull("parentalPin")) o.getString("parentalPin") else null,
                         starsCount = o.optInt("starsCount", 0),
-                        whitelistBookIds = whiteList
+                        whitelistBookIds = whiteList,
+                        preferredLanguage = o.optString("preferredLanguage", "es")
                     )
                 )
             }
@@ -183,6 +184,7 @@ class PreferencesManager(context: Context) {
                     o.put("parentalPin", p.parentalPin)
                 }
                 o.put("starsCount", p.starsCount)
+                o.put("preferredLanguage", p.preferredLanguage)
                 val whiteArr = org.json.JSONArray()
                 p.whitelistBookIds.forEach { whiteArr.put(it) }
                 o.put("whitelistBookIds", whiteArr)
@@ -196,7 +198,8 @@ class PreferencesManager(context: Context) {
         name: String,
         colorHex: String = "#FFA000",
         isKidsMode: Boolean = false,
-        parentalPin: String? = null
+        parentalPin: String? = null,
+        preferredLanguage: String = "es"
     ): UserProfile {
         val current = getProfiles().toMutableList()
         val newId = "user_${System.currentTimeMillis()}"
@@ -205,7 +208,8 @@ class PreferencesManager(context: Context) {
             name = name.ifBlank { if (isKidsMode) "Modo Niños" else "Mi Perfil" },
             avatarColorHex = colorHex,
             isKidsMode = isKidsMode,
-            parentalPin = parentalPin
+            parentalPin = parentalPin,
+            preferredLanguage = preferredLanguage
         )
         current.add(newProfile)
         saveProfiles(current)
@@ -279,7 +283,8 @@ class PreferencesManager(context: Context) {
         }
         val name = prefs.getString("active_profile_name", "Mi Perfil") ?: "Mi Perfil"
         val color = prefs.getString("active_profile_color", "#FFA000") ?: "#FFA000"
-        return UserProfile("user_default", name, color)
+        val lang = prefs.getString("active_profile_language", "es") ?: "es"
+        return UserProfile("user_default", name, color, preferredLanguage = lang)
     }
 
     fun saveActiveProfile(profile: UserProfile) {
@@ -287,6 +292,7 @@ class PreferencesManager(context: Context) {
             .putString("active_profile_id", profile.id)
             .putString("active_profile_name", profile.name)
             .putString("active_profile_color", profile.avatarColorHex)
+            .putString("active_profile_language", profile.preferredLanguage)
             .apply()
     }
 

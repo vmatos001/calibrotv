@@ -151,7 +151,7 @@ fun HomeScreen(
     val modalReadFocusRequester = remember { FocusRequester() }
 
     // Cartelera Dinámica: Hero Banner 16:9 + Carrusel de Ofertas (CMS /api/v1/cartelera/home)
-    var homeCarteleraData by remember { mutableStateOf(CuratorRepository.getOfflineHomeData()) }
+    var homeCarteleraData by remember { mutableStateOf(CuratorRepository.getOfflineHomeData(activeProfile.preferredLanguage)) }
 
     // Estanterías por Personajes / Arquetipos (CMS /api/v1/cartelera/shelves)
     var allCuratorSections by remember { mutableStateOf(CuratorRepository.getCuratedSections()) }
@@ -171,13 +171,13 @@ fun HomeScreen(
     var selectedCuratedBook by remember { mutableStateOf<CuratedBook?>(null) }
     var isDownloadingCuratedBook by remember { mutableStateOf(false) }
 
-    // Sincronización continua con CMS
-    LaunchedEffect(Unit) {
+    // Sincronización continua con CMS adaptada al idioma del perfil activo
+    LaunchedEffect(activeProfile.id, activeProfile.preferredLanguage) {
         val prefs = PreferencesManager(context)
         val cmsUrl = prefs.getCmsServerUrl()
         coroutineScope.launch {
             try {
-                val data = CuratorRepository.fetchHomeCartelera(cmsUrl)
+                val data = CuratorRepository.fetchHomeCartelera(cmsUrl, language = activeProfile.preferredLanguage)
                 homeCarteleraData = data
             } catch (e: Exception) {
                 Log.d("HomeScreen", "CMS Cartelera offline fallback: ${e.message}")

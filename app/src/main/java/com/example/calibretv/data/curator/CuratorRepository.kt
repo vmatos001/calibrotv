@@ -157,54 +157,70 @@ object CuratorRepository {
         }
     }
 
-    suspend fun fetchHomeCartelera(cmsUrl: String? = null): HomeCarteleraData = withContext(Dispatchers.IO) {
+    suspend fun fetchHomeCartelera(cmsUrl: String? = null, language: String = "es"): HomeCarteleraData = withContext(Dispatchers.IO) {
         try {
-            val hero = fetchHeroFromFirestore()
+            val isSpanish = !language.equals("en", ignoreCase = true)
+            val hero = fetchHeroFromFirestore(isSpanish = isSpanish)
             val offers = fetchOffersFromFirestore()
             if (hero != null || offers.isNotEmpty()) {
                 val data = HomeCarteleraData(
-                    heroBanner = hero ?: getOfflineHomeData().heroBanner,
-                    offers = if (offers.isNotEmpty()) offers else getOfflineHomeData().offers
+                    heroBanner = hero ?: getOfflineHomeData(language).heroBanner,
+                    offers = if (offers.isNotEmpty()) offers else getOfflineHomeData(language).offers
                 )
                 cachedHomeData = data
                 return@withContext data
             }
-            cachedHomeData ?: getOfflineHomeData()
+            cachedHomeData ?: getOfflineHomeData(language)
         } catch (e: Exception) {
             Log.d(TAG, "fetchHomeCartelera failed: ${e.message}")
-            cachedHomeData ?: getOfflineHomeData()
+            cachedHomeData ?: getOfflineHomeData(language)
         }
     }
 
-    fun getOfflineHomeData(): HomeCarteleraData {
+    fun getOfflineHomeData(language: String = "es"): HomeCarteleraData {
+        val isEnglish = language.equals("en", ignoreCase = true)
         return HomeCarteleraData(
-            heroBanner = HeroBanner(
-                id = "main_hero_offline",
-                title = "El Problema de los Tres Cuerpos",
-                author = "Cixin Liu",
-                tagline = "El fenómeno mundial de la ciencia ficción que desafía las leyes del cosmos",
-                synopsis = "Durante la Revolución Cultural china, una señal militar secreta viaja al espacio exterior desatando una conspiración cuántica global sin precedentes.",
-                backdropUrl = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1920&auto=format&fit=crop",
-                coverUrl = "https://covers.openlibrary.org/b/isbn/9788466659734-L.jpg",
-                sampleEpubUrl = "https://standardebooks.org/ebooks/h-g-wells/the-war-of-the-worlds/downloads/h-g-wells_the-war-of-the-worlds.epub",
-                affiliatePurchaseUrl = "https://www.amazon.es/dp/8466659730?tag=calibrotv-21"
-            ),
+            heroBanner = if (isEnglish) {
+                HeroBanner(
+                    id = "main_hero_offline_en",
+                    title = "The Three-Body Problem",
+                    author = "Cixin Liu",
+                    tagline = "The world-renowned sci-fi phenomenon that defies the laws of the cosmos",
+                    synopsis = "Set against the backdrop of China's Cultural Revolution, a secret military project sends signals into space to establish contact with aliens, triggering an unprecedented cosmic crisis.",
+                    backdropUrl = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1920&auto=format&fit=crop",
+                    coverUrl = "https://covers.openlibrary.org/b/isbn/9780765377067-L.jpg",
+                    sampleEpubUrl = "https://standardebooks.org/ebooks/h-g-wells/the-war-of-the-worlds/downloads/h-g-wells_the-war-of-the-worlds.epub",
+                    affiliatePurchaseUrl = "https://www.amazon.com/dp/0765382032"
+                )
+            } else {
+                HeroBanner(
+                    id = "main_hero_offline_es",
+                    title = "El Problema de los Tres Cuerpos",
+                    author = "Cixin Liu",
+                    tagline = "El fenómeno mundial de la ciencia ficción que desafía las leyes del cosmos",
+                    synopsis = "Durante la Revolución Cultural china, una señal militar secreta viaja al espacio exterior desatando una conspiración cuántica global sin precedentes.",
+                    backdropUrl = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1920&auto=format&fit=crop",
+                    coverUrl = "https://covers.openlibrary.org/b/isbn/9788466659734-L.jpg",
+                    sampleEpubUrl = "https://standardebooks.org/ebooks/h-g-wells/the-war-of-the-worlds/downloads/h-g-wells_the-war-of-the-worlds.epub",
+                    affiliatePurchaseUrl = "https://www.amazon.es/dp/8466659730?tag=calibrotv-21"
+                )
+            },
             offers = listOf(
                 BookOffer(
                     id = "off_1",
-                    title = "Dune (Edición Especial 60º Aniversario)",
+                    title = if (isEnglish) "Dune (60th Anniversary Edition)" else "Dune (Edición Especial 60º Aniversario)",
                     author = "Frank Herbert",
                     coverUrl = "https://images-na.ssl-images-amazon.com/images/S/compressed.photo.goodreads.com/books/1555447414i/44767458.jpg",
                     discountTag = "-45%",
-                    affiliateUrl = "https://www.amazon.es/dp/8401025553?tag=calibrotv-21"
+                    affiliateUrl = if (isEnglish) "https://www.amazon.com/dp/0441172717" else "https://www.amazon.es/dp/8401025553?tag=calibrotv-21"
                 ),
                 BookOffer(
                     id = "off_2",
-                    title = "Klara y el Sol",
+                    title = if (isEnglish) "Klara and the Sun" else "Klara y el Sol",
                     author = "Kazuo Ishiguro",
                     coverUrl = "https://images-na.ssl-images-amazon.com/images/S/compressed.photo.goodreads.com/books/1603206535i/54120408.jpg",
                     discountTag = "-30%",
-                    affiliateUrl = "https://www.amazon.es/dp/8433999242?tag=calibrotv-21"
+                    affiliateUrl = if (isEnglish) "https://www.amazon.com/dp/0593318171" else "https://www.amazon.es/dp/8433999242?tag=calibrotv-21"
                 )
             )
         )
@@ -218,8 +234,8 @@ object CuratorRepository {
         return getCuratedSections().flatMap { it.books }.distinctBy { it.id }
     }
 
-    suspend fun fetchHeroBanner(cmsUrl: String? = null): HeroBanner? {
-        return fetchHomeCartelera(cmsUrl).heroBanner
+    suspend fun fetchHeroBanner(cmsUrl: String? = null, language: String = "es"): HeroBanner? {
+        return fetchHomeCartelera(cmsUrl, language).heroBanner
     }
 
     suspend fun syncWithCms(cmsUrl: String? = null): Boolean = withContext(Dispatchers.IO) {

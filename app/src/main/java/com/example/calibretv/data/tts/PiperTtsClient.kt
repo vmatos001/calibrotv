@@ -103,10 +103,16 @@ object PiperTtsClient {
      */
     fun resolveVoiceId(localeCode: String, fallbackVoice: String = "es_MX-claude-high"): String {
         return when {
-            localeCode.contains("MX", ignoreCase = true) || localeCode.contains("Latino", ignoreCase = true) -> "es_MX-claude-high"
-            localeCode.contains("ES", ignoreCase = true) || localeCode.contains("España", ignoreCase = true) -> "es_ES-sharvard-medium"
-            localeCode.contains("GB", ignoreCase = true) || localeCode.contains("UK", ignoreCase = true) -> "en_GB-alan-medium"
-            localeCode.contains("US", ignoreCase = true) || localeCode.contains("en", ignoreCase = true) -> "en_US-ryan-high"
+            // Español (4 voces)
+            localeCode.equals("es-ES", ignoreCase = true) || localeCode.contains("España", ignoreCase = true) -> "es_ES-sharvard-medium"
+            localeCode.equals("es-MX", ignoreCase = true) || localeCode.contains("México", ignoreCase = true) -> "es_MX-claude-high"
+            localeCode.equals("es-US", ignoreCase = true) || localeCode.contains("Latino", ignoreCase = true) -> "es_MX-ald-medium"
+            localeCode.equals("es-AR", ignoreCase = true) || localeCode.contains("Argentina", ignoreCase = true) -> "es_ES-carlfm-x_low"
+            // Inglés (4 voces)
+            localeCode.equals("en-GB", ignoreCase = true) || localeCode.contains("UK", ignoreCase = true) || localeCode.contains("Reino Unido", ignoreCase = true) -> "en_GB-alan-medium"
+            localeCode.equals("en-AU", ignoreCase = true) || localeCode.contains("Australia", ignoreCase = true) -> "en_GB-alba-medium"
+            localeCode.equals("en-CA", ignoreCase = true) || localeCode.contains("Canadá", ignoreCase = true) || localeCode.contains("Canada", ignoreCase = true) -> "en_US-amy-medium"
+            localeCode.equals("en-US", ignoreCase = true) || localeCode.contains("EE.UU.", ignoreCase = true) || localeCode.startsWith("en", ignoreCase = true) -> "en_US-ryan-high"
             else -> fallbackVoice
         }
     }

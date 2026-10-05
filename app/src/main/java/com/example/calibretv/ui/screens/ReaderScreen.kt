@@ -94,6 +94,7 @@ import com.example.calibretv.data.BookRepository
 import com.example.calibretv.data.sound.AmbientSoundManager
 import com.example.calibretv.data.sound.SoundManager
 import com.example.calibretv.data.tts.TtsController
+import com.example.calibretv.data.tts.TtsVoiceCatalog
 import com.example.calibretv.data.epub.EpubParser
 import com.example.calibretv.data.epub.PageContent
 import com.example.calibretv.data.epub.PageItem
@@ -124,6 +125,43 @@ enum class ReaderHudCategory(val title: String, val icon: ImageVector) {
     VOZ_TTS("Voz TTS", Icons.Filled.RecordVoiceOver),
     AMBIENTE("Ambiente", Icons.Filled.MusicNote),
     HERRAMIENTAS("Herramientas", Icons.Default.MenuBook)
+}
+
+private fun detectBookLanguage(book: Book, spreads: List<PageSpread>): String {
+    // 1. Tag or category check
+    val tags = (book.tags + listOf(book.category)).map { it.lowercase() }
+    if (tags.any { it in listOf("en", "eng", "english", "inglés", "ingles") }) return "en"
+    if (tags.any { it in listOf("es", "spa", "spanish", "español", "espanol") }) return "es"
+
+    // 2. Sample text from the first spreads
+    val sb = java.lang.StringBuilder()
+    for (i in 0 until minOf(5, spreads.size)) {
+        val s = spreads[i]
+        val left = s.leftPage.paragraphs.joinToString(" ")
+        val right = s.rightPage.paragraphs.joinToString(" ")
+        sb.append(" ").append(left).append(" ").append(right)
+        if (sb.length > 600) break
+    }
+    val sample = sb.toString().lowercase()
+    if (sample.isNotBlank()) {
+        val esWords = listOf(" el ", " la ", " los ", " las ", " de ", " que ", " en ", " y ", " un ", " una ", " por ", " con ", " para ", " como ")
+        val enWords = listOf(" the ", " and ", " of ", " to ", " in ", " that ", " is ", " was ", " he ", " with ", " for ", " as ", " on ", " at ")
+        var esCount = 0
+        for (w in esWords) {
+            esCount += sample.split(w).size - 1
+        }
+        var enCount = 0
+        for (w in enWords) {
+            enCount += sample.split(w).size - 1
+        }
+        if (enCount > esCount && enCount >= 3) return "en"
+        if (esCount > 0) return "es"
+    }
+
+    // 3. Fallback to book title / summary
+    val meta = "${book.title} ${book.summary}".lowercase()
+    if (meta.contains(" the ") || meta.contains(" and ") || meta.contains(" of ")) return "en"
+    return "es"
 }
 
 @Composable
@@ -198,12 +236,24 @@ fun ReaderScreen(
         }
     }
 
+    val bookLanguage = remember(book.id, spreads.size) { detectBookLanguage(book, spreads) }
+
+    LaunchedEffect(bookLanguage) {
+        val validVoice = TtsVoiceCatalog.ensureValidVoiceCode(settings.ttsVoiceLocale, bookLanguage)
+        if (validVoice != settings.ttsVoiceLocale) {
+            settings = settings.copy(ttsVoiceLocale = validVoice)
+            repository.saveReadingSettings(settings)
+        }
+    }
+
     // Trigger Apple Books realistic 3D paper curl
-    fun turnPage(forward: Boolean) {
-        if (isFlipping) return
+    suspend fun turnPageSuspend(forward: Boolean, stopTts: Boolean = true): Boolean {
+        if (isFlipping) return false
         val nextIdx = if (forward) currentSpreadIndex + 1 else currentSpreadIndex - 1
-        if (nextIdx !in spreads.indices) return
-        ttsController.stop()
+        if (nextIdx !in spreads.indices) return false
+        if (stopTts) {
+            ttsController.stop()
+        }
         if (settings.pageSoundEnabled) {
             soundManager.playPageTurn()
         }
@@ -212,37 +262,47 @@ fun ReaderScreen(
         flipDirectionForward = forward
         targetSpreadIndex = nextIdx
 
-        scope.launch {
-            // Realistic organic duration: Apple Books 500ms vs Fluid 320ms
-            val animDuration = if (settings.curlSpeed == CurlSpeed.APPLE_BOOKS_SMOOTH) 500 else 320
-            // Organic paper physics easing (starts with natural peel resistance, accelerates through apex, decelerates as page lands)
-            val paperEasing = CubicBezierEasing(0.35f, 0.05f, 0.25f, 1.0f)
+        // Realistic organic duration: Apple Books 500ms vs Fluid 320ms
+        val animDuration = if (settings.curlSpeed == CurlSpeed.APPLE_BOOKS_SMOOTH) 500 else 320
+        // Organic paper physics easing (starts with natural peel resistance, accelerates through apex, decelerates as page lands)
+        val paperEasing = CubicBezierEasing(0.35f, 0.05f, 0.25f, 1.0f)
 
-            curlAnim.snapTo(0f)
-            curlAnim.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(animDuration, easing = paperEasing)
-            )
+        curlAnim.snapTo(0f)
+        curlAnim.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(animDuration, easing = paperEasing)
+        )
 
-            val pct = if (spreads.isNotEmpty()) (((nextIdx + 1) * 100) / spreads.size).coerceIn(1, 100) else 0
-            currentSpreadIndex = nextIdx
-            repository.saveBookProgress(book.id, nextIdx, pct)
-            curlAnim.snapTo(0f)
-            isFlipping = false
+        val pct = if (spreads.isNotEmpty()) (((nextIdx + 1) * 100) / spreads.size).coerceIn(1, 100) else 0
+        currentSpreadIndex = nextIdx
+        repository.saveBookProgress(book.id, nextIdx, pct)
+        curlAnim.snapTo(0f)
+        isFlipping = false
+        return true
+    }
+
+    fun turnPage(forward: Boolean) {
+        if (!isFlipping) {
+            scope.launch {
+                turnPageSuspend(forward, stopTts = true)
+            }
         }
     }
 
-    LaunchedEffect(ttsController) {
+    LaunchedEffect(ttsController, bookLanguage, spreads.size) {
         ttsController.onPageFinishedListener = {
             if (currentSpreadIndex < spreads.size - 1) {
                 scope.launch {
-                    turnPage(forward = true)
-                    kotlinx.coroutines.delay(450L)
-                    val nextL = spreads.getOrNull(currentSpreadIndex)?.leftPage?.paragraphs?.joinToString(" ") ?: ""
-                    val nextR = spreads.getOrNull(currentSpreadIndex)?.rightPage?.paragraphs?.joinToString(" ") ?: ""
-                    val nextText = listOf(nextL, nextR).filter { it.isNotBlank() }.joinToString(" ")
-                    if (nextText.isNotBlank()) {
-                        ttsController.readPage(nextText, settings.ttsSpeedRate, settings.ttsPitch, settings.ttsVoiceLocale)
+                    val targetIdx = currentSpreadIndex + 1
+                    val turned = turnPageSuspend(forward = true, stopTts = false)
+                    if (turned) {
+                        val nextL = spreads.getOrNull(targetIdx)?.leftPage?.paragraphs?.joinToString(" ") ?: ""
+                        val nextR = spreads.getOrNull(targetIdx)?.rightPage?.paragraphs?.joinToString(" ") ?: ""
+                        val nextText = listOf(nextL, nextR).filter { it.isNotBlank() }.joinToString(" ")
+                        if (nextText.isNotBlank()) {
+                            val activeVoice = TtsVoiceCatalog.ensureValidVoiceCode(settings.ttsVoiceLocale, bookLanguage)
+                            ttsController.readPage(nextText, settings.ttsSpeedRate, settings.ttsPitch, activeVoice)
+                        }
                     }
                 }
             }
@@ -885,21 +945,13 @@ fun ReaderScreen(
                                             repository.saveReadingSettings(settings)
                                         }
                                     )
-                                    val voiceName = when (settings.ttsVoiceLocale) {
-                                        "es-ES" -> "España"
-                                        "es-MX" -> "México"
-                                        else -> "Latino"
-                                    }
+                                    val voiceName = TtsVoiceCatalog.getVoiceDisplayName(settings.ttsVoiceLocale, bookLanguage)
                                     VerticalHudOptionButton(
                                         title = "Voz: $voiceName",
                                         icon = Icons.Filled.RecordVoiceOver,
                                         onClick = {
-                                            val nextLoc = when (settings.ttsVoiceLocale) {
-                                                "es-ES" -> "es-MX"
-                                                "es-MX" -> "es-US"
-                                                else -> "es-ES"
-                                            }
-                                            settings = settings.copy(ttsVoiceLocale = nextLoc)
+                                            val nextVoice = TtsVoiceCatalog.getNextVoice(settings.ttsVoiceLocale, bookLanguage)
+                                            settings = settings.copy(ttsVoiceLocale = nextVoice.code)
                                             repository.saveReadingSettings(settings)
                                         }
                                     )
@@ -918,7 +970,8 @@ fun ReaderScreen(
                                                 val rightText = currentSpread?.rightPage?.paragraphs?.joinToString(" ") ?: ""
                                                 val pageText = listOf(leftText, rightText).filter { it.isNotBlank() }.joinToString(" ")
                                                 if (pageText.isNotBlank()) {
-                                                    ttsController.readPage(pageText, settings.ttsSpeedRate, settings.ttsPitch, settings.ttsVoiceLocale)
+                                                    val activeVoice = TtsVoiceCatalog.ensureValidVoiceCode(settings.ttsVoiceLocale, bookLanguage)
+                                                    ttsController.readPage(pageText, settings.ttsSpeedRate, settings.ttsPitch, activeVoice)
                                                 }
                                             }
                                         }
