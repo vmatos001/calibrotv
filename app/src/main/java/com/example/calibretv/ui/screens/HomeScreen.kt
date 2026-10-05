@@ -561,7 +561,39 @@ fun HomeScreen(
                                     isDarkTheme = isDarkTheme,
                                     isInteractive = !isAnyModalOpen,
                                     onBookClick = { curatedBook ->
-                                        selectedCuratedBook = curatedBook
+                                        val isLevel1 = curatedBook.isPublicDomain || curatedBook.difficultyLevel == 1
+                                        if (isLevel1) {
+                                            // Nivel 1 (Gratuito / Dominio Público): Al pulsar OK, abre el Lector 3D de inmediato con el .epub gratuito
+                                            val localBook = repository.getCachedBooks().find {
+                                                it.id == curatedBook.id || it.title.equals(curatedBook.title, ignoreCase = true)
+                                            }
+                                            if (localBook != null && !localBook.epubUrl.isNullOrBlank()) {
+                                                onBookSelected(localBook)
+                                            } else {
+                                                // Descarga ágil automática en segundo plano e inicio inmediato en Lector 3D
+                                                android.widget.Toast.makeText(context, "Abriendo ${curatedBook.title} en el Lector 3D...", android.widget.Toast.LENGTH_SHORT).show()
+                                                coroutineScope.launch {
+                                                    isDownloadingCuratedBook = true
+                                                    val res = CuratorRepository.downloadPublicDomainBook(context, curatedBook, repository)
+                                                    isDownloadingCuratedBook = false
+                                                    if (res.isSuccess) {
+                                                        val downloadedBook = res.getOrNull() ?: repository.getCachedBooks().find {
+                                                            it.id == curatedBook.id || it.title.equals(curatedBook.title, ignoreCase = true)
+                                                        }
+                                                        if (downloadedBook != null) {
+                                                            onBookSelected(downloadedBook)
+                                                        } else {
+                                                            feedContent = repository.getFeed()
+                                                        }
+                                                    } else {
+                                                        android.widget.Toast.makeText(context, "No se pudo descargar: ${res.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_LONG).show()
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            // Niveles 4 y 5 (Comerciales / Bestsellers): Al pulsar OK, abre el Modal Multi-Tienda con Código QR
+                                            selectedCuratedBook = curatedBook
+                                        }
                                     },
                                     onLeftAtBoundary = { sidebarFocusRequester.requestFocus() }
                                 )

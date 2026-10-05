@@ -66,7 +66,8 @@ enum class AmbientSound {
     FIREPLACE,  // Chimenea crepitando
     OCEAN,      // Olas del mar
     CAFE,       // Cafetería con murmullos
-    FOREST      // Bosque / naturaleza
+    FOREST,     // Bosque / naturaleza
+    LOFI        // Frecuencias Lo-Fi / Concentración 432Hz
 }
 
 @Serializable

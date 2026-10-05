@@ -764,7 +764,8 @@ fun SettingsScreen(
                             AmbientSound.FIREPLACE to "🔥 Chimenea",
                             AmbientSound.OCEAN to "🌊 Mar",
                             AmbientSound.CAFE to "☕ Café",
-                            AmbientSound.FOREST to "🌲 Bosque"
+                            AmbientSound.FOREST to "🌲 Bosque",
+                            AmbientSound.LOFI to "🎧 Lo-Fi"
                         ).forEach { (sound, label) ->
                             SegmentedOption(
                                 modifier = Modifier.weight(1f),

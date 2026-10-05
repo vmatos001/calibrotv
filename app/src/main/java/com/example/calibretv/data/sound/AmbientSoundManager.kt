@@ -1,9 +1,9 @@
 package com.example.calibretv.data.sound
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.util.Log
-import com.example.calibretv.R
 import com.example.calibretv.data.model.AmbientSound
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -13,7 +13,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Gestor de paisajes sonoros inmersivos para BookSpread.
- * Implementa Ducking Automático (atenuación al 20% con fade suave)
+ * Reproduce en bucle vía streaming desde la nube (sin inflar el tamaño del APK)
+ * e implementa Ducking Automático (atenuación al 20% con fade suave)
  * coordinado con la lectura en voz alta (TTS) para evitar colisiones acústicas.
  */
 class AmbientSoundManager(private val context: Context) {
@@ -31,13 +32,14 @@ class AmbientSoundManager(private val context: Context) {
     private var fadeJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Main)
 
-    private fun getResId(sound: AmbientSound): Int? = when (sound) {
+    private fun getStreamUrl(sound: AmbientSound): String? = when (sound) {
         AmbientSound.NONE -> null
-        AmbientSound.RAIN -> R.raw.ambient_rain
-        AmbientSound.FIREPLACE -> R.raw.ambient_fireplace
-        AmbientSound.OCEAN -> R.raw.ambient_ocean
-        AmbientSound.CAFE -> R.raw.ambient_cafe
-        AmbientSound.FOREST -> R.raw.ambient_forest
+        AmbientSound.RAIN -> "https://bookspread-app-2026.web.app/audio/stream/ambient_rain.ogg"
+        AmbientSound.FIREPLACE -> "https://bookspread-app-2026.web.app/audio/stream/ambient_fireplace.ogg"
+        AmbientSound.OCEAN -> "https://bookspread-app-2026.web.app/audio/stream/ambient_ocean.ogg"
+        AmbientSound.CAFE -> "https://bookspread-app-2026.web.app/audio/stream/ambient_cafe.ogg"
+        AmbientSound.FOREST -> "https://bookspread-app-2026.web.app/audio/stream/ambient_forest.ogg"
+        AmbientSound.LOFI -> "https://bookspread-app-2026.web.app/audio/stream/ambient_lofi.wav"
     }
 
     fun play(sound: AmbientSound, volume: Float = 0.4f) {
@@ -53,13 +55,31 @@ class AmbientSoundManager(private val context: Context) {
             }
             stop()
             if (sound == AmbientSound.NONE) return
-            val resId = getResId(sound) ?: return
+            val streamUrl = getStreamUrl(sound) ?: return
 
             currentActualVolume = if (isDucked) baseVolume * 0.20f else baseVolume
-            mediaPlayer = MediaPlayer.create(context, resId)?.apply {
+            mediaPlayer = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .build()
+                )
+                setDataSource(streamUrl)
                 isLooping = true
                 setVolume(currentActualVolume, currentActualVolume)
-                start()
+                setOnPreparedListener { player ->
+                    try {
+                        player.start()
+                    } catch (e: Throwable) {
+                        Log.e(TAG, "Failed to start streaming sound $sound", e)
+                    }
+                }
+                setOnErrorListener { _, what, extra ->
+                    Log.e(TAG, "MediaPlayer streaming error ($sound): what=$what extra=$extra")
+                    true
+                }
+                prepareAsync()
             }
             currentSound = sound
         } catch (e: Throwable) {

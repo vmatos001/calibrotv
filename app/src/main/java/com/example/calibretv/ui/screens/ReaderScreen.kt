@@ -1026,6 +1026,7 @@ fun ReaderScreen(
                                 AmbientSound.OCEAN -> "🌊 Mar"
                                 AmbientSound.CAFE -> "☕ Café"
                                 AmbientSound.FOREST -> "🌲 Bosque"
+                                AmbientSound.LOFI -> "🎧 Lo-Fi (432Hz)"
                             }
                             VerticalHudOptionButton(
                                 title = "Ambiente: $ambientLabel",
@@ -1038,7 +1039,8 @@ fun ReaderScreen(
                                         AmbientSound.FIREPLACE -> AmbientSound.OCEAN
                                         AmbientSound.OCEAN -> AmbientSound.CAFE
                                         AmbientSound.CAFE -> AmbientSound.FOREST
-                                        AmbientSound.FOREST -> AmbientSound.NONE
+                                        AmbientSound.FOREST -> AmbientSound.LOFI
+                                        AmbientSound.LOFI -> AmbientSound.NONE
                                     }
                                     settings = settings.copy(ambientSound = nextSound)
                                     repository.saveReadingSettings(settings)

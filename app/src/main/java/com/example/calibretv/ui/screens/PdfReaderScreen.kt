@@ -485,7 +485,8 @@ fun PdfReaderScreen(
                                 AmbientSound.FIREPLACE -> AmbientSound.OCEAN
                                 AmbientSound.OCEAN -> AmbientSound.CAFE
                                 AmbientSound.CAFE -> AmbientSound.FOREST
-                                AmbientSound.FOREST -> AmbientSound.NONE
+                                AmbientSound.FOREST -> AmbientSound.LOFI
+                                AmbientSound.LOFI -> AmbientSound.NONE
                             }
                             currentAmbientSound = nextSound
                             if (nextSound == AmbientSound.NONE) {
@@ -639,6 +640,7 @@ private fun PdfReaderTopHud(
                 AmbientSound.OCEAN -> "🌊 Mar"
                 AmbientSound.CAFE -> "☕ Café"
                 AmbientSound.FOREST -> "🌲 Bosque"
+                AmbientSound.LOFI -> "🎧 Lo-Fi"
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,

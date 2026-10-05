@@ -45,6 +45,11 @@ object CuratorRepository {
     private const val FIRESTORE_SHELVES = "$FIRESTORE_BASE/cartelera_shelves"
     private const val FIRESTORE_SOUNDS = "$FIRESTORE_BASE/cartelera_sounds"
 
+    // API REST Alternativa (Hosting Web de BookSpread)
+    private const val CMS_WEB_BASE = "https://bookspread-app-2026.web.app"
+    private const val CMS_WEB_API_HOME = "$CMS_WEB_BASE/api/v1/cartelera/home"
+    private const val CMS_WEB_API_SHELVES = "$CMS_WEB_BASE/api/v1/cartelera/shelves"
+
     private fun org.json.JSONObject.getFsString(field: String, default: String = ""): String {
         val f = optJSONObject(field) ?: return default
         return f.optString("stringValue", default)
@@ -120,6 +125,34 @@ object CuratorRepository {
             list
         } catch (e: Exception) {
             Log.d(TAG, "Offers fetch from Firestore failed: ${e.message}")
+            emptyList()
+        }
+    }
+
+    suspend fun fetchSoundsFromFirestore(): List<CloudAmbientSound> = withContext(Dispatchers.IO) {
+        try {
+            val json = fetchJsonFromUrl(FIRESTORE_SOUNDS) ?: return@withContext emptyList()
+            val docs = json.optJSONArray("documents") ?: return@withContext emptyList()
+            val list = mutableListOf<CloudAmbientSound>()
+            for (i in 0 until docs.length()) {
+                val d = docs.getJSONObject(i)
+                val fields = d.optJSONObject("fields") ?: continue
+                val rawUrl = fields.getFsString("stream_url")
+                val fullStreamUrl = if (rawUrl.startsWith("/")) "$CMS_WEB_BASE$rawUrl" else rawUrl
+                list.add(
+                    CloudAmbientSound(
+                        id = fields.getFsString("id", "sound_$i"),
+                        name = fields.getFsString("name"),
+                        streamUrl = fullStreamUrl,
+                        icon = fields.getFsString("icon"),
+                        isActive = fields.getFsBoolean("is_active", true),
+                        type = fields.getFsString("type", "permanent")
+                    )
+                )
+            }
+            list
+        } catch (e: Exception) {
+            Log.d(TAG, "Sounds fetch from Firestore failed: ${e.message}")
             emptyList()
         }
     }
@@ -219,6 +252,23 @@ object CuratorRepository {
                     if (booksField != null) {
                         for (j in 0 until booksField.length()) {
                             val bFields = booksField.getJSONObject(j).optJSONObject("mapValue")?.optJSONObject("fields") ?: continue
+                            val storeLinksObj = bFields.optJSONObject("store_links")?.optJSONObject("mapValue")?.optJSONObject("fields")
+                            val storesObj = storeLinksObj?.optJSONObject("stores")?.optJSONObject("mapValue")?.optJSONObject("fields")
+
+                            val amazonUrl = storesObj?.optJSONObject("amazon")?.optJSONObject("mapValue")?.optJSONObject("fields")?.getFsString("url")
+                                ?: storeLinksObj?.getFsString("amazon")
+                                ?: bFields.getFsString("affiliate_url").takeIf { it.isNotBlank() }
+
+                            val cdlUrl = storesObj?.optJSONObject("casadellibro")?.optJSONObject("mapValue")?.optJSONObject("fields")?.getFsString("url")
+                                ?: storeLinksObj?.getFsString("casadellibro")
+
+                            val gpUrl = storesObj?.optJSONObject("googleplay")?.optJSONObject("mapValue")?.optJSONObject("fields")?.getFsString("url")
+                                ?: storeLinksObj?.getFsString("googleplay")
+
+                            val parsedStoreLinks = if (amazonUrl != null || cdlUrl != null || gpUrl != null) {
+                                BookStoreLinks(amazon = amazonUrl, casaDelLibro = cdlUrl, googlePlay = gpUrl)
+                            } else null
+
                             booksList.add(
                                 CuratedBook(
                                     id = bFields.getFsString("id", "book_${i}_$j"),
@@ -230,7 +280,8 @@ object CuratorRepository {
                                     isPublicDomain = bFields.getFsBoolean("is_public_domain", false),
                                     affiliateQrUrl = bFields.getFsString("affiliate_url").takeIf { it.isNotBlank() },
                                     publicDownloadUrl = bFields.getFsString("download_url").takeIf { it.isNotBlank() },
-                                    difficultyLevel = bFields.getFsInt("difficulty_level", 1)
+                                    difficultyLevel = bFields.getFsInt("difficulty_level", 1),
+                                    storeLinks = parsedStoreLinks
                                 )
                             )
                         }
@@ -359,7 +410,13 @@ object CuratorRepository {
                         isPublicDomain = false,
                         affiliateQrUrl = "https://www.amazon.es/dp/8467045437?tag=calibrotv-21",
                         approximatePrice = "10,95 €",
-                        year = "1934"
+                        year = "1934",
+                        difficultyLevel = 4,
+                        storeLinks = BookStoreLinks(
+                            amazon = "https://www.amazon.es/dp/8467045437?tag=calibrotv-21",
+                            casaDelLibro = "https://www.casadellibro.com/libro-asesinato-en-el-orient-express/9788467045437/2585474",
+                            googlePlay = "https://play.google.com/store/search?q=Asesinato+en+el+Orient+Express+Agatha+Christie&c=books"
+                        )
                     )
                 )
             ),
@@ -379,7 +436,8 @@ object CuratorRepository {
                         isPublicDomain = true,
                         publicDownloadUrl = "https://www.gutenberg.org/ebooks/36.epub.images",
                         approximatePrice = "Gratis (Dominio Público)",
-                        year = "1898"
+                        year = "1898",
+                        difficultyLevel = 1
                     ),
                     CuratedBook(
                         id = "pub_viaje_luna",
@@ -391,7 +449,8 @@ object CuratorRepository {
                         isPublicDomain = true,
                         publicDownloadUrl = "https://www.gutenberg.org/ebooks/83.epub.images",
                         approximatePrice = "Gratis (Dominio Público)",
-                        year = "1865"
+                        year = "1865",
+                        difficultyLevel = 1
                     ),
                     CuratedBook(
                         id = "com_dune",
@@ -403,7 +462,13 @@ object CuratorRepository {
                         isPublicDomain = false,
                         affiliateQrUrl = "https://www.amazon.es/dp/8466353774?tag=calibrotv-21",
                         approximatePrice = "12,95 €",
-                        year = "1965"
+                        year = "1965",
+                        difficultyLevel = 5,
+                        storeLinks = BookStoreLinks(
+                            amazon = "https://www.amazon.es/dp/8466353774?tag=calibrotv-21",
+                            casaDelLibro = "https://www.casadellibro.com/libro-dune/9788466353779/11690045",
+                            googlePlay = "https://play.google.com/store/search?q=Dune+Frank+Herbert&c=books"
+                        )
                     )
                 )
             ),
@@ -423,7 +488,8 @@ object CuratorRepository {
                         isPublicDomain = true,
                         publicDownloadUrl = "https://www.gutenberg.org/ebooks/132.epub.images",
                         approximatePrice = "Gratis (Dominio Público)",
-                        year = "Siglo V a.C."
+                        year = "Siglo V a.C.",
+                        difficultyLevel = 1
                     ),
                     CuratedBook(
                         id = "pub_meditaciones",
@@ -435,7 +501,8 @@ object CuratorRepository {
                         isPublicDomain = true,
                         publicDownloadUrl = "https://www.gutenberg.org/ebooks/2680.epub.images",
                         approximatePrice = "Gratis (Dominio Público)",
-                        year = "180 d.C."
+                        year = "180 d.C.",
+                        difficultyLevel = 1
                     ),
                     CuratedBook(
                         id = "com_pensar_rapido",
@@ -447,7 +514,13 @@ object CuratorRepository {
                         isPublicDomain = false,
                         affiliateQrUrl = "https://www.amazon.es/dp/8483068613?tag=calibrotv-21",
                         approximatePrice = "19,90 €",
-                        year = "2011"
+                        year = "2011",
+                        difficultyLevel = 4,
+                        storeLinks = BookStoreLinks(
+                            amazon = "https://www.amazon.es/dp/8483068613?tag=calibrotv-21",
+                            casaDelLibro = "https://www.casadellibro.com/libro-pensar-rapido-pensar-despacio/9788499922072/1993433",
+                            googlePlay = "https://play.google.com/store/search?q=Pensar+rapido+pensar+despacio+Daniel+Kahneman&c=books"
+                        )
                     )
                 )
             )

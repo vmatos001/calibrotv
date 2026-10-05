@@ -45,6 +45,29 @@ enum class CuratorArchetype(
 }
 
 /**
+ * Tiendas oficiales para conversión comercial en TV.
+ */
+enum class CommercialStoreType(
+    val storeName: String,
+    val iconEmoji: String,
+    val brandHex: Long
+) {
+    AMAZON("Amazon (Físico / Kindle)", "🟠", 0xFFFF9900),
+    CASA_DEL_LIBRO("Casa del Libro (España / LATAM)", "🟢", 0xFF22C55E),
+    GOOGLE_PLAY("Google Play Books (Móvil / Tablet)", "🔵", 0xFF3B82F6)
+}
+
+/**
+ * Enlaces específicos a tiendas comerciales (parsed desde Cloud Firestore o CMS).
+ */
+@Serializable
+data class BookStoreLinks(
+    val amazon: String? = null,
+    val casaDelLibro: String? = null,
+    val googlePlay: String? = null
+)
+
+/**
  * Obra curada que se exhibe en los carruseles dinámicos de la cartelera.
  * Si isPublicDomain == true, se puede descargar gratis directamente a la TV.
  * Si isPublicDomain == false, muestra el código QR dinámico de compra en librería asociada.
@@ -63,8 +86,36 @@ data class CuratedBook(
     val approximatePrice: String? = null,
     val rating: Float = 4.8f,
     val year: String? = null,
-    val difficultyLevel: Int = 1
-)
+    val difficultyLevel: Int = 1,
+    val storeLinks: BookStoreLinks? = null
+) {
+    /**
+     * Retorna la URL oficial para la tienda seleccionada con fallback inteligente a búsqueda directa.
+     */
+    fun getStoreUrl(store: CommercialStoreType): String {
+        val query = try {
+            java.net.URLEncoder.encode("$title $author", "UTF-8")
+        } catch (_: Exception) {
+            title.replace(" ", "+")
+        }
+
+        return when (store) {
+            CommercialStoreType.AMAZON -> {
+                storeLinks?.amazon?.takeIf { it.isNotBlank() }
+                    ?: affiliateQrUrl?.takeIf { it.isNotBlank() }
+                    ?: "https://www.amazon.es/s?k=$query&tag=calibrotv-21"
+            }
+            CommercialStoreType.CASA_DEL_LIBRO -> {
+                storeLinks?.casaDelLibro?.takeIf { it.isNotBlank() }
+                    ?: "https://www.casadellibro.com/libros?q=$query"
+            }
+            CommercialStoreType.GOOGLE_PLAY -> {
+                storeLinks?.googlePlay?.takeIf { it.isNotBlank() }
+                    ?: "https://play.google.com/store/search?q=$query&c=books"
+            }
+        }
+    }
+}
 
 /**
  * Sección de cartelera curada por un personaje o arquetipo literario.
@@ -114,3 +165,17 @@ data class HomeCarteleraData(
     val heroBanner: HeroBanner? = null,
     val offers: List<BookOffer> = emptyList()
 )
+
+/**
+ * Paisaje sonoro ambiental desde Cloud Firestore (cartelera_sounds).
+ */
+@Serializable
+data class CloudAmbientSound(
+    val id: String,
+    val name: String,
+    val streamUrl: String,
+    val icon: String = "",
+    val isActive: Boolean = true,
+    val type: String = "permanent"
+)
+
