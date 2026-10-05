@@ -72,6 +72,7 @@ import com.example.calibretv.theme.InkMuted
 import com.example.calibretv.theme.InkPrimary
 import com.example.calibretv.theme.InkSecondary
 import com.example.calibretv.theme.SurfaceCard
+import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceFocused
 import com.example.calibretv.theme.SurfaceRaised
 import com.example.calibretv.theme.TextMuted
@@ -220,17 +221,17 @@ fun YourBooksScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(if (isDarkTheme) SurfaceCard else Color.White)
                     .shadow(
                         elevation = if (isDarkTheme) 0.dp else 4.dp,
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(16.dp),
                         spotColor = Color.Black.copy(alpha = 0.05f)
                     )
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (isDarkTheme) SurfaceContainer else Color.White)
                     .border(
-                        width = if (isDarkTheme) 1.dp else 0.dp,
-                        color = if (isDarkTheme) SurfaceRaised else Color.Transparent,
-                        shape = RoundedCornerShape(20.dp)
+                        width = 1.dp,
+                        color = if (isDarkTheme) Color(0xFF26262A) else Color.Transparent,
+                        shape = RoundedCornerShape(16.dp)
                     )
                     .padding(horizontal = 22.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,

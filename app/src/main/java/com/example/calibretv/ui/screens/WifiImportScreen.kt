@@ -261,10 +261,10 @@ fun WifiImportScreen(
                         .size(260.dp)
                         .shadow(
                             elevation = if (isDarkTheme) 0.dp else 6.dp,
-                            shape = RoundedCornerShape(20.dp),
+                            shape = RoundedCornerShape(16.dp),
                             spotColor = Color.Black.copy(alpha = 0.08f)
                         )
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .background(Color.White)
                         .padding(18.dp),
                     contentAlignment = Alignment.Center

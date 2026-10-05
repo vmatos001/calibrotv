@@ -118,15 +118,15 @@ fun ServerScreen(
                         .fillMaxWidth(0.72f)
                         .shadow(
                             elevation = if (isDarkTheme) 0.dp else 4.dp,
-                            shape = RoundedCornerShape(24.dp),
+                            shape = RoundedCornerShape(16.dp),
                             spotColor = Color.Black.copy(alpha = 0.05f)
                         )
-                        .clip(RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .background(if (isDarkTheme) SurfaceContainer else Color.White)
                         .border(
                             width = 1.dp,
                             color = if (isDarkTheme) Color(0xFF26262A) else Color.Transparent,
-                            shape = RoundedCornerShape(24.dp)
+                            shape = RoundedCornerShape(16.dp)
                         )
                         .padding(32.dp)
                 ) {

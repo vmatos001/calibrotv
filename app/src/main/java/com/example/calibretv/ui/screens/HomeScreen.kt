@@ -106,6 +106,7 @@ import com.example.calibretv.theme.CalibreTVTheme
 import com.example.calibretv.theme.CanvasBackgroundLight
 import com.example.calibretv.theme.InkPrimary
 import com.example.calibretv.theme.InkSecondary
+import com.example.calibretv.theme.InkMuted
 import com.example.calibretv.ui.components.PinPadDialog
 import com.example.calibretv.ui.components.TvNavTab
 import com.example.calibretv.ui.components.TvProfilePill
@@ -314,19 +315,25 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         // ==========================================
-                        // ZONA A: BENTO HERO BANNER (Estilo Bento sin barra superior)
+                        // ZONA A: BENTO HERO BANNER (Estilo Bento Limpio y Elevado)
                         // ==========================================
+                        val heroBg = if (isDarkTheme) Color(0xFF12141A) else Color.White
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(232.dp)
-                                .padding(horizontal = 28.dp)
-                                .clip(RoundedCornerShape(26.dp))
-                                .background(Color(0xFF12141A))
+                                .padding(horizontal = 28.dp, vertical = 6.dp)
                                 .shadow(
-                                    elevation = if (isDarkTheme) 0.dp else 8.dp,
-                                    shape = RoundedCornerShape(26.dp),
-                                    spotColor = Color.Black.copy(alpha = 0.15f)
+                                    elevation = if (isDarkTheme) 0.dp else 4.dp,
+                                    shape = RoundedCornerShape(16.dp),
+                                    spotColor = Color.Black.copy(alpha = 0.05f)
+                                )
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(heroBg)
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isDarkTheme) Color(0xFF26262A) else Color.Transparent,
+                                    shape = RoundedCornerShape(16.dp)
                                 )
                         ) {
                             val backdropCoverBmp = rememberCoverImage(heroBanner.backdropUrl.ifBlank { heroBanner.coverUrl })
@@ -337,7 +344,7 @@ fun HomeScreen(
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .graphicsLayer { alpha = 0.28f }
+                                        .graphicsLayer { alpha = if (isDarkTheme) 0.28f else 0.12f }
                                 )
                             }
 
@@ -347,10 +354,10 @@ fun HomeScreen(
                                     .background(
                                         Brush.horizontalGradient(
                                             colors = listOf(
-                                                Color(0xFF12141A),
-                                                Color(0xFF12141A).copy(alpha = 0.95f),
-                                                Color(0xFF12141A).copy(alpha = 0.70f),
-                                                Color(0xFF12141A).copy(alpha = 0.30f),
+                                                heroBg,
+                                                heroBg.copy(alpha = 0.95f),
+                                                heroBg.copy(alpha = 0.70f),
+                                                heroBg.copy(alpha = 0.30f),
                                                 Color.Transparent
                                             ),
                                             startX = 0f,
@@ -361,6 +368,7 @@ fun HomeScreen(
 
                             HomeHeroBanner(
                                 heroBanner = heroBanner,
+                                isDarkTheme = isDarkTheme,
                                 isInteractive = !isAnyModalOpen,
                                 onReadSample = {
                                     val sampleUrl = heroBanner.sampleEpubUrl
@@ -421,7 +429,7 @@ fun HomeScreen(
                             ) {
                                 Text(
                                     text = currentTime,
-                                    color = Color.White.copy(alpha = 0.85f),
+                                    color = if (isDarkTheme) Color.White.copy(alpha = 0.85f) else InkSecondary,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
                                 )
@@ -454,15 +462,20 @@ fun HomeScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 28.dp, vertical = 2.dp)
-                                    .clip(RoundedCornerShape(24.dp))
-                                    .background(shelfCardBg)
+                                    .padding(horizontal = 28.dp, vertical = 6.dp)
                                     .shadow(
                                         elevation = if (isDarkTheme) 0.dp else 4.dp,
-                                        shape = RoundedCornerShape(24.dp),
+                                        shape = RoundedCornerShape(16.dp),
                                         spotColor = Color.Black.copy(alpha = 0.05f)
                                     )
-                                    .padding(vertical = 12.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (isDarkTheme) SurfaceContainer else Color.White)
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isDarkTheme) Color(0xFF26262A) else Color.Transparent,
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .padding(vertical = 14.dp)
                             ) {
                                 HomeShelf(
                                     sectionTitle = "Continuar Leyendo",
@@ -487,15 +500,20 @@ fun HomeScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 28.dp, vertical = 2.dp)
-                                    .clip(RoundedCornerShape(24.dp))
-                                    .background(shelfCardBg)
+                                    .padding(horizontal = 28.dp, vertical = 6.dp)
                                     .shadow(
                                         elevation = if (isDarkTheme) 0.dp else 4.dp,
-                                        shape = RoundedCornerShape(24.dp),
+                                        shape = RoundedCornerShape(16.dp),
                                         spotColor = Color.Black.copy(alpha = 0.05f)
                                     )
-                                    .padding(vertical = 12.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (isDarkTheme) SurfaceContainer else Color.White)
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isDarkTheme) Color(0xFF26262A) else Color.Transparent,
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .padding(vertical = 14.dp)
                             ) {
                                 HomeOffersRow(
                                     offers = homeCarteleraData.offers,
@@ -503,14 +521,14 @@ fun HomeScreen(
                                     isInteractive = !isAnyModalOpen,
                                     onOfferSelected = { offer ->
                                         selectedCuratedBook = CuratedBook(
-                                            id = offer.id,
-                                            title = offer.title,
-                                            author = offer.author,
-                                            coverUrl = offer.coverUrl,
-                                            summary = "Oferta especial de cartelera con descuento de ${offer.discountTag}.",
-                                            category = "Oferta ${offer.discountTag}",
-                                            isPublicDomain = false,
-                                            affiliateQrUrl = offer.affiliateUrl
+                                             id = offer.id,
+                                             title = offer.title,
+                                             author = offer.author,
+                                             coverUrl = offer.coverUrl,
+                                             summary = "Oferta especial de cartelera con descuento de ${offer.discountTag}.",
+                                             category = "Oferta ${offer.discountTag}",
+                                             isPublicDomain = false,
+                                             affiliateQrUrl = offer.affiliateUrl
                                         )
                                     },
                                     onLeftAtBoundary = { sidebarFocusRequester.requestFocus() }
@@ -523,15 +541,20 @@ fun HomeScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 28.dp, vertical = 2.dp)
-                                    .clip(RoundedCornerShape(24.dp))
-                                    .background(shelfCardBg)
+                                    .padding(horizontal = 28.dp, vertical = 6.dp)
                                     .shadow(
                                         elevation = if (isDarkTheme) 0.dp else 4.dp,
-                                        shape = RoundedCornerShape(24.dp),
+                                        shape = RoundedCornerShape(16.dp),
                                         spotColor = Color.Black.copy(alpha = 0.05f)
                                     )
-                                    .padding(vertical = 12.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (isDarkTheme) SurfaceContainer else Color.White)
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isDarkTheme) Color(0xFF26262A) else Color.Transparent,
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .padding(vertical = 14.dp)
                             ) {
                                 CuratorRow(
                                     section = section,
@@ -550,15 +573,20 @@ fun HomeScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 28.dp, vertical = 2.dp)
-                                    .clip(RoundedCornerShape(24.dp))
-                                    .background(shelfCardBg)
+                                    .padding(horizontal = 28.dp, vertical = 6.dp)
                                     .shadow(
                                         elevation = if (isDarkTheme) 0.dp else 4.dp,
-                                        shape = RoundedCornerShape(24.dp),
+                                        shape = RoundedCornerShape(16.dp),
                                         spotColor = Color.Black.copy(alpha = 0.05f)
                                     )
-                                    .padding(vertical = 12.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (isDarkTheme) SurfaceContainer else Color.White)
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isDarkTheme) Color(0xFF26262A) else Color.Transparent,
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .padding(vertical = 14.dp)
                             ) {
                                 HomeShelf(
                                     sectionTitle = "Tus Libros Favoritos",
@@ -685,21 +713,36 @@ fun HomeScreen(
         if (showDetailsModal && detailsBook != null) {
             val book = detailsBook!!
             val modalCover = rememberCoverImage(book.coverUrl, authHeader)
+            val modalBg = if (isDarkTheme) SurfaceContainer else Color(0xFFF7F5F0)
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.88f))
-                    .clickable { showDetailsModal = false },
+                    .background(Color.Black.copy(alpha = if (isDarkTheme) 0.88f else 0.65f))
+                    .onKeyEvent { keyEvent ->
+                        if (keyEvent.type == KeyEventType.KeyDown && (keyEvent.key == Key.Back || keyEvent.key == Key.Escape)) {
+                            showDetailsModal = false
+                            detailsBook = null
+                            true
+                        } else false
+                    }
+                    .clickable {
+                        showDetailsModal = false
+                        detailsBook = null
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.78f)
                         .fillMaxHeight(0.80f)
+                        .shadow(
+                            elevation = if (isDarkTheme) 0.dp else 8.dp,
+                            shape = RoundedCornerShape(18.dp),
+                            spotColor = Color.Black.copy(alpha = 0.12f)
+                        )
                         .clip(RoundedCornerShape(18.dp))
-                        .background(SurfaceContainer)
-                        .border(1.5.dp, AccentGold.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
+                        .background(modalBg)
                         .clickable(enabled = false) {}
                         .padding(28.dp)
                 ) {
@@ -727,7 +770,7 @@ fun HomeScreen(
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(
                                     text = book.title,
-                                    color = TextPrimary,
+                                    color = if (isDarkTheme) TextPrimary else InkPrimary,
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     maxLines = 2,
@@ -749,8 +792,8 @@ fun HomeScreen(
                                         book.shelves.take(3).forEach { shelf ->
                                             Box(
                                                 modifier = Modifier
-                                                    .background(AmberWarm.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
-                                                    .border(1.dp, AmberWarm.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                                    .background(if (isDarkTheme) AmberWarm.copy(alpha = 0.2f) else AmberWarm.copy(alpha = 0.14f), RoundedCornerShape(6.dp))
+                                                    .border(1.dp, if (isDarkTheme) AmberWarm.copy(alpha = 0.5f) else AmberWarm.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
                                                     .padding(horizontal = 8.dp, vertical = 3.dp)
                                             ) {
                                                 Text(text = "🏷 $shelf", color = AmberWarm, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
@@ -767,10 +810,10 @@ fun HomeScreen(
                                         book.tags.take(4).forEach { tag ->
                                             Box(
                                                 modifier = Modifier
-                                                    .background(SurfaceContainerHigh, RoundedCornerShape(6.dp))
+                                                    .background(if (isDarkTheme) SurfaceContainerHigh else Color.White, RoundedCornerShape(6.dp))
                                                     .padding(horizontal = 8.dp, vertical = 3.dp)
                                             ) {
-                                                Text(text = "#$tag", color = AccentGold, fontSize = 11.sp)
+                                                Text(text = "#$tag", color = if (isDarkTheme) AccentGold else AmberWarm, fontSize = 11.sp)
                                             }
                                         }
                                     }
@@ -778,14 +821,14 @@ fun HomeScreen(
 
                                 Text(
                                     text = "Sinopsis:",
-                                    color = TextMuted,
+                                    color = if (isDarkTheme) TextMuted else InkSecondary,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
 
                                 Text(
                                     text = modalDescription.ifBlank { book.summary },
-                                    color = TextPrimary.copy(alpha = 0.88f),
+                                    color = if (isDarkTheme) TextPrimary.copy(alpha = 0.88f) else InkSecondary,
                                     fontSize = 13.sp,
                                     lineHeight = 19.sp,
                                     modifier = Modifier
@@ -1522,6 +1565,7 @@ fun EmptyLibraryBanner(
 @Composable
 private fun HomeHeroBanner(
     heroBanner: HeroBanner,
+    isDarkTheme: Boolean = true,
     isInteractive: Boolean = true,
     onReadSample: () -> Unit,
     onBuyQr: () -> Unit,
@@ -1597,7 +1641,7 @@ private fun HomeHeroBanner(
             // Título Principal
             Text(
                 text = heroBanner.title,
-                color = Color.White,
+                color = if (isDarkTheme) Color.White else InkPrimary,
                 fontSize = 21.sp,
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
@@ -1619,7 +1663,7 @@ private fun HomeHeroBanner(
             // Cita editorial destacada
             Text(
                 text = "“${heroBanner.tagline.ifBlank { heroBanner.synopsis }}”",
-                color = Color(0xFFCBD5E1),
+                color = if (isDarkTheme) Color(0xFFCBD5E1) else InkSecondary,
                 fontSize = 11.sp,
                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                 maxLines = 1,
@@ -1631,7 +1675,7 @@ private fun HomeHeroBanner(
             // Sinopsis breve
             Text(
                 text = heroBanner.synopsis.ifBlank { heroBanner.tagline },
-                color = Color(0xFF94A3B8),
+                color = if (isDarkTheme) Color(0xFF94A3B8) else InkMuted,
                 fontSize = 10.5.sp,
                 lineHeight = 14.5.sp,
                 maxLines = 2,
@@ -1707,8 +1751,13 @@ private fun HomeHeroBanner(
         // LADO DERECHO: Tarjeta con Código QR limpia sin bordes
         Box(
             modifier = Modifier
+                .shadow(
+                    elevation = if (isDarkTheme) 0.dp else 2.dp,
+                    shape = RoundedCornerShape(16.dp),
+                    spotColor = Color.Black.copy(alpha = 0.05f)
+                )
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF161922))
+                .background(if (isDarkTheme) Color(0xFF161922) else Color(0xFFF6F8F6))
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -1734,7 +1783,7 @@ private fun HomeHeroBanner(
                 }
                 Text(
                     text = "COMPRAR EN MÓVIL",
-                    color = Color(0xFFD0D4DC),
+                    color = if (isDarkTheme) Color(0xFFD0D4DC) else InkSecondary,
                     fontSize = 8.5.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.5.sp
@@ -1887,44 +1936,36 @@ private fun HomeQuickAccessCard(
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
-    // Colores idénticos a la opción seleccionada del menú expandido:
-    // - En Dark Mode (Rail Blanco en menú, fondo oscuro en app): Píldora AmberWarm translúcida
-    // - En Light Mode (Rail Carbón en menú, fondo claro en app): Contenedor Amber/Carbón suave
-    val baseCardBg = if (isDarkTheme) AmberWarm.copy(alpha = 0.18f) else Color(0xFF28241A)
-    val cardBg = if (isFocused) AmberWarm else baseCardBg
+    val baseCardBg = if (isDarkTheme) SurfaceContainer else Color.White
+    val cardBg = if (isFocused) {
+        if (isDarkTheme) SurfaceContainerHigh else Color.White
+    } else {
+        baseCardBg
+    }
 
     val cardBorder = if (isFocused) {
-        if (isDarkTheme) Color(0xFFFFFFFF) else CyanElectric
+        if (isDarkTheme) Color.White else CyanElectric
     } else {
-        Color.Transparent
+        if (isDarkTheme) Color(0xFF26262A) else Color.Transparent
     }
 
-    val contentColor = when {
-        isFocused -> Color(0xFF111317)
-        isDarkTheme -> AmberWarm
-        else -> AmberWarm
-    }
-
-    val subtitleColor = when {
-        isFocused -> Color(0xFF111317).copy(alpha = 0.85f)
-        isDarkTheme -> Color(0xFFCBD5E1)
-        else -> Color(0xFFD0D4DC)
-    }
+    val contentColor = if (isDarkTheme) TextPrimary else InkPrimary
+    val subtitleColor = if (isDarkTheme) TextMuted else InkSecondary
 
     Box(
         modifier = modifier
             .scale(if (isFocused) 1.03f else 1.0f)
             .shadow(
-                elevation = if (isFocused) 8.dp else 0.dp,
-                shape = RoundedCornerShape(20.dp),
-                spotColor = Color.Black.copy(alpha = 0.35f)
+                elevation = if (isFocused) 8.dp else (if (isDarkTheme) 0.dp else 4.dp),
+                shape = RoundedCornerShape(16.dp),
+                spotColor = Color.Black.copy(alpha = if (isFocused) 0.18f else 0.05f)
             )
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(cardBg)
             .border(
-                width = if (isFocused) 2.dp else 0.dp,
+                width = if (isFocused) 2.dp else 1.dp,
                 color = cardBorder,
-                shape = RoundedCornerShape(20.dp)
+                shape = RoundedCornerShape(16.dp)
             )
             .onFocusChanged { isFocused = it.isFocused }
             .onKeyEvent { event ->
@@ -1950,13 +1991,13 @@ private fun HomeQuickAccessCard(
                 modifier = Modifier
                     .size(46.dp)
                     .clip(CircleShape)
-                    .background(if (isFocused) Color(0xFF111317).copy(alpha = 0.15f) else AmberWarm.copy(alpha = 0.22f)),
+                    .background(if (isFocused) AmberWarm.copy(alpha = 0.25f) else AmberWarm.copy(alpha = 0.14f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = contentColor,
+                    tint = AmberWarm,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -1981,7 +2022,7 @@ private fun HomeQuickAccessCard(
             Icon(
                 imageVector = Icons.Default.ArrowForward,
                 contentDescription = null,
-                tint = contentColor,
+                tint = if (isFocused) AmberWarm else (if (isDarkTheme) TextMuted else InkMuted),
                 modifier = Modifier.size(18.dp)
             )
         }

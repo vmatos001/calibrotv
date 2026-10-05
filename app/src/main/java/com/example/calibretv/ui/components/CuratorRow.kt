@@ -53,8 +53,10 @@ import com.example.calibretv.data.curator.CuratorArchetype
 import com.example.calibretv.data.curator.CuratorSection
 import com.example.calibretv.data.image.rememberCoverImage
 import com.example.calibretv.theme.AccentGold
+import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.AntiqueIvory
 import com.example.calibretv.theme.InkPrimary
+import com.example.calibretv.theme.InkSecondary
 import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextSecondary
@@ -76,9 +78,7 @@ fun CuratorRow(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp)
+        modifier = Modifier.fillMaxWidth()
     ) {
         // Cabecera estilizada del personaje curador con tipografía editorial estilo Apple Books
         Row(
@@ -126,13 +126,13 @@ fun CuratorRow(
                         )
                         Box(
                             modifier = Modifier
-                                .background(Color(0xFF2A2213), RoundedCornerShape(4.dp))
-                                .border(0.5.dp, AccentGold.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                                .background(if (isDarkTheme) Color(0xFF2A2213) else Color(0xFFFFF3E0), RoundedCornerShape(4.dp))
+                                .border(0.5.dp, if (isDarkTheme) AccentGold.copy(alpha = 0.6f) else AmberWarm.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
                                 .padding(horizontal = 6.dp, vertical = 1.dp)
                         ) {
                             Text(
                                 text = "CARTELERA",
-                                color = AccentGold,
+                                color = if (isDarkTheme) AccentGold else AmberWarm,
                                 fontSize = 8.5.sp,
                                 fontWeight = FontWeight.ExtraBold
                             )
@@ -140,7 +140,7 @@ fun CuratorRow(
                     }
                     Text(
                         text = section.tagline,
-                        color = TextMuted,
+                        color = if (isDarkTheme) TextMuted else InkSecondary,
                         fontSize = 11.5.sp
                     )
                 }
@@ -149,7 +149,7 @@ fun CuratorRow(
             // Cita célebre del personaje
             Text(
                 text = section.archetype.quote,
-                color = AccentGold.copy(alpha = 0.85f),
+                color = if (isDarkTheme) AccentGold.copy(alpha = 0.85f) else AmberWarm,
                 fontSize = 11.sp,
                 fontStyle = FontStyle.Italic,
                 maxLines = 1,
