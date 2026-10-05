@@ -12,8 +12,8 @@ android {
         applicationId = "com.calibrotv.app"
         minSdk = 23
         targetSdk = 34
-        versionCode = 47
-        versionName = "3.33"
+        versionCode = 48
+        versionName = "3.34"
     }
 
     signingConfigs {

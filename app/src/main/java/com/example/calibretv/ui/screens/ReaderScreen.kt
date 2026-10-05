@@ -16,6 +16,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,18 +32,23 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Contrast
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FirstPage
 import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material.icons.filled.LastPage
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -140,7 +146,7 @@ fun ReaderScreen(
     // Navigation and HUD visibility
     var showBottomHud by remember { mutableStateOf(false) } // Triggered by DPAD_DOWN
     var showTopBar by remember { mutableStateOf(false) }    // Triggered by DPAD_UP
-    var selectedHudCategory by remember { mutableStateOf(ReaderHudCategory.APARIENCIA) }
+    var selectedHudCategory by remember { mutableStateOf<ReaderHudCategory?>(ReaderHudCategory.APARIENCIA) }
 
     val curlAnim = remember { Animatable(0f) }
     val readerFocusRequester = remember { FocusRequester() }
@@ -321,13 +327,13 @@ fun ReaderScreen(
                 if (keyEvent.type == KeyEventType.KeyDown) {
                     if (showBottomHud) {
                         when (keyEvent.key) {
-                            Key.DirectionUp, Key.Back, Key.Escape -> {
+                            Key.Back, Key.Escape -> {
                                 showBottomHud = false
                                 readerFocusRequester.requestFocus()
                                 true
                             }
                             // Allow D-Pad navigation between buttons in the HUD!
-                            Key.DirectionLeft, Key.DirectionRight, Key.DirectionDown -> false
+                            Key.DirectionLeft, Key.DirectionRight, Key.DirectionUp, Key.DirectionDown -> false
                             else -> false
                         }
                     } else if (showTopBar) {
@@ -787,311 +793,306 @@ fun ReaderScreen(
                         )
                     }
 
-                    // 1. Selector jerárquico de 4 categorías (Plan Maestro v3.0 Sección 5)
+                    // Row A: 7 opciones (Atrás, Salto Pág, Adelante, Apariencia, Voz TTS, Ambiente, Herramientas)
+                    // con las opciones de B saliendo verticalmente ARRIBA de cada grupo
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom
                     ) {
-                        ReaderHudCategory.values().forEachIndexed { index, cat ->
-                            var isCatFocused by remember { mutableStateOf(false) }
-                            val isSelected = selectedHudCategory == cat
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = (if (index == 0) Modifier.focusRequester(hudInitialFocusRequester) else Modifier)
-                                    .scale(if (isCatFocused) 1.06f else 1.0f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        when {
-                                            isSelected -> AmberWarm
-                                            isCatFocused -> AmberWarm.copy(alpha = 0.30f)
-                                            else -> Color.White.copy(alpha = 0.08f)
-                                        }
-                                    )
-                                    .border(
-                                        width = if (isCatFocused) 1.5.dp else 1.dp,
-                                        color = when {
-                                            isCatFocused -> Color.White
-                                            isSelected -> AmberWarm
-                                            else -> Color.Transparent
-                                        },
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                    .onFocusChanged { isCatFocused = it.isFocused }
-                                    .focusable()
-                                    .clickable { selectedHudCategory = cat }
-                                    .padding(horizontal = 14.dp, vertical = 7.dp)
-                            ) {
-                                Icon(
-                                    imageVector = cat.icon,
-                                    contentDescription = null,
-                                    tint = if (isSelected) Color(0xFF131315) else if (isCatFocused) AmberWarm else TextMuted,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Text(
-                                    text = cat.title,
-                                    color = if (isSelected) Color(0xFF131315) else if (isCatFocused) Color.White else TextMuted,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
+                        // 1. Atrás (1 solo click: pasa página atrás)
+                        HudActionButton(
+                            title = "‹ Atrás",
+                            icon = Icons.Default.ChevronLeft,
+                            onClick = { turnPage(forward = false) },
+                            onFocus = { selectedHudCategory = null }
+                        )
 
-                    // 2. Fila contextual de controles según la categoría seleccionada
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        when (selectedHudCategory) {
-                            ReaderHudCategory.APARIENCIA -> {
-                                StitchHudButton(
-                                    title = "Fuente (${settings.fontSizeSp}sp)",
-                                    icon = Icons.Default.FormatSize,
-                                    isPrimary = false,
-                                    onClick = {
-                                        val nextSize = when (settings.fontSizeSp) {
-                                            16 -> 18
-                                            18 -> 20
-                                            20 -> 22
-                                            22 -> 24
-                                            else -> 16
-                                        }
-                                        settings = settings.copy(fontSizeSp = nextSize)
-                                        repository.saveReadingSettings(settings)
+                        // 2. Salto Pág (1 solo click: salta 5 páginas)
+                        HudActionButton(
+                            title = "Salto Pág",
+                            icon = Icons.Default.FastForward,
+                            onClick = {
+                                val jumpIdx = (currentSpreadIndex + 5).coerceAtMost(spreads.size - 1)
+                                currentSpreadIndex = jumpIdx
+                                repository.saveBookProgress(book.id, jumpIdx)
+                            },
+                            onFocus = { selectedHudCategory = null }
+                        )
+
+                        // 3. Adelante (1 solo click: pasa página adelante)
+                        HudActionButton(
+                            title = "Adelante ›",
+                            icon = Icons.Default.ChevronRight,
+                            isPrimary = true,
+                            onClick = { turnPage(forward = true) },
+                            onFocus = { selectedHudCategory = null }
+                        )
+
+                        // 4. Grupo Apariencia (Opciones verticales B salen arriba)
+                        HudGroupColumn(
+                            category = ReaderHudCategory.APARIENCIA,
+                            isSelected = selectedHudCategory == ReaderHudCategory.APARIENCIA,
+                            activeCategory = selectedHudCategory,
+                            modifier = Modifier.focusRequester(hudInitialFocusRequester),
+                            onSelect = { selectedHudCategory = ReaderHudCategory.APARIENCIA }
+                        ) {
+                            val brightnessPercent = (settings.readerBrightness * 100).toInt()
+                            VerticalHudOptionButton(
+                                title = "☀ Brillo: $brightnessPercent%",
+                                icon = Icons.Filled.Brightness4,
+                                isPrimary = settings.readerBrightness < 1.0f,
+                                onClick = {
+                                    val nextBrightness = when {
+                                        settings.readerBrightness > 0.85f -> 0.70f
+                                        settings.readerBrightness > 0.60f -> 0.50f
+                                        settings.readerBrightness > 0.40f -> 0.30f
+                                        else -> 1.0f
                                     }
-                                )
-                                val themeName = when (settings.theme) {
-                                    ReadingTheme.PERGAMINO -> "Pergamino"
-                                    ReadingTheme.OLED_PURE -> "OLED Puro"
-                                    ReadingTheme.SEPIA_CINE -> "Sepia"
-                                    ReadingTheme.NIGHT_AMBER -> "Ámbar Noche"
-                                    ReadingTheme.PROYECTOR_BLANCO -> "Proyector"
-                                    ReadingTheme.CINE_OSCURO -> "Cine Oscuro"
+                                    settings = settings.copy(readerBrightness = nextBrightness)
+                                    repository.saveReadingSettings(settings)
                                 }
-                                StitchHudButton(
-                                    title = "Tema: $themeName",
-                                    icon = Icons.Default.Palette,
-                                    isPrimary = false,
-                                    onClick = {
-                                        val nextTheme = when (settings.theme) {
-                                            ReadingTheme.PERGAMINO -> ReadingTheme.OLED_PURE
-                                            ReadingTheme.OLED_PURE -> ReadingTheme.SEPIA_CINE
-                                            ReadingTheme.SEPIA_CINE -> ReadingTheme.NIGHT_AMBER
-                                            ReadingTheme.NIGHT_AMBER -> ReadingTheme.PROYECTOR_BLANCO
-                                            ReadingTheme.PROYECTOR_BLANCO -> ReadingTheme.CINE_OSCURO
-                                            ReadingTheme.CINE_OSCURO -> ReadingTheme.PERGAMINO
-                                        }
-                                        settings = settings.copy(theme = nextTheme)
-                                        repository.saveReadingSettings(settings)
+                            )
+                            val marginPct = settings.overscanPercent
+                            VerticalHudOptionButton(
+                                title = "📐 Márgenes: $marginPct%",
+                                icon = Icons.Default.AspectRatio,
+                                isPrimary = settings.overscanPercent > 0,
+                                onClick = {
+                                    val nextMargin = when (settings.overscanPercent) {
+                                        0 -> 4
+                                        4 -> 8
+                                        else -> 0
                                     }
-                                )
-                                val marginPct = settings.overscanPercent
-                                StitchHudButton(
-                                    title = "Márgenes: $marginPct%",
-                                    icon = Icons.Default.AspectRatio,
-                                    isPrimary = settings.overscanPercent > 0,
-                                    onClick = {
-                                        val nextMargin = when (settings.overscanPercent) {
-                                            0 -> 4
-                                            4 -> 8
-                                            else -> 0
-                                        }
-                                        settings = settings.copy(overscanPercent = nextMargin)
-                                        repository.saveReadingSettings(settings)
-                                    }
-                                )
-                                val brightnessPercent = (settings.readerBrightness * 100).toInt()
-                                StitchHudButton(
-                                    title = "☀ Brillo: $brightnessPercent%",
-                                    icon = Icons.Filled.Brightness4,
-                                    isPrimary = settings.readerBrightness < 1.0f,
-                                    onClick = {
-                                        val nextBrightness = when {
-                                            settings.readerBrightness > 0.85f -> 0.70f
-                                            settings.readerBrightness > 0.60f -> 0.50f
-                                            settings.readerBrightness > 0.40f -> 0.30f
-                                            else -> 1.0f
-                                        }
-                                        settings = settings.copy(readerBrightness = nextBrightness)
-                                        repository.saveReadingSettings(settings)
-                                    }
-                                )
+                                    settings = settings.copy(overscanPercent = nextMargin)
+                                    repository.saveReadingSettings(settings)
+                                }
+                            )
+                            val themeName = when (settings.theme) {
+                                ReadingTheme.PERGAMINO -> "Pergamino"
+                                ReadingTheme.OLED_PURE -> "OLED Puro"
+                                ReadingTheme.SEPIA_CINE -> "Sepia"
+                                ReadingTheme.NIGHT_AMBER -> "Ámbar Noche"
+                                ReadingTheme.PROYECTOR_BLANCO -> "Proyector"
+                                ReadingTheme.CINE_OSCURO -> "Cine Oscuro"
                             }
-                            ReaderHudCategory.VOZ_TTS -> {
-                                val isTtsEngineAvailable by ttsController.isEngineAvailable.collectAsState()
-                                StitchHudButton(
-                                    title = if (isTtsPlaying) "⏸ Pausar" else "▶ Leer en Voz Alta",
-                                    icon = Icons.Filled.RecordVoiceOver,
-                                    isPrimary = isTtsPlaying,
-                                    onClick = {
-                                        if (!isTtsEngineAvailable) {
-                                            android.widget.Toast.makeText(context, "Lectura en voz alta no disponible en este dispositivo.", android.widget.Toast.LENGTH_LONG).show()
-                                        } else if (isTtsPlaying) {
-                                            ttsController.stop()
-                                        } else {
-                                            val leftText = currentSpread?.leftPage?.paragraphs?.joinToString(" ") ?: ""
-                                            val rightText = currentSpread?.rightPage?.paragraphs?.joinToString(" ") ?: ""
-                                            val pageText = listOf(leftText, rightText).filter { it.isNotBlank() }.joinToString(" ")
-                                            if (pageText.isNotBlank()) {
-                                                ttsController.readPage(pageText, settings.ttsSpeedRate, settings.ttsPitch, settings.ttsVoiceLocale)
-                                            }
-                                        }
+                            VerticalHudOptionButton(
+                                title = "🎨 Tema: $themeName",
+                                icon = Icons.Default.Palette,
+                                onClick = {
+                                    val nextTheme = when (settings.theme) {
+                                        ReadingTheme.PERGAMINO -> ReadingTheme.OLED_PURE
+                                        ReadingTheme.OLED_PURE -> ReadingTheme.SEPIA_CINE
+                                        ReadingTheme.SEPIA_CINE -> ReadingTheme.NIGHT_AMBER
+                                        ReadingTheme.NIGHT_AMBER -> ReadingTheme.PROYECTOR_BLANCO
+                                        ReadingTheme.PROYECTOR_BLANCO -> ReadingTheme.CINE_OSCURO
+                                        ReadingTheme.CINE_OSCURO -> ReadingTheme.PERGAMINO
                                     }
-                                )
-                                val voiceName = when (settings.ttsVoiceLocale) {
-                                    "es-ES" -> "Voz: España 🇪🇸"
-                                    "es-MX" -> "Voz: México 🇲🇽"
-                                    else -> "Voz: Latino 🌐"
+                                    settings = settings.copy(theme = nextTheme)
+                                    repository.saveReadingSettings(settings)
                                 }
-                                StitchHudButton(
-                                    title = voiceName,
-                                    icon = Icons.Default.RecordVoiceOver,
-                                    isPrimary = false,
-                                    onClick = {
-                                        val nextLoc = when (settings.ttsVoiceLocale) {
-                                            "es-ES" -> "es-MX"
-                                            "es-MX" -> "es-US"
-                                            else -> "es-ES"
-                                        }
-                                        settings = settings.copy(ttsVoiceLocale = nextLoc)
-                                        repository.saveReadingSettings(settings)
+                            )
+                            VerticalHudOptionButton(
+                                title = "TT Fuente (${settings.fontSizeSp}sp)",
+                                icon = Icons.Default.FormatSize,
+                                onClick = {
+                                    val nextSize = when (settings.fontSizeSp) {
+                                        16 -> 18
+                                        18 -> 20
+                                        20 -> 22
+                                        22 -> 24
+                                        else -> 16
                                     }
-                                )
-                                StitchHudButton(
-                                    title = "Velocidad: ${settings.ttsSpeedRate}x",
-                                    icon = Icons.Default.Timer,
-                                    isPrimary = settings.ttsSpeedRate != 1.0f,
-                                    onClick = {
-                                        val nextSpeed = when (settings.ttsSpeedRate) {
-                                            1.0f -> 1.25f
-                                            1.25f -> 1.5f
-                                            1.5f -> 0.75f
-                                            else -> 1.0f
-                                        }
-                                        settings = settings.copy(ttsSpeedRate = nextSpeed)
-                                        repository.saveReadingSettings(settings)
-                                    }
-                                )
-                                val pitchName = when (settings.ttsPitch) {
-                                    0.8f -> "Tono: Grave"
-                                    1.2f -> "Tono: Agudo"
-                                    else -> "Tono: Normal"
+                                    settings = settings.copy(fontSizeSp = nextSize)
+                                    repository.saveReadingSettings(settings)
                                 }
-                                StitchHudButton(
-                                    title = pitchName,
-                                    icon = Icons.Default.MusicNote,
-                                    isPrimary = false,
-                                    onClick = {
-                                        val nextPitch = when (settings.ttsPitch) {
-                                            1.0f -> 1.2f
-                                            1.2f -> 0.8f
-                                            else -> 1.0f
-                                        }
-                                        settings = settings.copy(ttsPitch = nextPitch)
-                                        repository.saveReadingSettings(settings)
-                                    }
-                                )
+                            )
+                        }
+
+                        // 5. Grupo Voz TTS (Opciones verticales B salen arriba)
+                        HudGroupColumn(
+                            category = ReaderHudCategory.VOZ_TTS,
+                            isSelected = selectedHudCategory == ReaderHudCategory.VOZ_TTS,
+                            activeCategory = selectedHudCategory,
+                            onSelect = { selectedHudCategory = ReaderHudCategory.VOZ_TTS }
+                        ) {
+                            val pitchName = when (settings.ttsPitch) {
+                                0.8f -> "Grave"
+                                1.2f -> "Agudo"
+                                else -> "Normal"
                             }
-                            ReaderHudCategory.AMBIENTE -> {
-                                val ambientLabel = when (settings.ambientSound) {
-                                    AmbientSound.NONE -> "🔕 Silencio"
-                                    AmbientSound.RAIN -> "🌧 Lluvia"
-                                    AmbientSound.FIREPLACE -> "🔥 Chimenea"
-                                    AmbientSound.OCEAN -> "🌊 Mar"
-                                    AmbientSound.CAFE -> "☕ Café"
-                                    AmbientSound.FOREST -> "🌲 Bosque"
+                            VerticalHudOptionButton(
+                                title = "🎵 Tono: $pitchName",
+                                icon = Icons.Filled.MusicNote,
+                                onClick = {
+                                    val nextPitch = when (settings.ttsPitch) {
+                                        1.0f -> 1.2f
+                                        1.2f -> 0.8f
+                                        else -> 1.0f
+                                    }
+                                    settings = settings.copy(ttsPitch = nextPitch)
+                                    repository.saveReadingSettings(settings)
                                 }
-                                StitchHudButton(
-                                    title = "Ambiente: $ambientLabel",
-                                    icon = Icons.Filled.MusicNote,
-                                    isPrimary = settings.ambientSound != AmbientSound.NONE,
-                                    onClick = {
-                                        val nextSound = when (settings.ambientSound) {
-                                            AmbientSound.NONE -> AmbientSound.RAIN
-                                            AmbientSound.RAIN -> AmbientSound.FIREPLACE
-                                            AmbientSound.FIREPLACE -> AmbientSound.OCEAN
-                                            AmbientSound.OCEAN -> AmbientSound.CAFE
-                                            AmbientSound.CAFE -> AmbientSound.FOREST
-                                            AmbientSound.FOREST -> AmbientSound.NONE
-                                        }
-                                        settings = settings.copy(ambientSound = nextSound)
-                                        repository.saveReadingSettings(settings)
+                            )
+                            VerticalHudOptionButton(
+                                title = "⏱ Velocidad: ${settings.ttsSpeedRate}x",
+                                icon = Icons.Default.Timer,
+                                isPrimary = settings.ttsSpeedRate != 1.0f,
+                                onClick = {
+                                    val nextSpeed = when (settings.ttsSpeedRate) {
+                                        1.0f -> 1.25f
+                                        1.25f -> 1.5f
+                                        1.5f -> 0.75f
+                                        else -> 1.0f
                                     }
-                                )
-                                StitchHudButton(
-                                    title = "Volumen: ${(settings.ambientVolume * 100).toInt()}%",
-                                    icon = Icons.Default.MusicNote,
-                                    isPrimary = false,
-                                    onClick = {
-                                        val nextVol = when {
-                                            settings.ambientVolume < 0.35f -> 0.50f
-                                            settings.ambientVolume < 0.65f -> 0.80f
-                                            settings.ambientVolume < 0.95f -> 1.0f
-                                            else -> 0.20f
-                                        }
-                                        settings = settings.copy(ambientVolume = nextVol)
-                                        repository.saveReadingSettings(settings)
-                                    }
-                                )
-                                StitchHudButton(
-                                    title = "Paso Página: ${if (settings.pageSoundEnabled) "Activado 📖" else "Silenciado 🔇"}",
-                                    icon = Icons.Default.Flip,
-                                    isPrimary = settings.pageSoundEnabled,
-                                    onClick = {
-                                        settings = settings.copy(pageSoundEnabled = !settings.pageSoundEnabled)
-                                        repository.saveReadingSettings(settings)
-                                    }
-                                )
-                            }
-                            ReaderHudCategory.HERRAMIENTAS -> {
-                                StitchHudButton(
-                                    title = "‹ Anterior",
-                                    icon = Icons.Default.ChevronLeft,
-                                    isPrimary = false,
-                                    onClick = { turnPage(forward = false) }
-                                )
-                                StitchHudButton(
-                                    title = "Salto (+5 Págs)",
-                                    icon = Icons.Default.MenuBook,
-                                    isPrimary = true,
-                                    onClick = {
-                                        val jumpIdx = (currentSpreadIndex + 5).coerceAtMost(spreads.size - 1)
-                                        currentSpreadIndex = jumpIdx
-                                        repository.saveBookProgress(book.id, jumpIdx)
-                                    }
-                                )
-                                StitchHudButton(
-                                    title = "Siguiente ›",
-                                    icon = Icons.Default.ChevronRight,
-                                    isPrimary = false,
-                                    onClick = { turnPage(forward = true) }
-                                )
-                                val timerLabel = when {
-                                    !isSleepTimerActive -> "⏱ Off"
-                                    sleepTimerSecondsLeft > 60 -> "⏱ ${sleepTimerSecondsLeft / 60}m"
-                                    else -> "⏱ ${sleepTimerSecondsLeft}s"
+                                    settings = settings.copy(ttsSpeedRate = nextSpeed)
+                                    repository.saveReadingSettings(settings)
                                 }
-                                StitchHudButton(
-                                    title = "Sleep: $timerLabel",
-                                    icon = Icons.Filled.Timer,
-                                    isPrimary = isSleepTimerActive,
-                                    onClick = {
-                                        val nextMinutes = when (settings.sleepTimerMinutes) {
-                                            0 -> 15
-                                            15 -> 30
-                                            30 -> 45
-                                            45 -> 60
-                                            else -> 0
-                                        }
-                                        settings = settings.copy(sleepTimerMinutes = nextMinutes)
-                                        repository.saveReadingSettings(settings)
-                                        isSleepTimerActive = nextMinutes > 0
-                                    }
-                                )
+                            )
+                            val voiceName = when (settings.ttsVoiceLocale) {
+                                "es-ES" -> "España 🇪🇸"
+                                "es-MX" -> "México 🇲🇽"
+                                else -> "Latino 🌐"
                             }
+                            VerticalHudOptionButton(
+                                title = "🗣 Voz: $voiceName",
+                                icon = Icons.Filled.RecordVoiceOver,
+                                onClick = {
+                                    val nextLoc = when (settings.ttsVoiceLocale) {
+                                        "es-ES" -> "es-MX"
+                                        "es-MX" -> "es-US"
+                                        else -> "es-ES"
+                                    }
+                                    settings = settings.copy(ttsVoiceLocale = nextLoc)
+                                    repository.saveReadingSettings(settings)
+                                }
+                            )
+                            val isTtsEngineAvailable by ttsController.isEngineAvailable.collectAsState()
+                            VerticalHudOptionButton(
+                                title = if (isTtsPlaying) "⏸ Pausar" else "▶ Leer en Voz",
+                                icon = Icons.Filled.RecordVoiceOver,
+                                isPrimary = isTtsPlaying,
+                                onClick = {
+                                    if (!isTtsEngineAvailable) {
+                                        android.widget.Toast.makeText(context, "Lectura en voz alta no disponible en este dispositivo.", android.widget.Toast.LENGTH_LONG).show()
+                                    } else if (isTtsPlaying) {
+                                        ttsController.stop()
+                                    } else {
+                                        val leftText = currentSpread?.leftPage?.paragraphs?.joinToString(" ") ?: ""
+                                        val rightText = currentSpread?.rightPage?.paragraphs?.joinToString(" ") ?: ""
+                                        val pageText = listOf(leftText, rightText).filter { it.isNotBlank() }.joinToString(" ")
+                                        if (pageText.isNotBlank()) {
+                                            ttsController.readPage(pageText, settings.ttsSpeedRate, settings.ttsPitch, settings.ttsVoiceLocale)
+                                        }
+                                    }
+                                }
+                            )
+                        }
+
+                        // 6. Grupo Ambiente (Opciones verticales B salen arriba)
+                        HudGroupColumn(
+                            category = ReaderHudCategory.AMBIENTE,
+                            isSelected = selectedHudCategory == ReaderHudCategory.AMBIENTE,
+                            activeCategory = selectedHudCategory,
+                            onSelect = { selectedHudCategory = ReaderHudCategory.AMBIENTE }
+                        ) {
+                            VerticalHudOptionButton(
+                                title = "📖 Paso: ${if (settings.pageSoundEnabled) "Activado" else "Silenciado"}",
+                                icon = Icons.Default.Flip,
+                                isPrimary = settings.pageSoundEnabled,
+                                onClick = {
+                                    settings = settings.copy(pageSoundEnabled = !settings.pageSoundEnabled)
+                                    repository.saveReadingSettings(settings)
+                                }
+                            )
+                            VerticalHudOptionButton(
+                                title = "🔊 Volumen: ${(settings.ambientVolume * 100).toInt()}%",
+                                icon = Icons.Filled.MusicNote,
+                                onClick = {
+                                    val nextVol = when {
+                                        settings.ambientVolume < 0.35f -> 0.50f
+                                        settings.ambientVolume < 0.65f -> 0.80f
+                                        settings.ambientVolume < 0.95f -> 1.0f
+                                        else -> 0.20f
+                                    }
+                                    settings = settings.copy(ambientVolume = nextVol)
+                                    repository.saveReadingSettings(settings)
+                                }
+                            )
+                            val ambientLabel = when (settings.ambientSound) {
+                                AmbientSound.NONE -> "🔕 Silencio"
+                                AmbientSound.RAIN -> "🌧 Lluvia"
+                                AmbientSound.FIREPLACE -> "🔥 Chimenea"
+                                AmbientSound.OCEAN -> "🌊 Mar"
+                                AmbientSound.CAFE -> "☕ Café"
+                                AmbientSound.FOREST -> "🌲 Bosque"
+                            }
+                            VerticalHudOptionButton(
+                                title = "Ambiente: $ambientLabel",
+                                icon = Icons.Filled.MusicNote,
+                                isPrimary = settings.ambientSound != AmbientSound.NONE,
+                                onClick = {
+                                    val nextSound = when (settings.ambientSound) {
+                                        AmbientSound.NONE -> AmbientSound.RAIN
+                                        AmbientSound.RAIN -> AmbientSound.FIREPLACE
+                                        AmbientSound.FIREPLACE -> AmbientSound.OCEAN
+                                        AmbientSound.OCEAN -> AmbientSound.CAFE
+                                        AmbientSound.CAFE -> AmbientSound.FOREST
+                                        AmbientSound.FOREST -> AmbientSound.NONE
+                                    }
+                                    settings = settings.copy(ambientSound = nextSound)
+                                    repository.saveReadingSettings(settings)
+                                }
+                            )
+                        }
+
+                        // 7. Grupo Herramientas (Opciones verticales B salen arriba)
+                        HudGroupColumn(
+                            category = ReaderHudCategory.HERRAMIENTAS,
+                            isSelected = selectedHudCategory == ReaderHudCategory.HERRAMIENTAS,
+                            activeCategory = selectedHudCategory,
+                            onSelect = { selectedHudCategory = ReaderHudCategory.HERRAMIENTAS }
+                        ) {
+                            VerticalHudOptionButton(
+                                title = "👤 Perfil: ${activeProfile.name}",
+                                icon = Icons.Default.AccountCircle,
+                                onClick = {
+                                    val profiles = repository.getProfiles()
+                                    val curIdx = profiles.indexOfFirst { it.id == activeProfile.id }
+                                    activeProfile = profiles[(curIdx + 1) % profiles.size]
+                                    repository.saveActiveProfile(activeProfile)
+                                }
+                            )
+                            VerticalHudOptionButton(
+                                title = "⏮ Inicio (Pág. 1)",
+                                icon = Icons.Default.FirstPage,
+                                onClick = {
+                                    currentSpreadIndex = 0
+                                    repository.saveBookProgress(book.id, 0)
+                                }
+                            )
+                            val timerLabel = when {
+                                !isSleepTimerActive -> "Off"
+                                sleepTimerSecondsLeft > 60 -> "${sleepTimerSecondsLeft / 60}m"
+                                else -> "${sleepTimerSecondsLeft}s"
+                            }
+                            VerticalHudOptionButton(
+                                title = "⏱ Sleep: $timerLabel",
+                                icon = Icons.Filled.Timer,
+                                isPrimary = isSleepTimerActive,
+                                onClick = {
+                                    val nextMinutes = when (settings.sleepTimerMinutes) {
+                                        0 -> 15
+                                        15 -> 30
+                                        30 -> 45
+                                        45 -> 60
+                                        else -> 0
+                                    }
+                                    settings = settings.copy(sleepTimerMinutes = nextMinutes)
+                                    repository.saveReadingSettings(settings)
+                                    isSleepTimerActive = nextMinutes > 0
+                                }
+                            )
                         }
                     }
                 }
@@ -1239,12 +1240,13 @@ private fun PageColumn(
 }
 
 @Composable
-private fun StitchHudButton(
+private fun HudActionButton(
     title: String,
     icon: ImageVector,
-    isPrimary: Boolean = false,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit
+    isPrimary: Boolean = false,
+    onClick: () -> Unit,
+    onFocus: () -> Unit = {}
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
@@ -1255,27 +1257,189 @@ private fun StitchHudButton(
             .scale(if (isFocused) 1.06f else 1.0f)
             .shadow(if (isFocused) 8.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = CyanElectric)
             .clip(RoundedCornerShape(8.dp))
-            .background(if (isPrimary || isFocused) AmberWarm else SurfaceContainerHigh)
+            .background(
+                when {
+                    isFocused -> AmberWarm
+                    isPrimary -> AmberWarm.copy(alpha = 0.25f)
+                    else -> Color.White.copy(alpha = 0.08f)
+                }
+            )
             .border(
-                width = if (isFocused) 2.dp else 0.dp,
-                color = if (isFocused) CyanElectric else Color.Transparent,
+                width = if (isFocused) 2.dp else if (isPrimary) 1.dp else 0.dp,
+                color = if (isFocused) Color.White else if (isPrimary) AmberWarm else Color.Transparent,
                 shape = RoundedCornerShape(8.dp)
             )
-            .onFocusChanged { isFocused = it.isFocused }
+            .onFocusChanged {
+                isFocused = it.isFocused
+                if (it.isFocused) onFocus()
+            }
+            .focusable()
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 7.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (isPrimary || isFocused) Color(0xFF131315) else TextPrimary,
+            tint = if (isFocused) Color(0xFF131315) else if (isPrimary) AmberWarm else TextPrimary,
             modifier = Modifier.size(15.dp)
         )
         Text(
             text = title,
-            color = if (isPrimary || isFocused) Color(0xFF131315) else TextPrimary,
+            color = if (isFocused) Color(0xFF131315) else if (isPrimary) AmberWarm else TextPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
+}
+
+@Composable
+private fun HudTabButton(
+    title: String,
+    icon: ImageVector,
+    isSelected: Boolean,
+    isFocused: Boolean,
+    onFocusChanged: (Boolean) -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = modifier
+            .scale(if (isFocused) 1.06f else 1.0f)
+            .shadow(if (isFocused) 8.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = CyanElectric)
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                when {
+                    isFocused -> AmberWarm
+                    isSelected -> AmberWarm.copy(alpha = 0.35f)
+                    else -> Color.White.copy(alpha = 0.08f)
+                }
+            )
+            .border(
+                width = if (isFocused) 2.dp else if (isSelected) 1.dp else 0.dp,
+                color = if (isFocused) Color.White else if (isSelected) AmberWarm else Color.Transparent,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .onFocusChanged { onFocusChanged(it.isFocused) }
+            .focusable()
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (isFocused) Color(0xFF131315) else if (isSelected) AmberWarm else TextMuted,
+            modifier = Modifier.size(15.dp)
+        )
+        Text(
+            text = title,
+            color = if (isFocused) Color(0xFF131315) else if (isSelected) Color.White else TextMuted,
+            fontSize = 12.sp,
+            fontWeight = if (isFocused || isSelected) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
+}
+
+@Composable
+private fun HudGroupColumn(
+    category: ReaderHudCategory,
+    isSelected: Boolean,
+    activeCategory: ReaderHudCategory?,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Bottom
+    ) {
+        // Opciones verticales ARRIBA del grupo (Parte B)
+        if (activeCategory == category) {
+            Column(
+                modifier = Modifier
+                    .padding(bottom = 8.dp)
+                    .width(155.dp)
+                    .background(Color(0xFF1E1E22).copy(alpha = 0.98f), RoundedCornerShape(12.dp))
+                    .border(1.dp, CyanElectric.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                    .padding(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                content()
+            }
+        }
+
+        // Botón del grupo en la fila A
+        HudTabButton(
+            title = category.title,
+            icon = category.icon,
+            isSelected = isSelected,
+            isFocused = isFocused,
+            onFocusChanged = { focused ->
+                isFocused = focused
+                if (focused) onSelect()
+            },
+            onClick = onSelect
+        )
+    }
+}
+
+@Composable
+private fun VerticalHudOptionButton(
+    title: String,
+    icon: ImageVector,
+    isPrimary: Boolean = false,
+    onClick: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(if (isFocused) 1.05f else 1.0f)
+            .shadow(if (isFocused) 8.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = CyanElectric)
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                when {
+                    isFocused -> AmberWarm
+                    isPrimary -> AmberWarm.copy(alpha = 0.20f)
+                    else -> Color.White.copy(alpha = 0.08f)
+                }
+            )
+            .border(
+                width = if (isFocused) 2.dp else if (isPrimary) 1.dp else 0.dp,
+                color = if (isFocused) Color.White else if (isPrimary) AmberWarm else Color.Transparent,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 7.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (isFocused) Color(0xFF131315) else if (isPrimary) AmberWarm else TextPrimary,
+            modifier = Modifier.size(15.dp)
+        )
+        Text(
+            text = title,
+            color = if (isFocused) Color(0xFF131315) else if (isPrimary) AmberWarm else TextPrimary,
             fontSize = 11.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = if (isFocused || isPrimary) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
