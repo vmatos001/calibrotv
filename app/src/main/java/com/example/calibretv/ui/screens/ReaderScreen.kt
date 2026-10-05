@@ -93,8 +93,12 @@ import androidx.compose.ui.unit.sp
 import com.example.calibretv.data.BookRepository
 import com.example.calibretv.data.sound.AmbientSoundManager
 import com.example.calibretv.data.sound.SoundManager
+import com.example.calibretv.data.storage.PreferencesManager
+import com.example.calibretv.data.tts.PiperTtsClient
 import com.example.calibretv.data.tts.TtsController
 import com.example.calibretv.data.tts.TtsVoiceCatalog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.example.calibretv.data.epub.EpubParser
 import com.example.calibretv.data.epub.PageContent
 import com.example.calibretv.data.epub.PageItem
@@ -200,6 +204,7 @@ fun ReaderScreen(
     val topBarFocusRequester = remember { FocusRequester() }
 
     val context = LocalContext.current
+    val prefs = remember { PreferencesManager(context) }
     val ttsController = remember { TtsController(context) }
     val currentSentence by ttsController.currentSentenceIndex.collectAsState()
     val currentSentenceText by ttsController.currentSentenceText.collectAsState()
@@ -243,6 +248,13 @@ fun ReaderScreen(
         if (validVoice != settings.ttsVoiceLocale) {
             settings = settings.copy(ttsVoiceLocale = validVoice)
             repository.saveReadingSettings(settings)
+        }
+        if (prefs.isPiperTtsEnabled()) {
+            val serverUrl = prefs.getPiperTtsUrl()
+            val secret = prefs.getPiperTtsSecret()
+            withContext(Dispatchers.IO) {
+                PiperTtsClient.preloadVoice(validVoice, serverUrl, secret)
+            }
         }
     }
 
@@ -291,13 +303,14 @@ fun ReaderScreen(
 
     LaunchedEffect(ttsController, bookLanguage, spreads.size) {
         ttsController.onPageFinishedListener = {
-            if (currentSpreadIndex < spreads.size - 1) {
+            val nextSpreadIdx = currentSpreadIndex + 1
+            if (nextSpreadIdx in spreads.indices) {
                 scope.launch {
-                    val targetIdx = currentSpreadIndex + 1
                     val turned = turnPageSuspend(forward = true, stopTts = false)
                     if (turned) {
-                        val nextL = spreads.getOrNull(targetIdx)?.leftPage?.paragraphs?.joinToString(" ") ?: ""
-                        val nextR = spreads.getOrNull(targetIdx)?.rightPage?.paragraphs?.joinToString(" ") ?: ""
+                        val nextSpread = spreads.getOrNull(nextSpreadIdx)
+                        val nextL = nextSpread?.leftPage?.paragraphs?.joinToString(" ") ?: ""
+                        val nextR = nextSpread?.rightPage?.paragraphs?.joinToString(" ") ?: ""
                         val nextText = listOf(nextL, nextR).filter { it.isNotBlank() }.joinToString(" ")
                         if (nextText.isNotBlank()) {
                             val activeVoice = TtsVoiceCatalog.ensureValidVoiceCode(settings.ttsVoiceLocale, bookLanguage)
@@ -305,6 +318,8 @@ fun ReaderScreen(
                         }
                     }
                 }
+            } else {
+                ttsController.stop()
             }
         }
     }
@@ -953,6 +968,21 @@ fun ReaderScreen(
                                             val nextVoice = TtsVoiceCatalog.getNextVoice(settings.ttsVoiceLocale, bookLanguage)
                                             settings = settings.copy(ttsVoiceLocale = nextVoice.code)
                                             repository.saveReadingSettings(settings)
+                                            if (prefs.isPiperTtsEnabled()) {
+                                                val serverUrl = prefs.getPiperTtsUrl()
+                                                val secret = prefs.getPiperTtsSecret()
+                                                scope.launch(Dispatchers.IO) {
+                                                    PiperTtsClient.preloadVoice(nextVoice.code, serverUrl, secret)
+                                                }
+                                            }
+                                            if (isTtsPlaying) {
+                                                val leftText = currentSpread?.leftPage?.paragraphs?.joinToString(" ") ?: ""
+                                                val rightText = currentSpread?.rightPage?.paragraphs?.joinToString(" ") ?: ""
+                                                val pageText = listOf(leftText, rightText).filter { it.isNotBlank() }.joinToString(" ")
+                                                if (pageText.isNotBlank()) {
+                                                    ttsController.readPage(pageText, settings.ttsSpeedRate, settings.ttsPitch, nextVoice.code)
+                                                }
+                                            }
                                         }
                                     )
                                     val isTtsEngineAvailable by ttsController.isEngineAvailable.collectAsState()

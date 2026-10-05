@@ -110,7 +110,9 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
                 pendingText?.let { text ->
                     val spd = pendingSpeed
                     pendingText = null
-                    readPage(text, spd)
+                    if (!prefs.isPiperTtsEnabled()) {
+                        readPage(text, spd)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error configuring TTS onInit", e)
@@ -139,7 +141,8 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
 
     fun readPage(text: String, speedRate: Float = 1.0f, pitch: Float = 1.0f, localeCode: String = "es-ES") {
         stop()
-        sentences = text.split(Regex("(?<=[.!?])\\s+")).map { it.trim() }.filter { it.isNotBlank() }
+        val speechChunks = splitIntoSpeechChunks(text, targetSize = 220)
+        sentences = speechChunks
         if (sentences.isEmpty()) return
 
         val usePiper = prefs.isPiperTtsEnabled()
@@ -152,23 +155,35 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
             val secret = prefs.getPiperTtsSecret()
             val selectedVoice = PiperTtsClient.resolveVoiceId(localeCode, prefs.getPiperVoice())
 
-            // 1. Productor en background: sintetiza oraciones de forma anticipada (Pipelining)
+            // Precarga anticipada del modelo en RAM del servidor para latencia 0 ms
+            scope.launch(Dispatchers.IO) {
+                PiperTtsClient.preloadVoice(selectedVoice, serverUrl, secret)
+            }
+
+            // 1. Productor concurrente: sintetiza bloques continuos por adelantado (Pipelining)
             producerJob = scope.launch(Dispatchers.IO) {
                 for (idx in sentences.indices) {
                     if (!isActive) break
-                    val sentence = sentences[idx]
+
+                    // Si la cola está suficientemente llena (> 3 bloques por delante), pausa breve
+                    while (audioCache.size >= 4 && isActive) {
+                        delay(60)
+                    }
+
+                    val chunkText = sentences[idx]
                     val result = PiperTtsClient.synthesize(
-                        text = sentence,
+                        text = chunkText,
                         voice = selectedVoice,
                         speed = speedRate,
+                        pitch = pitch,
                         serverUrl = serverUrl,
                         secret = secret
                     )
                     if (result.isSuccess && result.getOrNull() != null) {
                         audioCache[idx] = result.getOrNull()!!
-                        Log.d(TAG, "Prefetched sentence $idx (${sentence.take(25)}...)")
+                        Log.d(TAG, "Prefetched speech chunk $idx / ${sentences.size} (${chunkText.take(25)}...)")
                     } else {
-                        Log.w(TAG, "Failed prefetching sentence $idx: ${result.exceptionOrNull()?.message}")
+                        Log.w(TAG, "Failed prefetching chunk $idx: ${result.exceptionOrNull()?.message}")
                         failedIndices.add(idx)
                     }
                 }
@@ -181,29 +196,30 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
 
                 for (idx in sentences.indices) {
                     if (!isActive) break
-                    val sentence = sentences[idx]
+                    val chunkText = sentences[idx]
                     _currentSentenceIndex.value = idx
-                    _currentSentenceText.value = sentence
+                    _currentSentenceText.value = chunkText
 
-                    // Esperar a que la oración esté sintetizada por el productor (más tiempo en la primera por arranque de inferencia en CPU)
+                    // Esperar a que el fragmento esté sintetizado por el productor.
+                    // Para el bloque 0 damos margen de calentamiento (hasta 15s), para los siguientes
+                    // ya están en RAM con antelación porque cada bloque habla durante 12-16s.
                     var waitTime = 0
-                    val maxWait = if (idx == 0) 14000 else 9000
+                    val maxWait = if (idx == 0) 15000 else 8000
                     while (!audioCache.containsKey(idx) && !failedIndices.contains(idx) && waitTime < maxWait && isActive) {
-                        delay(50)
-                        waitTime += 50
+                        delay(40)
+                        waitTime += 40
                     }
 
-                    val audioBytes = audioCache[idx]
+                    val audioBytes = audioCache.remove(idx)
                     if (audioBytes != null && audioBytes.isNotEmpty()) {
                         val played = playWavBytes(audioBytes, idx)
-                        audioCache.remove(idx) // Liberar memoria RAM de inmediato
                         if (!played) {
                             fallbackNeeded = true
                             fallbackStartIndex = idx
                             break
                         }
                     } else {
-                        Log.w(TAG, "Timeout or error on Piper sentence $idx. Falling back to native TTS.")
+                        Log.w(TAG, "Timeout or error on Piper speech chunk $idx. Falling back to native TTS.")
                         fallbackNeeded = true
                         fallbackStartIndex = idx
                         break
@@ -237,27 +253,25 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
 
             suspendCoroutine { cont ->
                 try {
-                    piperPlayer?.stop()
-                    piperPlayer?.release()
-                    piperPlayer = MediaPlayer().apply {
-                        setAudioAttributes(
-                            AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_MEDIA)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                .build()
-                        )
-                        setDataSource(tempFile.absolutePath)
-                        setOnCompletionListener {
-                            cont.resume(true)
-                        }
-                        setOnErrorListener { _, what, extra ->
-                            Log.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
-                            cont.resume(false)
-                            true
-                        }
-                        prepare()
-                        start()
+                    val player = piperPlayer ?: MediaPlayer().also { piperPlayer = it }
+                    player.reset()
+                    player.setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    player.setDataSource(tempFile.absolutePath)
+                    player.setOnCompletionListener {
+                        cont.resume(true)
                     }
+                    player.setOnErrorListener { _, what, extra ->
+                        Log.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
+                        cont.resume(false)
+                        true
+                    }
+                    player.prepare()
+                    player.start()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error playing audio via MediaPlayer", e)
                     cont.resume(false)
@@ -280,15 +294,18 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
 
         val ttsEngine = tts ?: return
         try {
+            sentences = splitIntoSpeechChunks(text, targetSize = 200)
             ttsEngine.setSpeechRate(speedRate)
             ttsEngine.setPitch(pitch)
-            try {
+
+            val voiceObj = TtsVoiceCatalog.findVoice(localeCode)
+            val loc = voiceObj?.nativeLocale ?: run {
                 val parts = localeCode.split("-")
-                val loc = if (parts.size >= 2) Locale(parts[0], parts[1]) else Locale(localeCode)
-                if (ttsEngine.isLanguageAvailable(loc) >= TextToSpeech.LANG_AVAILABLE) {
-                    ttsEngine.language = loc
-                }
-            } catch (_: Exception) {}
+                if (parts.size >= 2) Locale(parts[0], parts[1]) else Locale(localeCode)
+            }
+            if (ttsEngine.isLanguageAvailable(loc) >= TextToSpeech.LANG_AVAILABLE) {
+                ttsEngine.language = loc
+            }
 
             ttsEngine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String) {
@@ -346,9 +363,8 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
 
         try {
             piperPlayer?.stop()
-            piperPlayer?.release()
+            piperPlayer?.reset()
         } catch (_: Exception) {}
-        piperPlayer = null
 
         try {
             tts?.stop()
@@ -364,10 +380,71 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
         stop()
         scope.cancel()
         try {
+            piperPlayer?.release()
+            piperPlayer = null
+        } catch (_: Exception) {}
+        try {
             tts?.shutdown()
             tts = null
         } catch (e: Exception) {
             Log.e(TAG, "Error shutting down native TTS", e)
+        }
+    }
+
+    companion object {
+        /**
+         * Agrupa oraciones en fragmentos naturales de locución de ~200-240 caracteres.
+         * Cada fragmento tarda entre 12 y 16 segundos en reproducirse, permitiendo
+         * que el sintetizador Piper en CPU genere los siguientes bloques con holgura
+         * (3-4 segundos de inferencia por bloque), eliminando las pausas de 4-6 segundos.
+         */
+        fun splitIntoSpeechChunks(text: String, targetSize: Int = 220): List<String> {
+            val rawSentences = text.split(Regex("(?<=[.!?:;\\n])\\s+"))
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+
+            if (rawSentences.isEmpty()) return emptyList()
+
+            val chunks = mutableListOf<String>()
+            var currentChunk = StringBuilder()
+
+            fun flushCurrent() {
+                if (currentChunk.isNotBlank()) {
+                    chunks.add(currentChunk.toString().trim())
+                    currentChunk = StringBuilder()
+                }
+            }
+
+            for (sentence in rawSentences) {
+                if (sentence.length > 280) {
+                    flushCurrent()
+                    val clauses = sentence.split(Regex("(?<=[,])\\s+"))
+                    var clauseBuffer = StringBuilder()
+                    for (clause in clauses) {
+                        if (clauseBuffer.isNotEmpty() && clauseBuffer.length + clause.length + 1 > targetSize) {
+                            chunks.add(clauseBuffer.toString().trim())
+                            clauseBuffer = StringBuilder(clause)
+                        } else {
+                            if (clauseBuffer.isNotEmpty()) clauseBuffer.append(" ")
+                            clauseBuffer.append(clause)
+                        }
+                    }
+                    if (clauseBuffer.isNotEmpty()) {
+                        chunks.add(clauseBuffer.toString().trim())
+                    }
+                } else {
+                    if (currentChunk.isEmpty()) {
+                        currentChunk.append(sentence)
+                    } else if (currentChunk.length + sentence.length + 1 <= targetSize) {
+                        currentChunk.append(" ").append(sentence)
+                    } else {
+                        flushCurrent()
+                        currentChunk.append(sentence)
+                    }
+                }
+            }
+            flushCurrent()
+            return chunks
         }
     }
 }

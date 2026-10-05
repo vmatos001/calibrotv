@@ -7,10 +7,13 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 /**
- * Cliente HTTP para el microservicio local de síntesis de voz Piper TTS (VITS Architecture).
- * Soporta llamadas con streaming/cache WAV, cabecera secreta X-Calibro-Secret y verificación de salud.
+ * Cliente HTTP de alto rendimiento para el microservicio local de síntesis Piper TTS.
+ * Diseñado para streaming de ultra baja latencia en CalibroTV (Android TV).
+ * Soporta endpoints directos GET con caché, POST para textos extensos,
+ * precarga de modelos en RAM (/api/models/preload) y token de seguridad.
  */
 object PiperTtsClient {
 
@@ -42,41 +45,105 @@ object PiperTtsClient {
     }
 
     /**
+     * Solicita la precarga del modelo de voz especificado en la memoria RAM del servidor Piper.
+     * Esto asegura que la síntesis posterior sea instantánea.
+     */
+    suspend fun preloadVoice(
+        voice: String,
+        serverUrl: String = "http://192.168.1.89:5000",
+        secret: String = "calibro_super_secret_token_change_me"
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val endpoint = if (serverUrl.endsWith("/")) "${serverUrl}api/models/preload" else "$serverUrl/api/models/preload"
+            val tokenParam = if (secret.isNotBlank()) "&token=${URLEncoder.encode(secret, "UTF-8")}" else ""
+            val fullUrl = "$endpoint?voice=${URLEncoder.encode(voice, "UTF-8")}$tokenParam"
+            val conn = URL(fullUrl).openConnection() as HttpURLConnection
+            conn.connectTimeout = 3000
+            conn.readTimeout = 5000
+            conn.requestMethod = "POST"
+            if (secret.isNotBlank()) {
+                conn.setRequestProperty("X-Calibro-Secret", secret)
+            }
+            conn.connect()
+            val code = conn.responseCode
+            code in 200..299
+        } catch (e: Exception) {
+            Log.d(TAG, "Preload voice $voice skipped: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Construye la URL de streaming directo GET soportada nativamente por reproductores
+     * multimedia como MediaPlayer o ExoPlayer.
+     */
+    fun buildStreamingUrl(
+        text: String,
+        voice: String = "es_MX-claude-high",
+        speed: Float = 1.0f,
+        pitch: Float = 1.0f,
+        serverUrl: String = "http://192.168.1.89:5000",
+        secret: String = "calibro_super_secret_token_change_me"
+    ): String {
+        val baseUrl = if (serverUrl.endsWith("/")) "${serverUrl}api/tts" else "$serverUrl/api/tts"
+        val encodedText = URLEncoder.encode(text, "UTF-8")
+        val tokenParam = if (secret.isNotBlank()) "&token=${URLEncoder.encode(secret, "UTF-8")}" else ""
+        return "$baseUrl?voice=$voice&speed=$speed&pitch=$pitch$tokenParam&text=$encodedText"
+    }
+
+    /**
      * Sintetiza el texto solicitado y retorna el audio binario en formato WAV.
+     * Utiliza GET para textos de tamaño estándar (beneficiándose del streaming y caché de Piper)
+     * o POST con cuerpo JSON para párrafos más largos.
      */
     suspend fun synthesize(
         text: String,
         voice: String = "es_MX-claude-high",
         speed: Float = 1.0f,
+        pitch: Float = 1.0f,
         serverUrl: String = "http://192.168.1.89:5000",
         secret: String = "calibro_super_secret_token_change_me"
     ): Result<ByteArray> = withContext(Dispatchers.IO) {
         try {
-            val endpoint = if (serverUrl.endsWith("/")) "${serverUrl}api/tts" else "$serverUrl/api/tts"
-            val url = URL(endpoint)
-            val conn = url.openConnection() as HttpURLConnection
-            conn.connectTimeout = 4000
-            conn.readTimeout = 15000
-            conn.requestMethod = "POST"
-            conn.doInput = true
-            conn.doOutput = true
-            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-            conn.setRequestProperty("Accept", "audio/wav, */*")
-            if (secret.isNotBlank()) {
-                conn.setRequestProperty("X-Calibro-Secret", secret)
+            val useGet = text.length <= 1800
+            val conn = if (useGet) {
+                val streamUrl = buildStreamingUrl(text, voice, speed, pitch, serverUrl, secret)
+                (URL(streamUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 5000
+                    readTimeout = 30000
+                    if (secret.isNotBlank()) {
+                        setRequestProperty("X-Calibro-Secret", secret)
+                    }
+                    setRequestProperty("Accept", "audio/wav, */*")
+                }
+            } else {
+                val endpoint = if (serverUrl.endsWith("/")) "${serverUrl}api/tts" else "$serverUrl/api/tts"
+                (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 5000
+                    readTimeout = 40000
+                    doInput = true
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+                    setRequestProperty("Accept", "audio/wav, */*")
+                    if (secret.isNotBlank()) {
+                        setRequestProperty("X-Calibro-Secret", secret)
+                    }
+                    val payload = JSONObject().apply {
+                        put("text", text)
+                        put("voice", voice)
+                        put("speed", speed)
+                        put("pitch", pitch)
+                    }
+                    OutputStreamWriter(outputStream, Charsets.UTF_8).use { writer ->
+                        writer.write(payload.toString())
+                        writer.flush()
+                    }
+                }
             }
 
-            val payload = JSONObject().apply {
-                put("text", text)
-                put("voice", voice)
-                put("speed", speed)
-            }
-
-            OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { writer ->
-                writer.write(payload.toString())
-                writer.flush()
-            }
-
+            conn.connect()
             val code = conn.responseCode
             if (code in 200..299) {
                 val bytes = conn.inputStream.use { it.readBytes() }
@@ -99,21 +166,9 @@ object PiperTtsClient {
     }
 
     /**
-     * Resuelve el identificador de voz oficial de Piper a partir del código de idioma o acento.
+     * Resuelve el identificador de voz oficial de Piper a partir del código configurado.
      */
     fun resolveVoiceId(localeCode: String, fallbackVoice: String = "es_MX-claude-high"): String {
-        return when {
-            // Español (4 voces)
-            localeCode.equals("es-ES", ignoreCase = true) || localeCode.contains("España", ignoreCase = true) -> "es_ES-sharvard-medium"
-            localeCode.equals("es-MX", ignoreCase = true) || localeCode.contains("México", ignoreCase = true) -> "es_MX-claude-high"
-            localeCode.equals("es-US", ignoreCase = true) || localeCode.contains("Latino", ignoreCase = true) -> "es_MX-ald-medium"
-            localeCode.equals("es-AR", ignoreCase = true) || localeCode.contains("Argentina", ignoreCase = true) -> "es_ES-carlfm-x_low"
-            // Inglés (4 voces)
-            localeCode.equals("en-GB", ignoreCase = true) || localeCode.contains("UK", ignoreCase = true) || localeCode.contains("Reino Unido", ignoreCase = true) -> "en_GB-alan-medium"
-            localeCode.equals("en-AU", ignoreCase = true) || localeCode.contains("Australia", ignoreCase = true) -> "en_GB-alba-medium"
-            localeCode.equals("en-CA", ignoreCase = true) || localeCode.contains("Canadá", ignoreCase = true) || localeCode.contains("Canada", ignoreCase = true) -> "en_US-amy-medium"
-            localeCode.equals("en-US", ignoreCase = true) || localeCode.contains("EE.UU.", ignoreCase = true) || localeCode.startsWith("en", ignoreCase = true) -> "en_US-ryan-high"
-            else -> fallbackVoice
-        }
+        return TtsVoiceCatalog.findVoice(localeCode)?.code ?: fallbackVoice
     }
 }

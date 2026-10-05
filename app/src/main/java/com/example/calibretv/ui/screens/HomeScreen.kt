@@ -557,7 +557,7 @@ fun HomeScreen(
                                     .padding(vertical = 14.dp)
                             ) {
                                 CuratorRow(
-                                    section = section,
+                                    section = section.copy(books = section.books.take(5)),
                                     isDarkTheme = isDarkTheme,
                                     isInteractive = !isAnyModalOpen,
                                     onBookClick = { curatedBook ->
