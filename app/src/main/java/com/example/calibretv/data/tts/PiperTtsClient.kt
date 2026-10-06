@@ -79,7 +79,7 @@ object PiperTtsClient {
      */
     fun buildStreamingUrl(
         text: String,
-        voice: String = "es_MX-claude-high",
+        voice: String = "es_ES-davefx-medium",
         speed: Float = 1.0f,
         pitch: Float = 1.0f,
         serverUrl: String = "http://192.168.1.89:5000",
@@ -98,7 +98,7 @@ object PiperTtsClient {
      */
     suspend fun synthesize(
         text: String,
-        voice: String = "es_MX-claude-high",
+        voice: String = "es_ES-davefx-medium",
         speed: Float = 1.0f,
         pitch: Float = 1.0f,
         serverUrl: String = "http://192.168.1.89:5000",
@@ -168,7 +168,7 @@ object PiperTtsClient {
     /**
      * Resuelve el identificador de voz oficial de Piper a partir del código configurado.
      */
-    fun resolveVoiceId(localeCode: String, fallbackVoice: String = "es_MX-claude-high"): String {
-        return TtsVoiceCatalog.findVoice(localeCode)?.code ?: fallbackVoice
+    fun resolveVoiceId(localeCode: String, fallbackVoice: String = "es_ES-davefx-medium"): String {
+        return TtsVoiceCatalog.findVoice(localeCode).code
     }
 }

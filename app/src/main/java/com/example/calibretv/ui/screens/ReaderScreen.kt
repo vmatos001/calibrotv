@@ -53,7 +53,11 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -84,6 +88,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -98,6 +106,8 @@ import com.example.calibretv.data.tts.PiperTtsClient
 import com.example.calibretv.data.tts.TtsController
 import com.example.calibretv.data.tts.TtsVoiceCatalog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import com.example.calibretv.data.epub.EpubParser
 import com.example.calibretv.data.epub.PageContent
@@ -108,6 +118,7 @@ import com.example.calibretv.data.image.rememberLocalImage
 import com.example.calibretv.data.model.AmbientSound
 import com.example.calibretv.data.model.Book
 import com.example.calibretv.data.model.CurlSpeed
+import com.example.calibretv.data.model.TtsEngineMode
 import com.example.calibretv.data.model.ReadingFont
 import com.example.calibretv.data.model.ReadingSettings
 import com.example.calibretv.data.model.ReadingTheme
@@ -209,13 +220,19 @@ fun ReaderScreen(
     val currentSentence by ttsController.currentSentenceIndex.collectAsState()
     val currentSentenceText by ttsController.currentSentenceText.collectAsState()
     val isTtsPlaying by ttsController.isPlaying.collectAsState()
+    val isModelDownloading by ttsController.isModelDownloading.collectAsState()
+    val downloadProgress by ttsController.downloadProgress.collectAsState()
+    val downloadStatusText by ttsController.downloadStatusText.collectAsState()
     val soundManager = remember { SoundManager(context) }
     val ambientManager = remember { AmbientSoundManager(context) }
+    var ttsAutoAdvanceJob by remember { mutableStateOf<Job?>(null) }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE || event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                ttsAutoAdvanceJob?.cancel()
+                ttsAutoAdvanceJob = null
                 ambientManager.stop()
                 ttsController.stop()
             } else if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
@@ -227,6 +244,10 @@ fun ReaderScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            ttsController.nextPageFirstChunkProvider = null
+            ttsController.onPageFinishedListener = null
+            ttsAutoAdvanceJob?.cancel()
+            ttsAutoAdvanceJob = null
             ttsController.destroy()
             soundManager.release()
             ambientManager.release()
@@ -249,13 +270,12 @@ fun ReaderScreen(
             settings = settings.copy(ttsVoiceLocale = validVoice)
             repository.saveReadingSettings(settings)
         }
-        if (prefs.isPiperTtsEnabled()) {
-            val serverUrl = prefs.getPiperTtsUrl()
-            val secret = prefs.getPiperTtsSecret()
-            withContext(Dispatchers.IO) {
-                PiperTtsClient.preloadVoice(validVoice, serverUrl, secret)
-            }
-        }
+        // Pre-cargar modelo de voz en segundo plano (IO) para latencia instantánea al pulsar reproducir
+        ttsController.warmUpEngine(bookLanguage)
+    }
+
+    LaunchedEffect(settings.ttsEngineMode) {
+        ttsController.setEngineMode(settings.ttsEngineMode)
     }
 
     // Trigger Apple Books realistic 3D paper curl
@@ -263,10 +283,13 @@ fun ReaderScreen(
         if (isFlipping) return false
         val nextIdx = if (forward) currentSpreadIndex + 1 else currentSpreadIndex - 1
         if (nextIdx !in spreads.indices) return false
+        val wasTtsRunning = isTtsPlaying || ttsController.isPlaying.value || !stopTts || (ttsAutoAdvanceJob?.isActive == true)
         if (stopTts) {
+            ttsAutoAdvanceJob?.cancel()
+            ttsAutoAdvanceJob = null
             ttsController.stop()
         }
-        if (settings.pageSoundEnabled) {
+        if (settings.pageSoundEnabled && !wasTtsRunning) {
             soundManager.playPageTurn()
         }
 
@@ -301,31 +324,88 @@ fun ReaderScreen(
         }
     }
 
-    LaunchedEffect(ttsController, bookLanguage, spreads.size) {
-        ttsController.onPageFinishedListener = {
-            val nextSpreadIdx = currentSpreadIndex + 1
-            if (nextSpreadIdx in spreads.indices) {
-                scope.launch {
-                    val turned = turnPageSuspend(forward = true, stopTts = false)
-                    if (turned) {
-                        val nextSpread = spreads.getOrNull(nextSpreadIdx)
-                        val nextL = nextSpread?.leftPage?.paragraphs?.joinToString(" ") ?: ""
-                        val nextR = nextSpread?.rightPage?.paragraphs?.joinToString(" ") ?: ""
-                        val nextText = listOf(nextL, nextR).filter { it.isNotBlank() }.joinToString(" ")
-                        if (nextText.isNotBlank()) {
-                            val activeVoice = TtsVoiceCatalog.ensureValidVoiceCode(settings.ttsVoiceLocale, bookLanguage)
-                            ttsController.readPage(nextText, settings.ttsSpeedRate, settings.ttsPitch, activeVoice)
-                        }
-                    }
+    val isTtsActive = isTtsPlaying || (ttsAutoAdvanceJob?.isActive == true)
+
+    fun advanceToNextReadableSpread(fromIndex: Int) {
+        ttsAutoAdvanceJob?.cancel()
+        ttsAutoAdvanceJob = scope.launch {
+            var targetIdx = fromIndex
+            var foundText = false
+
+            while (targetIdx in spreads.indices && isActive) {
+                val turned = turnPageSuspend(forward = true, stopTts = false)
+                if (!turned) break
+
+                val nextSpread = spreads.getOrNull(targetIdx)
+                val nextL = nextSpread?.leftPage?.paragraphs?.joinToString("\n\n") ?: ""
+                val nextR = nextSpread?.rightPage?.paragraphs?.joinToString("\n\n") ?: ""
+                val nextText = listOf(nextL, nextR).filter { it.isNotBlank() }.joinToString("\n\n")
+
+                if (nextText.isNotBlank()) {
+                    foundText = true
+                    val activeVoice = TtsVoiceCatalog.ensureValidVoiceCode(settings.ttsVoiceLocale, bookLanguage)
+                    ttsController.readPage(nextText, settings.ttsSpeedRate, settings.ttsPitch, activeVoice)
+                    break
+                } else {
+                    // El pliego actual contiene sólo ilustraciones o está en blanco.
+                    // Pausa de 2.5s para que el usuario aprecie la imagen y continúa al siguiente pliego.
+                    android.util.Log.i("ReaderScreen", "Pliego $targetIdx es una ilustración sin texto. Mostrando imagen y pasando al siguiente...")
+                    kotlinx.coroutines.delay(2500L)
+                    targetIdx++
                 }
-            } else {
+            }
+
+            if (!foundText && targetIdx !in spreads.indices) {
+                android.util.Log.i("ReaderScreen", "Fin del libro alcanzado durante la lectura TTS.")
                 ttsController.stop()
             }
         }
     }
 
-    LaunchedEffect(isTtsPlaying) {
-        ambientManager.duck(isTtsPlaying)
+    fun toggleTts() {
+        if (isTtsActive) {
+            ttsAutoAdvanceJob?.cancel()
+            ttsAutoAdvanceJob = null
+            ttsController.stop()
+        } else {
+            val current = spreads.getOrNull(currentSpreadIndex)
+            val leftText = current?.leftPage?.paragraphs?.joinToString("\n\n") ?: ""
+            val rightText = current?.rightPage?.paragraphs?.joinToString("\n\n") ?: ""
+            val pageText = listOf(leftText, rightText).filter { it.isNotBlank() }.joinToString("\n\n")
+            if (pageText.isNotBlank()) {
+                val activeVoice = TtsVoiceCatalog.ensureValidVoiceCode(settings.ttsVoiceLocale, bookLanguage)
+                ttsController.readPage(pageText, settings.ttsSpeedRate, settings.ttsPitch, activeVoice)
+            } else {
+                advanceToNextReadableSpread(currentSpreadIndex + 1)
+            }
+        }
+    }
+
+    LaunchedEffect(ttsController, bookLanguage, spreads.size) {
+        ttsController.onPageFinishedListener = {
+            advanceToNextReadableSpread(currentSpreadIndex + 1)
+        }
+        ttsController.nextPageFirstChunkProvider = {
+            var targetIdx = currentSpreadIndex + 1
+            var result: String? = null
+            while (targetIdx in spreads.indices) {
+                val nextSpread = spreads.getOrNull(targetIdx)
+                val nextL = nextSpread?.leftPage?.paragraphs?.joinToString("\n\n") ?: ""
+                val nextR = nextSpread?.rightPage?.paragraphs?.joinToString("\n\n") ?: ""
+                val nextText = listOf(nextL, nextR).filter { it.isNotBlank() }.joinToString("\n\n")
+                if (nextText.isNotBlank()) {
+                    val chunks = TtsController.splitIntoSpeechChunks(nextText)
+                    result = chunks.firstOrNull()
+                    break
+                }
+                targetIdx++
+            }
+            result
+        }
+    }
+
+    LaunchedEffect(isTtsActive) {
+        ambientManager.duck(isTtsActive)
     }
 
     // Load parsed book once
@@ -419,6 +499,10 @@ fun ReaderScreen(
                                 }
                                 true
                             }
+                            Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause, Key.One -> {
+                                toggleTts()
+                                true
+                            }
                             // Allow D-Pad navigation between buttons in the HUD!
                             Key.DirectionLeft, Key.DirectionRight, Key.DirectionUp, Key.DirectionDown -> false
                             else -> false
@@ -444,6 +528,10 @@ fun ReaderScreen(
                                 turnPage(forward = false)
                                 true
                             }
+                            Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause, Key.One -> {
+                                toggleTts()
+                                true
+                            }
                             // DOWN on remote reveals the Stitch HUD with direct button focus
                             Key.DirectionDown -> {
                                 showBottomHud = true
@@ -466,6 +554,8 @@ fun ReaderScreen(
                                 true
                             }
                             Key.Back, Key.Escape -> {
+                                ttsAutoAdvanceJob?.cancel()
+                                ttsAutoAdvanceJob = null
                                 ttsController.stop()
                                 val exitPct = if (spreads.isNotEmpty()) (((currentSpreadIndex + 1) * 100) / spreads.size).coerceIn(1, 100) else 0
                                 repository.saveBookProgress(book.id, currentSpreadIndex, exitPct)
@@ -926,7 +1016,7 @@ fun ReaderScreen(
                         // Slot 5: Voz TTS
                         Box(modifier = Modifier.width(105.dp), contentAlignment = Alignment.BottomCenter) {
                             if (selectedHudCategory == ReaderHudCategory.VOZ_TTS) {
-                                FloatingHudMenuCard(width = 180.dp) {
+                                FloatingHudMenuCard(width = 210.dp) {
                                     val pitchName = when (settings.ttsPitch) {
                                         0.8f -> "Grave"
                                         1.2f -> "Agudo"
@@ -960,50 +1050,36 @@ fun ReaderScreen(
                                             repository.saveReadingSettings(settings)
                                         }
                                     )
-                                    val voiceName = TtsVoiceCatalog.getVoiceDisplayName(settings.ttsVoiceLocale, bookLanguage)
+                                    val currentVoiceName = TtsVoiceCatalog.getVoiceDisplayName(settings.ttsVoiceLocale, bookLanguage)
                                     VerticalHudOptionButton(
-                                        title = "Voz: $voiceName",
+                                        title = "Voz: $currentVoiceName",
                                         icon = Icons.Filled.RecordVoiceOver,
+                                        isPrimary = true,
                                         onClick = {
                                             val nextVoice = TtsVoiceCatalog.getNextVoice(settings.ttsVoiceLocale, bookLanguage)
                                             settings = settings.copy(ttsVoiceLocale = nextVoice.code)
                                             repository.saveReadingSettings(settings)
-                                            if (prefs.isPiperTtsEnabled()) {
-                                                val serverUrl = prefs.getPiperTtsUrl()
-                                                val secret = prefs.getPiperTtsSecret()
-                                                scope.launch(Dispatchers.IO) {
-                                                    PiperTtsClient.preloadVoice(nextVoice.code, serverUrl, secret)
-                                                }
-                                            }
-                                            if (isTtsPlaying) {
-                                                val leftText = currentSpread?.leftPage?.paragraphs?.joinToString(" ") ?: ""
-                                                val rightText = currentSpread?.rightPage?.paragraphs?.joinToString(" ") ?: ""
-                                                val pageText = listOf(leftText, rightText).filter { it.isNotBlank() }.joinToString(" ")
+
+                                            android.widget.Toast.makeText(context, "Voz: ${nextVoice.displayName}", android.widget.Toast.LENGTH_SHORT).show()
+
+                                            if (isTtsActive) {
+                                                ttsController.stop()
+                                                val current = spreads.getOrNull(currentSpreadIndex)
+                                                val leftText = current?.leftPage?.paragraphs?.joinToString("\n\n") ?: ""
+                                                val rightText = current?.rightPage?.paragraphs?.joinToString("\n\n") ?: ""
+                                                val pageText = listOf(leftText, rightText).filter { it.isNotBlank() }.joinToString("\n\n")
                                                 if (pageText.isNotBlank()) {
                                                     ttsController.readPage(pageText, settings.ttsSpeedRate, settings.ttsPitch, nextVoice.code)
                                                 }
                                             }
                                         }
                                     )
-                                    val isTtsEngineAvailable by ttsController.isEngineAvailable.collectAsState()
                                     VerticalHudOptionButton(
-                                        title = if (isTtsPlaying) "Pausar" else "Leer en Voz",
+                                        title = if (isTtsActive) "Pausar" else "Leer en Voz",
                                         icon = Icons.Filled.RecordVoiceOver,
-                                        isPrimary = isTtsPlaying,
+                                        isPrimary = isTtsActive,
                                         onClick = {
-                                            if (!isTtsEngineAvailable) {
-                                                android.widget.Toast.makeText(context, "Lectura en voz alta no disponible en este dispositivo.", android.widget.Toast.LENGTH_LONG).show()
-                                            } else if (isTtsPlaying) {
-                                                ttsController.stop()
-                                            } else {
-                                                val leftText = currentSpread?.leftPage?.paragraphs?.joinToString(" ") ?: ""
-                                                val rightText = currentSpread?.rightPage?.paragraphs?.joinToString(" ") ?: ""
-                                                val pageText = listOf(leftText, rightText).filter { it.isNotBlank() }.joinToString(" ")
-                                                if (pageText.isNotBlank()) {
-                                                    val activeVoice = TtsVoiceCatalog.ensureValidVoiceCode(settings.ttsVoiceLocale, bookLanguage)
-                                                    ttsController.readPage(pageText, settings.ttsSpeedRate, settings.ttsPitch, activeVoice)
-                                                }
-                                            }
+                                            toggleTts()
                                         }
                                     )
                                 }
@@ -1319,6 +1395,96 @@ fun ReaderScreen(
                 }
             )
         }
+
+        if (isModelDownloading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 50.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF161619).copy(alpha = 0.95f)),
+                    border = BorderStroke(1.2.dp, AmberWarm.copy(alpha = 0.7f)),
+                    modifier = Modifier
+                        .width(420.dp)
+                        .shadow(20.dp, RoundedCornerShape(16.dp), spotColor = AmberWarm)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                progress = { downloadProgress / 100f },
+                                modifier = Modifier.size(24.dp),
+                                color = AmberWarm,
+                                strokeWidth = 3.dp
+                            )
+                            Text(
+                                text = "Descargando voz neuronal ($downloadProgress%)",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        LinearProgressIndicator(
+                            progress = { downloadProgress / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = AmberWarm,
+                            trackColor = Color.White.copy(alpha = 0.15f)
+                        )
+                        Text(
+                            text = downloadStatusText.ifBlank { "Descargando modelo de voz..." },
+                            color = Color.White.copy(alpha = 0.75f),
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "La lectura comenzará de forma automática al completarse.",
+                            color = AmberWarm.copy(alpha = 0.9f),
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun buildHighlightedParagraph(
+    fullText: String,
+    activeText: String,
+    textColor: Color,
+    accentColor: Color
+): AnnotatedString {
+    val cleanActive = activeText.trim()
+    if (cleanActive.isBlank() || !fullText.contains(cleanActive, ignoreCase = true)) {
+        return AnnotatedString(fullText)
+    }
+    val startIdx = fullText.indexOf(cleanActive, ignoreCase = true)
+    val endIdx = startIdx + cleanActive.length
+    return buildAnnotatedString {
+        append(fullText.substring(0, startIdx))
+        withStyle(
+            SpanStyle(
+                background = accentColor.copy(alpha = 0.28f),
+                color = textColor,
+                fontWeight = FontWeight.SemiBold
+            )
+        ) {
+            append(fullText.substring(startIdx, endIdx))
+        }
+        append(fullText.substring(endIdx))
     }
 }
 
@@ -1373,20 +1539,13 @@ private fun PageColumn(
             content.items.forEachIndexed { index, item ->
                 when (item) {
                     is PageItem.Paragraph -> {
-                        val isSentenceActive = activeSentenceText.isNotBlank() && item.text.contains(activeSentenceText.trim())
-                        val highlightModifier = if (isSentenceActive) {
-                            Modifier
-                                .background(accentColor.copy(alpha = 0.22f), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        } else {
-                            Modifier
-                        }
                         val isChapterStart = index == 0 && content.pageNumber % 2 == 1 && item.text.length > 20 && !item.isHeader
                         if (isChapterStart) {
                             val dropLetter = item.text.take(1)
                             val remainingPara = item.text.drop(1)
+                            val annotatedRemaining = buildHighlightedParagraph(remainingPara, activeSentenceText, textColor, accentColor)
                             Row(
-                                modifier = Modifier.fillMaxWidth().then(highlightModifier),
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.Top
                             ) {
                                 Text(
@@ -1399,7 +1558,7 @@ private fun PageColumn(
                                     modifier = Modifier.padding(end = 10.dp, top = 2.dp)
                                 )
                                 Text(
-                                    text = remainingPara,
+                                    text = annotatedRemaining,
                                     fontSize = fontSizeSp.sp,
                                     lineHeight = (fontSizeSp * 1.55).sp,
                                     color = textColor,
@@ -1409,24 +1568,25 @@ private fun PageColumn(
                                 )
                             }
                         } else if (item.isHeader) {
+                            val annotatedHeader = buildHighlightedParagraph(item.text, activeSentenceText, accentColor, accentColor)
                             Text(
-                                text = item.text,
+                                text = annotatedHeader,
                                 fontSize = (fontSizeSp * 1.25).sp,
                                 lineHeight = (fontSizeSp * 1.6).sp,
                                 fontWeight = FontWeight.Bold,
                                 color = accentColor,
                                 fontFamily = FontProvider.getFontFamily(readingFont),
-                                modifier = Modifier.padding(vertical = 4.dp).then(highlightModifier)
+                                modifier = Modifier.padding(vertical = 4.dp)
                             )
                         } else {
+                            val annotatedPara = buildHighlightedParagraph(item.text, activeSentenceText, textColor, accentColor)
                             Text(
-                                text = item.text,
+                                text = annotatedPara,
                                 fontSize = fontSizeSp.sp,
                                 lineHeight = (fontSizeSp * 1.55).sp,
                                 color = textColor,
                                 fontFamily = FontProvider.getFontFamily(readingFont),
-                                textAlign = TextAlign.Justify,
-                                modifier = highlightModifier
+                                textAlign = TextAlign.Justify
                             )
                         }
                         if (index < content.items.lastIndex) {

@@ -98,8 +98,15 @@ class PreferencesManager(context: Context) {
             spineDepth3D = prefs.getFloat("spine_depth_3d", 0.5f),
             ttsEnabled = prefs.getBoolean("tts_enabled", false),
             ttsSpeedRate = prefs.getFloat("tts_speed_rate", 1.0f),
-            ttsPitch = prefs.getFloat("tts_pitch", 1.0f),
-            ttsVoiceLocale = prefs.getString("tts_voice_locale", "es-ES") ?: "es-ES",
+            ttsVoiceLocale = (prefs.getString("tts_voice_locale", "es-MX-DaliaNeural") ?: "es-MX-DaliaNeural").let {
+                if (it.contains("Jane") || it.contains("Samuel")) {
+                    "en-US-AvaNeural"
+                } else if (it.contains("davefx") || it.contains("joe") || it.contains("ald") || it.contains("claude") || it.contains("Alvaro") || it.contains("Elvira") || it == "es-ES" || it == "es_ES") {
+                    "es-MX-DaliaNeural"
+                } else it
+            },
+            ttsEngineMode = com.example.calibretv.data.model.TtsEngineMode.EDGE_ONLINE,
+            useNativeTts = prefs.getBoolean("tts_use_native", false),
             pageSoundEnabled = prefs.getBoolean("page_sound_enabled", true),
             ambientSound = try {
                 com.example.calibretv.data.model.AmbientSound.valueOf(
@@ -115,7 +122,7 @@ class PreferencesManager(context: Context) {
     fun saveReadingSettings(settings: ReadingSettings) {
         prefs.edit()
             .putBoolean("vertical_mirror", settings.verticalMirror)
-            .putBoolean("rotation_180", settings.rotation180)
+            .putBoolean("rotation180", settings.rotation180)
             .putBoolean("ceiling_mode", settings.verticalMirror || settings.rotation180)
             .putString("curl_speed", settings.curlSpeed.name)
             .putString("read_theme", settings.theme.name)
@@ -129,6 +136,8 @@ class PreferencesManager(context: Context) {
             .putFloat("tts_speed_rate", settings.ttsSpeedRate)
             .putFloat("tts_pitch", settings.ttsPitch)
             .putString("tts_voice_locale", settings.ttsVoiceLocale)
+            .putString("tts_engine_mode", settings.ttsEngineMode.name)
+            .putBoolean("tts_use_native", settings.useNativeTts)
             .putBoolean("page_sound_enabled", settings.pageSoundEnabled)
             .putString("ambient_sound", settings.ambientSound.name)
             .putFloat("ambient_volume", settings.ambientVolume)
@@ -451,7 +460,12 @@ class PreferencesManager(context: Context) {
     }
 
     fun getPiperVoice(): String {
-        return prefs.getString("piper_voice", "es_MX-claude-high") ?: "es_MX-claude-high"
+        val voice = prefs.getString("piper_voice", "es_ES-davefx-medium") ?: "es_ES-davefx-medium"
+        if (voice == "es_MX-ald-medium" || voice == "es_MX-claude-high") {
+            setPiperVoice("es_ES-davefx-medium")
+            return "es_ES-davefx-medium"
+        }
+        return voice
     }
 
     fun setPiperVoice(voice: String) {

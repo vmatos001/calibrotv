@@ -14,6 +14,9 @@ android {
         targetSdk = 34
         versionCode = 52
         versionName = "3.38"
+        ndk {
+            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
+        }
     }
 
     signingConfigs {
@@ -47,6 +50,7 @@ android {
         }
     }
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -60,6 +64,16 @@ android {
     packaging {
       resources {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
+      }
+      jniLibs {
+        pickFirsts.add("lib/arm64-v8a/libonnxruntime.so")
+        pickFirsts.add("lib/armeabi-v7a/libonnxruntime.so")
+        pickFirsts.add("lib/arm64-v8a/libsherpa-onnx-jni.so")
+        pickFirsts.add("lib/armeabi-v7a/libsherpa-onnx-jni.so")
+        pickFirsts.add("lib/arm64-v8a/libsherpa-onnx-c-api.so")
+        pickFirsts.add("lib/armeabi-v7a/libsherpa-onnx-c-api.so")
+        pickFirsts.add("lib/arm64-v8a/libsherpa-onnx-cxx-api.so")
+        pickFirsts.add("lib/armeabi-v7a/libsherpa-onnx-cxx-api.so")
       }
     }
 }
@@ -125,4 +139,11 @@ dependencies {
 
   // QR Code Generator (ZXing core estándar para códigos QR escaneables)
   implementation("com.google.zxing:core:3.5.3")
+
+
+  // Desugaring de APIs modernas para compatibilidad con Fire OS / Android 7.1 (API 23+)
+  coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+
+  // Apache Commons Compress v1.21 (100% compatible con Android API 21+ sin requerir java.nio.file)
+  implementation("org.apache.commons:commons-compress:1.21")
 }

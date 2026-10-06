@@ -3,16 +3,18 @@ package com.example.calibretv.data.tts
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
-import android.media.MediaPlayer
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import com.example.calibretv.data.model.TtsEngineMode
 import com.example.calibretv.data.storage.PreferencesManager
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,47 +22,37 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
 /**
- * Controlador de Text-to-Speech híbrido para CalibroTV.
- * Implementa una cola de precarga concurrente (Pipelined Prefetcher) para que mientras
- * se reproduce una oración, las siguientes ya se estén sintetizando en paralelo en el servidor Piper TTS.
- * Esto elimina los silencios de 8-10 segundos entre frases, logrando una locución fluida.
- * Cuenta con fallback automático al motor nativo si el servidor no responde.
+ * Controlador de Text-to-Speech de alta fidelidad para CalibroTV en Android TV / Fire TV OS.
+ * Motor principal: Microsoft Edge Neural TTS en streaming con prefetch entre páginas.
  */
 class TtsController(private val context: Context) : TextToSpeech.OnInitListener {
 
     private val TAG = "CalibroTTS"
-    private var tts: TextToSpeech? = null
-    private var isReady = false
-    private var pendingText: String? = null
-    private var pendingSpeed: Float = 1.0f
+    private val edgeEngine = EdgeTtsEngine(context)
+    private var nativeTts: TextToSpeech? = null
+    private var isNativeReady = false
+    private var currentNativePackage: String? = null
 
     private val prefs = PreferencesManager(context)
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private var producerJob: Job? = null
-    private var consumerJob: Job? = null
-    private var piperPlayer: MediaPlayer? = null
-
-    // Caché concurrente en RAM para la precarga de oraciones
-    private val audioCache = ConcurrentHashMap<Int, ByteArray>()
-    private val failedIndices = ConcurrentHashMap.newKeySet<Int>()
+    private var playbackJob: Job? = null
+    private var prefetchedEdgeNextPageDeferred: Deferred<ByteArray?>? = null
 
     var onPageFinishedListener: (() -> Unit)? = null
+    var nextPageFirstChunkProvider: (() -> String?)? = null
 
-    init {
-        try {
-            tts = TextToSpeech(context.applicationContext, this)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error initializing TextToSpeech", e)
-        }
-    }
+    private val _engineMode = MutableStateFlow(TtsEngineMode.EDGE_ONLINE)
+    val engineMode: StateFlow<TtsEngineMode> = _engineMode
+
+    private val _useNativeEngine = MutableStateFlow(false)
+    val useNativeEngine: StateFlow<Boolean> = _useNativeEngine
+
+    private val _nativeEngineName = MutableStateFlow("Nativo Fire OS")
+    val nativeEngineName: StateFlow<String> = _nativeEngineName
 
     private val _currentSentenceIndex = MutableStateFlow(-1)
     val currentSentenceIndex: StateFlow<Int> = _currentSentenceIndex
@@ -74,269 +66,348 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
     private val _isEngineAvailable = MutableStateFlow(true)
     val isEngineAvailable: StateFlow<Boolean> = _isEngineAvailable
 
+    // Estados de descarga para UI
+    private val _isModelDownloading = MutableStateFlow(false)
+    val isModelDownloading: StateFlow<Boolean> = _isModelDownloading
+
+    private val _downloadProgress = MutableStateFlow(0)
+    val downloadProgress: StateFlow<Int> = _downloadProgress
+
+    private val _downloadStatusText = MutableStateFlow("")
+    val downloadStatusText: StateFlow<String> = _downloadStatusText
+
     private var sentences = listOf<String>()
 
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            _isEngineAvailable.value = true
-            val ttsEngine = tts ?: return
-            try {
-                val audioAttributes = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build()
-                ttsEngine.setAudioAttributes(audioAttributes)
-
-                val candidates = listOf(
-                    Locale.getDefault(),
-                    Locale("es", "ES"),
-                    Locale("es", "US"),
-                    Locale("es", "MX"),
-                    Locale("es"),
-                    Locale.US
-                )
-                var resolvedLocale = Locale.getDefault()
-                for (loc in candidates) {
-                    val avail = ttsEngine.isLanguageAvailable(loc)
-                    if (avail >= TextToSpeech.LANG_AVAILABLE) {
-                        resolvedLocale = loc
-                        break
-                    }
-                }
-                ttsEngine.language = resolvedLocale
-                isReady = true
-                Log.d(TAG, "Native TTS initialized successfully with locale $resolvedLocale")
-
-                pendingText?.let { text ->
-                    val spd = pendingSpeed
-                    pendingText = null
-                    if (!prefs.isPiperTtsEnabled()) {
-                        readPage(text, spd)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error configuring TTS onInit", e)
-            }
-        } else {
-            _isEngineAvailable.value = false
-            Log.e(TAG, "Failed to initialize TextToSpeech engine, status: $status")
-        }
+    init {
+        initNativeTts()
     }
 
-    fun setVoiceLocale(locale: Locale) {
-        if (isReady && tts != null) {
-            try {
-                tts?.language = locale
-            } catch (_: Exception) {}
-        }
+    fun setEngineMode(mode: TtsEngineMode) {
+        _engineMode.value = TtsEngineMode.EDGE_ONLINE
     }
 
-    fun setPitch(pitch: Float) {
-        if (isReady && tts != null) {
-            try {
-                tts?.setPitch(pitch)
-            } catch (_: Exception) {}
-        }
+    fun setUseNativeEngine(enable: Boolean) {
+        _engineMode.value = TtsEngineMode.EDGE_ONLINE
     }
 
-    fun readPage(text: String, speedRate: Float = 1.0f, pitch: Float = 1.0f, localeCode: String = "es-ES") {
-        stop()
-        val speechChunks = splitIntoSpeechChunks(text, targetSize = 220)
-        sentences = speechChunks
-        if (sentences.isEmpty()) return
-
-        val usePiper = prefs.isPiperTtsEnabled()
-        if (usePiper) {
-            audioCache.clear()
-            failedIndices.clear()
-            _isPlaying.value = true
-
-            val serverUrl = prefs.getPiperTtsUrl()
-            val secret = prefs.getPiperTtsSecret()
-            val selectedVoice = PiperTtsClient.resolveVoiceId(localeCode, prefs.getPiperVoice())
-
-            // Precarga anticipada del modelo en RAM del servidor para latencia 0 ms
-            scope.launch(Dispatchers.IO) {
-                PiperTtsClient.preloadVoice(selectedVoice, serverUrl, secret)
-            }
-
-            // 1. Productor concurrente: sintetiza bloques continuos por adelantado (Pipelining)
-            producerJob = scope.launch(Dispatchers.IO) {
-                for (idx in sentences.indices) {
-                    if (!isActive) break
-
-                    // Si la cola está suficientemente llena (> 3 bloques por delante), pausa breve
-                    while (audioCache.size >= 4 && isActive) {
-                        delay(60)
-                    }
-
-                    val chunkText = sentences[idx]
-                    val result = PiperTtsClient.synthesize(
-                        text = chunkText,
-                        voice = selectedVoice,
-                        speed = speedRate,
-                        pitch = pitch,
-                        serverUrl = serverUrl,
-                        secret = secret
-                    )
-                    if (result.isSuccess && result.getOrNull() != null) {
-                        audioCache[idx] = result.getOrNull()!!
-                        Log.d(TAG, "Prefetched speech chunk $idx / ${sentences.size} (${chunkText.take(25)}...)")
-                    } else {
-                        Log.w(TAG, "Failed prefetching chunk $idx: ${result.exceptionOrNull()?.message}")
-                        failedIndices.add(idx)
-                    }
-                }
-            }
-
-            // 2. Consumidor: reproduce la cola sin silencios
-            consumerJob = scope.launch(Dispatchers.Main) {
-                var fallbackNeeded = false
-                var fallbackStartIndex = 0
-
-                for (idx in sentences.indices) {
-                    if (!isActive) break
-                    val chunkText = sentences[idx]
-                    _currentSentenceIndex.value = idx
-                    _currentSentenceText.value = chunkText
-
-                    // Esperar a que el fragmento esté sintetizado por el productor.
-                    // Para el bloque 0 damos margen de calentamiento (hasta 15s), para los siguientes
-                    // ya están en RAM con antelación porque cada bloque habla durante 12-16s.
-                    var waitTime = 0
-                    val maxWait = if (idx == 0) 15000 else 8000
-                    while (!audioCache.containsKey(idx) && !failedIndices.contains(idx) && waitTime < maxWait && isActive) {
-                        delay(40)
-                        waitTime += 40
-                    }
-
-                    val audioBytes = audioCache.remove(idx)
-                    if (audioBytes != null && audioBytes.isNotEmpty()) {
-                        val played = playWavBytes(audioBytes, idx)
-                        if (!played) {
-                            fallbackNeeded = true
-                            fallbackStartIndex = idx
-                            break
-                        }
-                    } else {
-                        Log.w(TAG, "Timeout or error on Piper speech chunk $idx. Falling back to native TTS.")
-                        fallbackNeeded = true
-                        fallbackStartIndex = idx
-                        break
-                    }
-                }
-
-                if (fallbackNeeded) {
-                    val remainingText = sentences.drop(fallbackStartIndex).joinToString(" ")
-                    if (remainingText.isNotBlank()) {
-                        readPageNative(remainingText, speedRate, pitch, localeCode)
-                    }
-                } else {
-                    _isPlaying.value = false
-                    _currentSentenceIndex.value = -1
-                    _currentSentenceText.value = ""
-                    onPageFinishedListener?.invoke()
-                }
-            }
-        } else {
-            readPageNative(text, speedRate, pitch, localeCode)
-        }
-    }
-
-    private suspend fun playWavBytes(bytes: ByteArray, sentenceIdx: Int): Boolean = withContext(Dispatchers.IO) {
-        val tempFile = File(context.cacheDir, "piper_tts_$sentenceIdx.wav")
+    private fun initNativeTts(enginePackage: String? = null) {
         try {
-            FileOutputStream(tempFile).use { fos ->
-                fos.write(bytes)
-                fos.flush()
-            }
+            nativeTts?.stop()
+            nativeTts?.shutdown()
+            isNativeReady = false
+            currentNativePackage = enginePackage
 
-            suspendCoroutine { cont ->
-                try {
-                    val player = piperPlayer ?: MediaPlayer().also { piperPlayer = it }
-                    player.reset()
-                    player.setAudioAttributes(
-                        AudioAttributes.Builder()
+            val listener = TextToSpeech.OnInitListener { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    val tts = nativeTts ?: return@OnInitListener
+                    try {
+                        val audioAttributes = AudioAttributes.Builder()
                             .setUsage(AudioAttributes.USAGE_MEDIA)
                             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                             .build()
-                    )
-                    player.setDataSource(tempFile.absolutePath)
-                    player.setOnCompletionListener {
-                        cont.resume(true)
+                        tts.setAudioAttributes(audioAttributes)
+                        isNativeReady = true
+                        _isEngineAvailable.value = true
+
+                        val currentEngine = enginePackage ?: tts.defaultEngine ?: "desconocido"
+                        Log.i(TAG, "Native TTS initialized with engine: $currentEngine")
+                        Log.i(TAG, "Available engines: ${tts.engines.map { it.name }}")
+
+                        val esAvail = tts.isLanguageAvailable(Locale("es", "ES"))
+                        val enAvail = tts.isLanguageAvailable(Locale.US)
+                        Log.i(TAG, "Language availability for $currentEngine: es-ES=$esAvail, en-US=$enAvail")
+
+                        // Si el motor actual no soporta español y estamos en el motor por defecto (ej. Ivona solo inglés),
+                        // cambiar automáticamente a Pico que sí tiene librerías es-ES en ROM.
+                        if (esAvail < TextToSpeech.LANG_AVAILABLE && enginePackage == null) {
+                            val hasPico = tts.engines.any { it.name == "com.svox.pico" }
+                            if (hasPico) {
+                                Log.i(TAG, "Motor predeterminado no soporta español ($esAvail). Conmutando a com.svox.pico...")
+                                initNativeTts("com.svox.pico")
+                                return@OnInitListener
+                            }
+                        }
+
+                        val nameStr = when {
+                            currentEngine.contains("ivona", ignoreCase = true) -> "Nativo (Ivona)"
+                            currentEngine.contains("pico", ignoreCase = true) -> "Nativo (Pico)"
+                            currentEngine.contains("google", ignoreCase = true) -> "Nativo (Google)"
+                            else -> "Nativo Fire OS"
+                        }
+                        _nativeEngineName.value = nameStr
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error configuring native TTS after init", e)
                     }
-                    player.setOnErrorListener { _, what, extra ->
-                        Log.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
-                        cont.resume(false)
-                        true
-                    }
-                    player.prepare()
-                    player.start()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error playing audio via MediaPlayer", e)
-                    cont.resume(false)
+                } else {
+                    Log.w(TAG, "Failed to initialize native TTS (engine=$enginePackage), status=$status")
                 }
             }
+
+            if (enginePackage != null) {
+                nativeTts = TextToSpeech(context.applicationContext, listener, enginePackage)
+            } else {
+                nativeTts = TextToSpeech(context.applicationContext, listener)
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Error writing temporary audio file", e)
-            false
-        } finally {
-            try { tempFile.delete() } catch (_: Exception) {}
+            Log.e(TAG, "Error initializing native TextToSpeech", e)
         }
     }
 
-    private fun readPageNative(text: String, speedRate: Float, pitch: Float, localeCode: String) {
-        if (!isReady || tts == null) {
-            pendingText = text
-            pendingSpeed = speedRate
+    override fun onInit(status: Int) {
+        // Fallback interface callback
+    }
+
+    fun isModelInstalled(localeCode: String): Boolean = true
+
+    fun warmUpEngine(localeCode: String) {}
+
+    fun downloadModel(localeCode: String, onFinished: ((Boolean) -> Unit)? = null) {
+        onFinished?.invoke(true)
+    }
+
+    fun readPage(text: String, speedRate: Float = 1.0f, pitch: Float = 1.0f, localeCode: String = TtsVoiceCatalog.SPANISH_VOICE.code) {
+        playbackJob?.cancel()
+        playbackJob = null
+        prefetchedEdgeNextPageDeferred?.cancel()
+        prefetchedEdgeNextPageDeferred = null
+
+        if (text.isBlank()) return
+
+        Log.i(TAG, "Leyendo página con Microsoft Edge TTS (Voz: $localeCode)...")
+    }
+
+    private fun readPageEdge(text: String, speedRate: Float, pitch: Float, localeCode: String) {
+        val lang = if (localeCode.startsWith("en", ignoreCase = true)) "en" else "es"
+        val voice = if (localeCode.contains("Neural", ignoreCase = true)) {
+            localeCode
+        } else {
+            TtsVoiceCatalog.ensureValidVoiceCode(localeCode, lang)
+        }
+        _isPlaying.value = true
+
+        playbackJob = scope.launch(Dispatchers.IO) {
+            val speechChunks = splitIntoSpeechChunks(text)
+            sentences = speechChunks
+            if (speechChunks.isEmpty() || !isActive) {
+                _isPlaying.value = false
+                return@launch
+            }
+
+            // 1. Usar prefetch si ya estaba precargado el primer fragmento de la siguiente página
+            val prefetched = try {
+                prefetchedEdgeNextPageDeferred?.await()
+            } catch (_: Exception) {
+                null
+            }
+            prefetchedEdgeNextPageDeferred = null
+
+            val firstAudio = prefetched ?: edgeEngine.generateAudio(speechChunks[0], speedRate, pitch, voice)
+            var nextAudio: ByteArray? = firstAudio
+            var completedAll = true
+
+            // Si falla la conexión a internet en el primer chunk, alertar
+            if (firstAudio == null) {
+                Log.w(TAG, "Edge TTS online no respondió (posible falta de internet).")
+                withContext(Dispatchers.Main) {
+                    _isPlaying.value = false
+                    android.widget.Toast.makeText(context, "No se pudo conectar al servicio de voz en la nube. Comprueba tu conexión a Internet.", android.widget.Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+
+            for (idx in speechChunks.indices) {
+                if (!isActive) {
+                    completedAll = false
+                    break
+                }
+
+                val currentChunkText = speechChunks[idx]
+                val currentAudio = nextAudio ?: edgeEngine.generateAudio(currentChunkText, speedRate, pitch, voice)
+
+                if (currentAudio == null) {
+                    Log.w(TAG, "Edge TTS chunk $idx failed to generate, skipping...")
+                    continue
+                }
+
+                // Iniciar precarga de la siguiente oración en segundo plano
+                val prefetchJob = if (idx + 1 < speechChunks.size && isActive) {
+                    launch(Dispatchers.IO) {
+                        nextAudio = edgeEngine.generateAudio(speechChunks[idx + 1], speedRate, pitch, voice)
+                    }
+                } else if (idx + 1 == speechChunks.size && isActive) {
+                    // ¡Última oración de la página actual!
+                    // Precargamos la primera frase del siguiente pliego
+                    launch(Dispatchers.IO) {
+                        val nextChunk = withContext(Dispatchers.Main) {
+                            nextPageFirstChunkProvider?.invoke()
+                        }
+                        if (!nextChunk.isNullOrBlank() && isActive) {
+                            Log.i(TAG, "Edge TTS Cross-page prefetch: Pre-sintetizando primera oración del siguiente pliego...")
+                            prefetchedEdgeNextPageDeferred = async(Dispatchers.IO) {
+                                edgeEngine.generateAudio(nextChunk, speedRate, pitch, voice)
+                            }
+                        }
+                    }
+                    nextAudio = null
+                    null
+                } else {
+                    nextAudio = null
+                    null
+                }
+
+                // Actualizar resaltado en pantalla
+                _currentSentenceIndex.value = idx
+                _currentSentenceText.value = currentChunkText
+                Log.i(TAG, "Edge TTS: Reproduciendo chunk $idx / ${speechChunks.size} (${currentChunkText.take(25)}...)")
+
+                // Reproducir el audio MP3
+                val played = edgeEngine.playAudio(currentAudio)
+                if (!played && !isActive) {
+                    completedAll = false
+                    prefetchJob?.cancel()
+                    break
+                }
+
+                // Esperar a que la precarga del siguiente fragmento esté lista
+                prefetchJob?.join()
+
+                // Pausa breve natural entre oraciones
+                if (isActive && idx < speechChunks.size - 1) {
+                    delay(30L)
+                }
+            }
+
+            if (completedAll && isActive) {
+                Log.i(TAG, "Lectura Edge TTS finalizada con éxito.")
+                _isPlaying.value = false
+                _currentSentenceIndex.value = -1
+                _currentSentenceText.value = ""
+                withContext(Dispatchers.Main) {
+                    onPageFinishedListener?.invoke()
+                }
+            } else {
+                _isPlaying.value = false
+                _currentSentenceIndex.value = -1
+                _currentSentenceText.value = ""
+            }
+        }
+    }
+
+    fun readPageNative(text: String, speedRate: Float = 1.0f, pitch: Float = 1.0f, localeCode: String = TtsVoiceCatalog.SPANISH_VOICE.code) {
+        playbackJob?.cancel()
+        playbackJob = null
+        prefetchedEdgeNextPageDeferred?.cancel()
+        prefetchedEdgeNextPageDeferred = null
+
+        val ttsEngine = nativeTts
+        if (!isNativeReady || ttsEngine == null) {
+            Log.w(TAG, "Native TTS not ready yet. Scheduling playback when ready...")
+            scope.launch(Dispatchers.IO) {
+                var attempts = 0
+                while (!isNativeReady && attempts < 20) {
+                    delay(100)
+                    attempts++
+                }
+                if (isNativeReady) {
+                    withContext(Dispatchers.Main) {
+                        readPageNative(text, speedRate, pitch, localeCode)
+                    }
+                } else {
+                    Log.e(TAG, "Native TTS never became ready.")
+                }
+            }
             return
         }
 
-        val ttsEngine = tts ?: return
         try {
-            sentences = splitIntoSpeechChunks(text, targetSize = 200)
+            val speechChunks = splitIntoSpeechChunks(text)
+            sentences = speechChunks
+            if (speechChunks.isEmpty()) {
+                _isPlaying.value = false
+                return
+            }
+
+            ttsEngine.stop()
             ttsEngine.setSpeechRate(speedRate)
             ttsEngine.setPitch(pitch)
 
-            val voiceObj = TtsVoiceCatalog.findVoice(localeCode)
-            val loc = voiceObj?.nativeLocale ?: run {
-                val parts = localeCode.split("-")
-                if (parts.size >= 2) Locale(parts[0], parts[1]) else Locale(localeCode)
-            }
-            if (ttsEngine.isLanguageAvailable(loc) >= TextToSpeech.LANG_AVAILABLE) {
+            val loc = if (localeCode.startsWith("en", ignoreCase = true)) Locale.US else Locale("es", "ES")
+            val langAvail = ttsEngine.isLanguageAvailable(loc)
+            Log.i(TAG, "readPageNative: language $loc availability = $langAvail on ${currentNativePackage ?: ttsEngine.defaultEngine}")
+
+            if (langAvail >= TextToSpeech.LANG_AVAILABLE) {
                 ttsEngine.language = loc
+            } else {
+                if (loc.language == "es" && currentNativePackage != "com.svox.pico") {
+                    val hasPico = ttsEngine.engines.any { it.name == "com.svox.pico" }
+                    if (hasPico) {
+                        Log.i(TAG, "Conmutando dinámicamente a com.svox.pico para español...")
+                        initNativeTts("com.svox.pico")
+                        scope.launch(Dispatchers.IO) {
+                            var waitMs = 0
+                            while (!isNativeReady && waitMs < 2000) {
+                                delay(100)
+                                waitMs += 100
+                            }
+                            if (isNativeReady) {
+                                withContext(Dispatchers.Main) {
+                                    readPageNative(text, speedRate, pitch, localeCode)
+                                }
+                            }
+                        }
+                        return
+                    }
+                }
+                Log.w(TAG, "Intentando setLanguage($loc) de todas formas...")
+                ttsEngine.setLanguage(loc)
             }
 
             ttsEngine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String) {
                     val idx = utteranceId.removePrefix("sentence_").toIntOrNull() ?: -1
-                    _currentSentenceIndex.value = idx
-                    _currentSentenceText.value = sentences.getOrNull(idx) ?: ""
-                    _isPlaying.value = true
+                    scope.launch(Dispatchers.Main) {
+                        _currentSentenceIndex.value = idx
+                        _currentSentenceText.value = sentences.getOrNull(idx) ?: ""
+                        _isPlaying.value = true
+                    }
                 }
 
                 override fun onDone(utteranceId: String) {
                     val idx = utteranceId.removePrefix("sentence_").toIntOrNull() ?: -1
                     if (idx >= sentences.size - 1) {
-                        _isPlaying.value = false
-                        _currentSentenceIndex.value = -1
-                        _currentSentenceText.value = ""
-                        onPageFinishedListener?.invoke()
+                        scope.launch(Dispatchers.Main) {
+                            _isPlaying.value = false
+                            _currentSentenceIndex.value = -1
+                            _currentSentenceText.value = ""
+                            onPageFinishedListener?.invoke()
+                        }
                     }
                 }
 
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String) {
-                    _isPlaying.value = false
-                    _currentSentenceIndex.value = -1
-                    _currentSentenceText.value = ""
+                    val idx = utteranceId.removePrefix("sentence_").toIntOrNull() ?: -1
+                    if (idx >= sentences.size - 1) {
+                        scope.launch(Dispatchers.Main) {
+                            _isPlaying.value = false
+                            _currentSentenceIndex.value = -1
+                            _currentSentenceText.value = ""
+                            onPageFinishedListener?.invoke()
+                        }
+                    }
                 }
 
                 override fun onError(utteranceId: String, errorCode: Int) {
                     Log.e(TAG, "Native TTS Utterance error on $utteranceId, code: $errorCode")
-                    _isPlaying.value = false
-                    _currentSentenceIndex.value = -1
-                    _currentSentenceText.value = ""
+                    val idx = utteranceId.removePrefix("sentence_").toIntOrNull() ?: -1
+                    if (idx >= sentences.size - 1) {
+                        scope.launch(Dispatchers.Main) {
+                            _isPlaying.value = false
+                            _currentSentenceIndex.value = -1
+                            _currentSentenceText.value = ""
+                            onPageFinishedListener?.invoke()
+                        }
+                    }
                 }
             })
 
@@ -345,7 +416,14 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
                     putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC)
                     putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f)
                 }
-                ttsEngine.speak(sentence, TextToSpeech.QUEUE_ADD, params, "sentence_$idx")
+                val cleaned = sentence
+                    .replace("—", " ")
+                    .replace("–", " ")
+                    .replace("«", "\"")
+                    .replace("»", "\"")
+                    .trim()
+                val queueMode = if (idx == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+                ttsEngine.speak(cleaned, queueMode, params, "sentence_$idx")
             }
             _isPlaying.value = true
         } catch (e: Exception) {
@@ -354,23 +432,24 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
     }
 
     fun stop() {
-        producerJob?.cancel()
-        producerJob = null
-        consumerJob?.cancel()
-        consumerJob = null
-        audioCache.clear()
-        failedIndices.clear()
+        playbackJob?.cancel()
+        playbackJob = null
+
+        prefetchedEdgeNextPageDeferred?.cancel()
+        prefetchedEdgeNextPageDeferred = null
 
         try {
-            piperPlayer?.stop()
-            piperPlayer?.reset()
-        } catch (_: Exception) {}
+            edgeEngine.stop()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping Edge TTS", e)
+        }
 
         try {
-            tts?.stop()
+            nativeTts?.stop()
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping native TTS", e)
         }
+
         _isPlaying.value = false
         _currentSentenceIndex.value = -1
         _currentSentenceText.value = ""
@@ -380,12 +459,13 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
         stop()
         scope.cancel()
         try {
-            piperPlayer?.release()
-            piperPlayer = null
-        } catch (_: Exception) {}
+            edgeEngine.release()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing Edge TTS", e)
+        }
         try {
-            tts?.shutdown()
-            tts = null
+            nativeTts?.shutdown()
+            nativeTts = null
         } catch (e: Exception) {
             Log.e(TAG, "Error shutting down native TTS", e)
         }
@@ -393,58 +473,48 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
 
     companion object {
         /**
-         * Agrupa oraciones en fragmentos naturales de locución de ~200-240 caracteres.
-         * Cada fragmento tarda entre 12 y 16 segundos en reproducirse, permitiendo
-         * que el sintetizador Piper en CPU genere los siguientes bloques con holgura
-         * (3-4 segundos de inferencia por bloque), eliminando las pausas de 4-6 segundos.
+         * Divide el texto estrictamente por signos de puntuación terminales de fin de oración (. ? ! … ...).
+         * Mantiene las oraciones completas con sus comas para que el modelo aplique la prosodia y cadencia
+         * melódica continua sin fragmentar la voz artificialmente.
          */
-        fun splitIntoSpeechChunks(text: String, targetSize: Int = 220): List<String> {
-            val rawSentences = text.split(Regex("(?<=[.!?:;\\n])\\s+"))
+        fun splitIntoSpeechChunks(text: String): List<String> {
+            if (text.isBlank()) return emptyList()
+
+            val normalized = text
+                .replace("\r\n", "\n")
+                .replace("\r", "\n")
+                .replace(Regex("[ \\t]+"), " ")
+                .trim()
+
+            val rawParagraphs = normalized.split(Regex("\\n+"))
                 .map { it.trim() }
                 .filter { it.isNotBlank() }
 
-            if (rawSentences.isEmpty()) return emptyList()
-
             val chunks = mutableListOf<String>()
-            var currentChunk = StringBuilder()
 
-            fun flushCurrent() {
-                if (currentChunk.isNotBlank()) {
-                    chunks.add(currentChunk.toString().trim())
-                    currentChunk = StringBuilder()
-                }
-            }
+            for (para in rawParagraphs) {
+                // Dividir únicamente por signos de puntuación de fin de oración (. ? ! … ...)
+                val sentences = para.split(Regex("(?<=[.!?…])\\s+|(?<=\\.\\.\\.)\\s+"))
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
 
-            for (sentence in rawSentences) {
-                if (sentence.length > 280) {
-                    flushCurrent()
-                    val clauses = sentence.split(Regex("(?<=[,])\\s+"))
-                    var clauseBuffer = StringBuilder()
-                    for (clause in clauses) {
-                        if (clauseBuffer.isNotEmpty() && clauseBuffer.length + clause.length + 1 > targetSize) {
-                            chunks.add(clauseBuffer.toString().trim())
-                            clauseBuffer = StringBuilder(clause)
-                        } else {
-                            if (clauseBuffer.isNotEmpty()) clauseBuffer.append(" ")
-                            clauseBuffer.append(clause)
-                        }
-                    }
-                    if (clauseBuffer.isNotEmpty()) {
-                        chunks.add(clauseBuffer.toString().trim())
-                    }
-                } else {
-                    if (currentChunk.isEmpty()) {
-                        currentChunk.append(sentence)
-                    } else if (currentChunk.length + sentence.length + 1 <= targetSize) {
-                        currentChunk.append(" ").append(sentence)
+                for (sentence in sentences) {
+                    // Preservar la oración completa con todas sus comas y guiones de diálogo.
+                    // Las comas NUNCA se cortan por separado porque Piper las modula con prosodia continua.
+                    // Solo si un autor escribió una frase anormalmente gigantesca sin puntos (> 280 caracteres),
+                    // la dividimos en pausas mayores (; o :) para evitar sobrecargar la memoria.
+                    if (sentence.length > 280 && (sentence.contains(";") || sentence.contains(":"))) {
+                        val subParts = sentence.split(Regex("(?<=[;:])\\s+"))
+                            .map { it.trim() }
+                            .filter { it.isNotBlank() }
+                        chunks.addAll(subParts)
                     } else {
-                        flushCurrent()
-                        currentChunk.append(sentence)
+                        chunks.add(sentence)
                     }
                 }
             }
-            flushCurrent()
-            return chunks
+
+            return chunks.filter { it.any { c -> c.isLetterOrDigit() } }
         }
     }
 }

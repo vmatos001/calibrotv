@@ -3,127 +3,96 @@ package com.example.calibretv.data.tts
 import java.util.Locale
 
 /**
- * Catálogo Exclusivo de 8 Voces Neuronales Piper TTS para CalibroTV.
- * 4 en Español y 4 en Inglés, optimizadas para lectura continua de audiolibros.
+ * Catálogo Canónico de Parejas de Voces Neuronales de Microsoft Edge TTS para CalibroTV.
+ *
+ * Parejas de Voces por Idioma del Libro:
+ * - Español (México):
+ *     1. Dalia (Femenina) [es-MX-DaliaNeural] - Predeterminada
+ *     2. Jorge (Masculino) [es-MX-JorgeNeural]
+ * - Inglés (EE.UU.):
+ *     1. Ava (Femenina) [en-US-AvaNeural] - Predeterminada (Estilo Jane: joven, cálida y amigable)
+ *     2. Andrew (Masculino) [en-US-AndrewMultilingualNeural] - (Estilo Samuel: sincero, cálido y multilingüe)
  */
 data class TtsVoice(
-    val code: String,        // Identificador oficial del modelo Piper en el servidor (ej: "es_MX-claude-high")
-    val displayName: String, // Nombre para el HUD del TV (ej: "Claude (Neutro)")
+    val code: String,        // Identificador de Edge TTS (ej: "es-MX-DaliaNeural")
+    val displayName: String, // Nombre para el HUD del TV (ej: "Dalia (Femenina)")
     val language: String,    // "es" o "en"
-    val description: String, // Descripción del arquetipo vocal
-    val nativeLocale: Locale // Locale de fallback para el motor nativo de Android
+    val description: String, // Descripción del timbre
+    val isFemale: Boolean,   // Femenina o Masculina
+    val nativeLocale: Locale // Locale de fallback
 )
 
 object TtsVoiceCatalog {
 
-    val SPANISH_VOICES = listOf(
-        TtsVoice(
-            code = "es_MX-claude-high",
-            displayName = "Claude (Neutro)",
-            language = "es",
-            description = "Tono neutro alta fidelidad (Voz predeterminada)",
-            nativeLocale = Locale("es", "MX")
-        ),
-        TtsVoice(
-            code = "es_MX-ald-medium",
-            displayName = "Aldo (México)",
-            language = "es",
-            description = "Masculina (México / Neutro)",
-            nativeLocale = Locale("es", "MX")
-        ),
-        TtsVoice(
-            code = "es_ES-carlfm-x_low",
-            displayName = "Carl (España)",
-            language = "es",
-            description = "Voz ágil y ligera (España)",
-            nativeLocale = Locale("es", "ES")
-        ),
-        TtsVoice(
-            code = "es_ES-mls_10246-low",
-            displayName = "Clásica (España)",
-            language = "es",
-            description = "Narrativa de audiolibro clásica (España)",
-            nativeLocale = Locale("es", "ES")
-        )
+    // --- PAREJA EN ESPAÑOL (México) ---
+    val DALIA = TtsVoice(
+        code = "es-MX-DaliaNeural",
+        displayName = "Dalia (Femenina)",
+        language = "es",
+        description = "Femenina brillante, alegre y expresiva para narración (México)",
+        isFemale = true,
+        nativeLocale = Locale.forLanguageTag("es-MX")
     )
 
-    val ENGLISH_VOICES = listOf(
-        TtsVoice(
-            code = "en_US-joe-medium",
-            displayName = "Joe (EE.UU.)",
-            language = "en",
-            description = "Masculina (Estados Unidos)",
-            nativeLocale = Locale.US
-        ),
-        TtsVoice(
-            code = "en_US-kristin-medium",
-            displayName = "Kristin (EE.UU.)",
-            language = "en",
-            description = "Femenina (Estados Unidos)",
-            nativeLocale = Locale.US
-        ),
-        TtsVoice(
-            code = "en_GB-northern_english_male-medium",
-            displayName = "Norteño (Reino Unido)",
-            language = "en",
-            description = "Masculina británica norteña",
-            nativeLocale = Locale.UK
-        ),
-        TtsVoice(
-            code = "en_GB-alba-medium",
-            displayName = "Alba (Reino Unido)",
-            language = "en",
-            description = "Femenina británica / escocesa",
-            nativeLocale = Locale.UK
-        )
+    val JORGE = TtsVoice(
+        code = "es-MX-JorgeNeural",
+        displayName = "Jorge (Masculino)",
+        language = "es",
+        description = "Masculina profunda, segura y con autoridad para narración (México)",
+        isFemale = false,
+        nativeLocale = Locale.forLanguageTag("es-MX")
     )
 
+    // --- PAREJA EN INGLÉS (EE.UU.) ---
+    val AVA = TtsVoice(
+        code = "en-US-AvaNeural",
+        displayName = "Ava (Femenina)",
+        language = "en",
+        description = "Femenina joven, cálida y amigable para audiolibros (EE.UU.)",
+        isFemale = true,
+        nativeLocale = Locale.US
+    )
+
+    val ANDREW = TtsVoice(
+        code = "en-US-AndrewMultilingualNeural",
+        displayName = "Andrew (Masculino)",
+        language = "en",
+        description = "Masculina sincera, cálida y narrativa (EE.UU. Multilingüe)",
+        isFemale = false,
+        nativeLocale = Locale.US
+    )
+
+    val SPANISH_VOICE = DALIA
+    val ENGLISH_VOICE = AVA
+
+    val SPANISH_VOICES = listOf(DALIA, JORGE)
+    val ENGLISH_VOICES = listOf(AVA, ANDREW)
     val ALL_VOICES = SPANISH_VOICES + ENGLISH_VOICES
 
     fun getVoicesForLanguage(lang: String): List<TtsVoice> {
         return if (lang.equals("en", ignoreCase = true)) ENGLISH_VOICES else SPANISH_VOICES
     }
 
-    fun findVoice(code: String): TtsVoice? {
-        val direct = ALL_VOICES.find { it.code.equals(code, ignoreCase = true) }
-        if (direct != null) return direct
-
-        // Mapeo inteligente para configuraciones previas (ej: "es-ES", "es-MX", "en-US")
-        return when {
-            code.contains("claude", true) || code.equals("es-MX", true) || code.equals("es-US", true) || code.equals("Latino", true) -> SPANISH_VOICES[0]
-            code.contains("ald", true) || code.equals("es-AR", true) || code.equals("Argentina", true) -> SPANISH_VOICES[1]
-            code.contains("carlfm", true) || code.equals("es-ES", true) || code.equals("España", true) -> SPANISH_VOICES[2]
-            code.contains("mls", true) -> SPANISH_VOICES[3]
-            code.contains("joe", true) || code.equals("en-US", true) || code.equals("EE.UU.", true) -> ENGLISH_VOICES[0]
-            code.contains("kristin", true) -> ENGLISH_VOICES[1]
-            code.contains("northern", true) || code.equals("en-GB", true) || code.equals("Reino Unido", true) -> ENGLISH_VOICES[2]
-            code.contains("alba", true) || code.equals("en-AU", true) || code.equals("en-CA", true) || code.equals("Australia", true) || code.equals("Canadá", true) -> ENGLISH_VOICES[3]
-            code.startsWith("en", true) -> ENGLISH_VOICES[0]
-            else -> SPANISH_VOICES[0]
-        }
+    fun findVoice(code: String, lang: String = "es"): TtsVoice {
+        val list = getVoicesForLanguage(lang)
+        return list.find { it.code.equals(code, ignoreCase = true) }
+            ?: ALL_VOICES.find { it.code.equals(code, ignoreCase = true) }
+            ?: if (lang.equals("en", ignoreCase = true)) ENGLISH_VOICE else SPANISH_VOICE
     }
 
     fun getVoiceDisplayName(code: String, lang: String): String {
-        val found = findVoice(code)
-        if (found != null && found.language.equals(lang, ignoreCase = true)) {
-            return found.displayName
-        }
-        val fallbackList = getVoicesForLanguage(lang)
-        return fallbackList.first().displayName
+        return findVoice(code, lang).displayName
     }
 
     fun getNextVoice(currentCode: String, lang: String): TtsVoice {
         val list = getVoicesForLanguage(lang)
-        val currentVoice = findVoice(currentCode)
-        val idx = list.indexOfFirst { it.code.equals(currentVoice?.code, ignoreCase = true) }
-        return if (idx < 0) list.first() else list[(idx + 1) % list.size]
+        val currentIndex = list.indexOfFirst { it.code.equals(currentCode, ignoreCase = true) }
+        val nextIndex = if (currentIndex >= 0) (currentIndex + 1) % list.size else 0
+        return list[nextIndex]
     }
 
     fun ensureValidVoiceCode(code: String, lang: String): String {
-        val found = findVoice(code)
-        if (found != null && found.language.equals(lang, ignoreCase = true)) {
-            return found.code
-        }
-        return getVoicesForLanguage(lang).first().code
+        val list = getVoicesForLanguage(lang)
+        return list.firstOrNull { it.code.equals(code, ignoreCase = true) }?.code ?: list.first().code
     }
 }
