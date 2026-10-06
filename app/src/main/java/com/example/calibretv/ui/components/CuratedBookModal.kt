@@ -88,7 +88,8 @@ fun CuratedBookModal(
     onRead: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val isCommercial = !book.isPublicDomain || book.difficultyLevel >= 4
+    val hasFreeDownload = book.isPublicDomain || !book.publicDownloadUrl.isNullOrBlank()
+    val isCommercial = !hasFreeDownload && (!book.affiliateQrUrl.isNullOrBlank() || book.difficultyLevel in 4..5)
 
     // Fondo semi-transparente oscuro
     Box(
@@ -646,7 +647,7 @@ private fun PublicDomainModalContent(
                     )
                 } else {
                     ModalActionButton(
-                        title = if (isDownloading) "Descargando..." else "Descargar Libro",
+                        title = if (isDownloading) "Descargando..." else "Descargar Gratis",
                         icon = Icons.Default.Download,
                         isPrimary = true,
                         isDarkTheme = isDarkTheme,

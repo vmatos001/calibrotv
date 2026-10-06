@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
@@ -489,7 +490,13 @@ fun HomeScreen(
                                     isDarkTheme = isDarkTheme,
                                     onBookFocused = {},
                                     onBookSelected = { book ->
-                                        onBookSelected(book)
+                                        val isDownloaded = CuratorRepository.isBookDownloaded(book.id, repository)
+                                        if (isDownloaded) {
+                                            onBookSelected(book)
+                                        } else {
+                                            detailsBook = book
+                                            showDetailsModal = true
+                                        }
                                     }
                                 )
                             }
@@ -561,39 +568,7 @@ fun HomeScreen(
                                     isDarkTheme = isDarkTheme,
                                     isInteractive = !isAnyModalOpen,
                                     onBookClick = { curatedBook ->
-                                        val isLevel1 = curatedBook.isPublicDomain || curatedBook.difficultyLevel == 1
-                                        if (isLevel1) {
-                                            // Nivel 1 (Gratuito / Dominio Público): Al pulsar OK, abre el Lector 3D de inmediato con el .epub gratuito
-                                            val localBook = repository.getCachedBooks().find {
-                                                it.id == curatedBook.id || it.title.equals(curatedBook.title, ignoreCase = true)
-                                            }
-                                            if (localBook != null && !localBook.epubUrl.isNullOrBlank()) {
-                                                onBookSelected(localBook)
-                                            } else {
-                                                // Descarga ágil automática en segundo plano e inicio inmediato en Lector 3D
-                                                android.widget.Toast.makeText(context, "Abriendo ${curatedBook.title} en el Lector 3D...", android.widget.Toast.LENGTH_SHORT).show()
-                                                coroutineScope.launch {
-                                                    isDownloadingCuratedBook = true
-                                                    val res = CuratorRepository.downloadPublicDomainBook(context, curatedBook, repository)
-                                                    isDownloadingCuratedBook = false
-                                                    if (res.isSuccess) {
-                                                        val downloadedBook = res.getOrNull() ?: repository.getCachedBooks().find {
-                                                            it.id == curatedBook.id || it.title.equals(curatedBook.title, ignoreCase = true)
-                                                        }
-                                                        if (downloadedBook != null) {
-                                                            onBookSelected(downloadedBook)
-                                                        } else {
-                                                            feedContent = repository.getFeed()
-                                                        }
-                                                    } else {
-                                                        android.widget.Toast.makeText(context, "No se pudo descargar: ${res.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_LONG).show()
-                                                    }
-                                                }
-                                            }
-                                        } else {
-                                            // Niveles 4 y 5 (Comerciales / Bestsellers): Al pulsar OK, abre el Modal Multi-Tienda con Código QR
-                                            selectedCuratedBook = curatedBook
-                                        }
+                                        selectedCuratedBook = curatedBook
                                     },
                                     onLeftAtBoundary = { sidebarFocusRequester.requestFocus() }
                                 )
@@ -869,21 +844,61 @@ fun HomeScreen(
                                 )
                             }
 
+                            var isDetailsDownloaded by remember(book.id) {
+                                mutableStateOf(CuratorRepository.isBookDownloaded(book.id, repository))
+                            }
+                            var isDownloadingDetailsBook by remember { mutableStateOf(false) }
+
                             // Modal Buttons with trapped remote focus
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
-                                HomeActionCapsule(
-                                    title = "Leer en 3D",
-                                    icon = Icons.Default.MenuBook,
-                                    isPrimary = true,
-                                    modifier = Modifier.focusRequester(modalReadFocusRequester),
-                                    onClick = {
-                                        showDetailsModal = false
-                                        onBookSelected(book)
-                                    }
-                                )
+                                if (isDetailsDownloaded) {
+                                    HomeActionCapsule(
+                                        title = "Leer en 3D",
+                                        icon = Icons.Default.MenuBook,
+                                        isPrimary = true,
+                                        modifier = Modifier.focusRequester(modalReadFocusRequester),
+                                        onClick = {
+                                            showDetailsModal = false
+                                            onBookSelected(book)
+                                        }
+                                    )
+                                } else {
+                                    HomeActionCapsule(
+                                        title = if (isDownloadingDetailsBook) "Descargando..." else "Descargar Gratis",
+                                        icon = Icons.Default.Download,
+                                        isPrimary = true,
+                                        modifier = Modifier.focusRequester(modalReadFocusRequester),
+                                        onClick = {
+                                            if (!isDownloadingDetailsBook) {
+                                                isDownloadingDetailsBook = true
+                                                coroutineScope.launch {
+                                                    val curated = CuratedBook(
+                                                        id = book.id,
+                                                        title = book.title,
+                                                        author = book.author,
+                                                        coverUrl = book.coverUrl ?: "",
+                                                        summary = book.summary,
+                                                        category = book.category,
+                                                        isPublicDomain = true,
+                                                        publicDownloadUrl = book.epubUrl
+                                                    )
+                                                    val res = CuratorRepository.downloadPublicDomainBook(context, curated, repository)
+                                                    isDownloadingDetailsBook = false
+                                                    if (res.isSuccess) {
+                                                        isDetailsDownloaded = true
+                                                        feedContent = repository.getFeed()
+                                                        android.widget.Toast.makeText(context, "¡Descarga completada! Ya puedes abrir el libro.", android.widget.Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        android.widget.Toast.makeText(context, "Error al descargar: ${res.exceptionOrNull()?.message ?: "Comprueba tu conexión"}", android.widget.Toast.LENGTH_LONG).show()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
                                 HomeActionCapsule(
                                     title = if (repository.isFavorite(book.id)) "En Favoritos" else "Añadir a Favoritos",
                                     icon = Icons.Default.Star,
@@ -909,12 +924,12 @@ fun HomeScreen(
         // MODAL DE LIBRO CURADO (Compra QR / Descarga)
         // ==========================================
         selectedCuratedBook?.let { curatedBook ->
-            val isDownloaded = remember(curatedBook.id, allBooks) {
-                CuratorRepository.isBookDownloaded(curatedBook.id, repository)
+            var isCuratedDownloaded by remember(curatedBook.id) {
+                mutableStateOf(CuratorRepository.isBookDownloaded(curatedBook.id, repository))
             }
             CuratedBookModal(
                 book = curatedBook,
-                isDownloaded = isDownloaded,
+                isDownloaded = isCuratedDownloaded,
                 isDownloading = isDownloadingCuratedBook,
                 isDarkTheme = isDarkTheme,
                 onDownload = {
@@ -922,16 +937,24 @@ fun HomeScreen(
                     coroutineScope.launch {
                         val res = CuratorRepository.downloadPublicDomainBook(context, curatedBook, repository)
                         if (res.isSuccess) {
+                            isCuratedDownloaded = true
                             feedContent = repository.getFeed()
+                            android.widget.Toast.makeText(context, "¡Descarga completada! Ya puedes abrir el libro.", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            android.widget.Toast.makeText(context, "Error al descargar: ${res.exceptionOrNull()?.message ?: "Comprueba tu conexión"}", android.widget.Toast.LENGTH_LONG).show()
                         }
                         isDownloadingCuratedBook = false
                     }
                 },
                 onRead = {
-                    val localBook = repository.getCachedBooks().find { it.id == curatedBook.id }
+                    val localBook = repository.getCachedBooks().find { 
+                        it.id == curatedBook.id || it.title.equals(curatedBook.title, ignoreCase = true) 
+                    }
+                    selectedCuratedBook = null
                     if (localBook != null) {
-                        selectedCuratedBook = null
                         onBookSelected(localBook)
+                    } else {
+                        onBookSelected(curatedBook.toBook())
                     }
                 },
                 onDismiss = {

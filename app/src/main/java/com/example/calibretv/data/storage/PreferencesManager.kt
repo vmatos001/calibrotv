@@ -44,6 +44,14 @@ class PreferencesManager(context: Context) {
         prefs.edit().putBoolean("app_dark_theme", isDark).apply()
     }
 
+    fun getAppLanguage(): String {
+        return prefs.getString("app_language", "es") ?: "es"
+    }
+
+    fun setAppLanguage(lang: String) {
+        prefs.edit().putString("app_language", lang).apply()
+    }
+
     fun getServerConfig(): ServerConfig {
         return ServerConfig(
             serverUrl = prefs.getString("server_url", "") ?: "",

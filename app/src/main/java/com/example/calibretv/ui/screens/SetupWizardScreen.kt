@@ -22,11 +22,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Flip
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
@@ -35,7 +41,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,12 +48,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -60,30 +67,39 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.calibretv.R
 import com.example.calibretv.data.BookRepository
-import com.example.calibretv.data.model.ReadingSettings
-import com.example.calibretv.data.model.ReadingTheme
 import com.example.calibretv.data.model.ServerConfig
+import com.example.calibretv.data.opds.OpdsClient
 import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.BackgroundDark
 import com.example.calibretv.theme.CyanElectric
 import com.example.calibretv.theme.SurfaceContainer
 import com.example.calibretv.theme.SurfaceContainerHigh
+import com.example.calibretv.theme.SurfaceContainerHighest
 import com.example.calibretv.theme.SurfaceRaised
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+enum class SetupWizardStep {
+    WELCOME_CHOICE,    // Paso 1: ¿Qué desea configurar? (4 opciones en tarjetas navegables)
+    OPDS_FORM,         // Formulario OPDS (solo si el usuario lo seleccionó)
+    WIFI_INFO,         // Info de Transferencia WiFi
+    GDRIVE_INFO,       // Info de Google Drive
+    LANGUAGE,          // Paso 2: ¿Qué idioma prefieres?
+    THEME,             // Paso 3: Tema de la app
+    PROFILE            // Paso 4: ¿Quién leerá los libros?
+}
+
 @Composable
 fun SetupWizardScreen(
     repository: BookRepository,
     onSetupFinished: () -> Unit
 ) {
-    // 1: Servidor OPDS, 2: Orientación & Pantalla, 3: Estética & Perfil Familiar
-    var step by remember { mutableIntStateOf(1) }
+    var step by remember { mutableStateOf(SetupWizardStep.WELCOME_CHOICE) }
     val scope = rememberCoroutineScope()
 
-    // Step 1 State: Server Config
+    // Configuración de Servidor OPDS
     val currentConfig = remember { repository.getServerConfig() }
     var serverUrl by remember { mutableStateOf(currentConfig.serverUrl.ifBlank { "http://" }) }
     var username by remember { mutableStateOf(currentConfig.username) }
@@ -92,20 +108,20 @@ fun SetupWizardScreen(
     var testResult by remember { mutableStateOf<String?>(null) }
     var testSuccess by remember { mutableStateOf(false) }
 
-    // Step 2 State: Orientación de Pantalla (Estándar vs Techo)
-    val currentReadingSettings = remember { repository.getReadingSettings() }
-    var isCeilingMode by remember { mutableStateOf(currentReadingSettings.ceilingMode) }
+    // Idioma & Tema
+    var selectedLanguage by remember { mutableStateOf(repository.getAppLanguage()) }
+    var isDarkTheme by remember { mutableStateOf(repository.isDarkTheme()) }
 
-    // Step 3 State: Estética & Perfil Familiar
-    var selectedTheme by remember { mutableStateOf(currentReadingSettings.theme) }
-    var profileName by remember { mutableStateOf("Mi Perfil") }
+    // Perfil
+    var profileName by remember { mutableStateOf(if (selectedLanguage == "en") "My Profile" else "Mi Perfil") }
     val presetColors = listOf("#FFA000", "#38BDF8", "#4CAF50", "#AB47BC", "#FF5722", "#E91E63")
     var selectedColor by remember { mutableStateOf("#FFA000") }
 
+    // Foco inicial controlado
     val initialFocus = remember { FocusRequester() }
 
     LaunchedEffect(step) {
-        delay(200)
+        delay(150)
         try {
             initialFocus.requestFocus()
         } catch (_: Exception) {}
@@ -136,7 +152,7 @@ fun SetupWizardScreen(
                 .padding(32.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Header with Steps Progress
+            // Header con progreso de pasos
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -164,9 +180,13 @@ fun SetupWizardScreen(
                             )
                             Text(
                                 text = when (step) {
-                                    1 -> "Paso 1 de 3: Servidor OPDS / Calibre-Web"
-                                    2 -> "Paso 2 de 3: Orientación y Modo de Pantalla"
-                                    else -> "Paso 3 de 3: Estética y Perfil de Lectura"
+                                    SetupWizardStep.WELCOME_CHOICE -> "¿Qué desea configurar?"
+                                    SetupWizardStep.OPDS_FORM -> "Configuración de Servidor OPDS"
+                                    SetupWizardStep.WIFI_INFO -> "Transferencia de Libros vía WiFi"
+                                    SetupWizardStep.GDRIVE_INFO -> "Sincronización con Google Drive"
+                                    SetupWizardStep.LANGUAGE -> "Idioma de la Aplicación"
+                                    SetupWizardStep.THEME -> "Apariencia y Tema Visual"
+                                    SetupWizardStep.PROFILE -> "¿Quién leerá los libros?"
                                 },
                                 fontSize = 13.sp,
                                 color = AmberWarm,
@@ -175,14 +195,20 @@ fun SetupWizardScreen(
                         }
                     }
 
-                    // 3 Step Badges
+                    // Indicadores de progreso (4 etapas)
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        listOf(1, 2, 3).forEach { stepNum ->
-                            val isActive = step == stepNum
-                            val isCompleted = step > stepNum
+                        val currentStage = when (step) {
+                            SetupWizardStep.WELCOME_CHOICE, SetupWizardStep.OPDS_FORM, SetupWizardStep.WIFI_INFO, SetupWizardStep.GDRIVE_INFO -> 1
+                            SetupWizardStep.LANGUAGE -> 2
+                            SetupWizardStep.THEME -> 3
+                            SetupWizardStep.PROFILE -> 4
+                        }
+                        (1..4).forEach { stage ->
+                            val isActive = currentStage == stage
+                            val isCompleted = currentStage > stage
                             Box(
                                 modifier = Modifier
                                     .size(if (isActive) 14.dp else 10.dp)
@@ -207,21 +233,91 @@ fun SetupWizardScreen(
                 )
             }
 
-            // Body depending on Step
+            // Contenido dinámico según el paso
             when (step) {
-                1 -> {
-                    // ==========================================
-                    // STEP 1: CONEXIÓN SERVIDOR OPDS
-                    // ==========================================
+                // =========================================================================
+                // PASO 1: BIENVENIDA Y ELECCIÓN DE FUENTE (SOLO BOTONES GRANDES D-PAD)
+                // =========================================================================
+                SetupWizardStep.WELCOME_CHOICE -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "¿Cómo deseas añadir libros a tu televisor?",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Selecciona una opción con el mando a distancia. Podrás cambiarla o añadir más fuentes en cualquier momento desde los Ajustes.",
+                            fontSize = 13.sp,
+                            color = TextMuted,
+                            lineHeight = 18.sp
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            // 1. Servidor OPDS
+                            SetupOptionCard(
+                                title = "Servidor OPDS",
+                                description = "Conectar con Calibre-Web o servidor OPDS",
+                                icon = Icons.Default.Dns,
+                                iconColor = AmberWarm,
+                                focusRequester = initialFocus,
+                                modifier = Modifier.weight(1f),
+                                onSelect = { step = SetupWizardStep.OPDS_FORM }
+                            )
+
+                            // 2. Enviar por WiFi
+                            SetupOptionCard(
+                                title = "Enviar por WiFi",
+                                description = "Subir libros directamente desde el móvil o PC",
+                                icon = Icons.Default.Wifi,
+                                iconColor = CyanElectric,
+                                modifier = Modifier.weight(1f),
+                                onSelect = { step = SetupWizardStep.WIFI_INFO }
+                            )
+
+                            // 3. Conectar GDrive
+                            SetupOptionCard(
+                                title = "Conectar GDrive",
+                                description = "Sincronizar biblioteca desde Google Drive",
+                                icon = Icons.Default.Cloud,
+                                iconColor = Color(0xFF4285F4),
+                                modifier = Modifier.weight(1f),
+                                onSelect = { step = SetupWizardStep.GDRIVE_INFO }
+                            )
+
+                            // 4. Omitir
+                            SetupOptionCard(
+                                title = "Omitir por Ahora",
+                                description = "Continuar sin configurar fuente ahora",
+                                icon = Icons.Default.SkipNext,
+                                iconColor = Color(0xFFAAAAAA),
+                                modifier = Modifier.weight(1f),
+                                onSelect = { step = SetupWizardStep.LANGUAGE }
+                            )
+                        }
+                    }
+                }
+
+                // =========================================================================
+                // SUB-PASO: FORMULARIO SERVIDOR OPDS
+                // =========================================================================
+                SetupWizardStep.OPDS_FORM -> {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         Text(
-                            text = "Conecta CalibroTV a tu biblioteca de Calibre o Calibre-Web para sincronizar tus libros con soporte EPUB:",
+                            text = "Ingresa los datos de conexión de tu servidor Calibre-Web:",
                             fontSize = 13.sp,
-                            color = TextMuted,
-                            lineHeight = 18.sp
+                            color = TextMuted
                         )
 
                         Row(
@@ -238,9 +334,7 @@ fun SetupWizardScreen(
                                     onValueChange = { serverUrl = it },
                                     placeholder = { Text("http://192.168.1.X:8083/opds", color = TextMuted) },
                                     singleLine = true,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .focusRequester(initialFocus),
+                                    modifier = Modifier.fillMaxWidth(),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = AmberWarm,
                                         unfocusedBorderColor = Color(0xFF383842),
@@ -289,7 +383,7 @@ fun SetupWizardScreen(
                                 }
                             }
 
-                            // Right column: Feedback status card
+                            // Feedback status card
                             Column(
                                 modifier = Modifier
                                     .weight(0.9f)
@@ -307,7 +401,7 @@ fun SetupWizardScreen(
                                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
                                         CircularProgressIndicator(modifier = Modifier.size(18.dp), color = AmberWarm, strokeWidth = 2.dp)
-                                        Text("Probando y sincronizando catálogo...", fontSize = 12.sp, color = TextPrimary)
+                                        Text("Probando conexión...", fontSize = 12.sp, color = TextPrimary)
                                     }
                                 } else if (testResult != null) {
                                     Row(
@@ -329,7 +423,7 @@ fun SetupWizardScreen(
                                     }
                                 } else {
                                     Text(
-                                        text = "Ingresa la dirección IP de tu servidor Calibre-Web y pulsa 'Probar y Sincronizar', o pulsa 'Configurar Más Tarde' si prefieres transferir libros vía WiFi.",
+                                        text = "Introduce la URL de tu servidor y pulsa 'Probar Conexión' antes de continuar, o avanza si prefieres verificarlo luego.",
                                         fontSize = 12.sp,
                                         color = TextMuted,
                                         lineHeight = 16.sp
@@ -340,385 +434,290 @@ fun SetupWizardScreen(
                     }
                 }
 
-                2 -> {
-                    // ==========================================
-                    // STEP 2: ORIENTACIÓN Y MODO PANTALLA
-                    // ==========================================
+                // =========================================================================
+                // SUB-PASO: INFO WIFI IMPORT
+                // =========================================================================
+                SetupWizardStep.WIFI_INFO -> {
                     Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(CyanElectric.copy(alpha = 0.15f))
+                                .border(1.5.dp, CyanElectric, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Wifi, contentDescription = null, tint = CyanElectric, modifier = Modifier.size(36.dp))
+                        }
                         Text(
-                            text = "CalibroTV está optimizado para salas de estar con televisores tradicionales y para dormitorios con proyectores al techo:",
+                            text = "Transferencia Directa de Libros por WiFi",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "¡Excelente elección! CalibroTV incluye un servidor web integrado. Cuando entres a la aplicación, solo pulsa 'Importar por WiFi' en el menú lateral y escanea el código QR desde tu teléfono o escribe la IP en el navegador de tu ordenador para enviar libros EPUB, PDF o cómics de forma instantánea.",
                             fontSize = 13.sp,
                             color = TextMuted,
-                            lineHeight = 18.sp
+                            lineHeight = 20.sp,
+                            modifier = Modifier.fillMaxWidth(0.85f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(20.dp)
-                        ) {
-                            // Card 1: Estándar TV
-                            var isTvFocused by remember { mutableStateOf(false) }
-                            val isTvSelected = !isCeilingMode
-
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(if (isTvFocused) Color(0xFF1E242B) else SurfaceContainerHigh)
-                                    .border(
-                                        width = if (isTvFocused) 2.5.dp else if (isTvSelected) 1.5.dp else 1.dp,
-                                        color = when {
-                                            isTvFocused -> AmberWarm
-                                            isTvSelected -> AmberWarm.copy(alpha = 0.8f)
-                                            else -> Color(0xFF333340)
-                                        },
-                                        shape = RoundedCornerShape(16.dp)
-                                    )
-                                    .onFocusChanged { isTvFocused = it.isFocused }
-                                    .onKeyEvent { event ->
-                                        if (event.type == KeyEventType.KeyDown &&
-                                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                        ) {
-                                            isCeilingMode = false
-                                            true
-                                        } else false
-                                    }
-                                    .focusable()
-                                    .clickable { isCeilingMode = false }
-                                    .padding(20.dp)
-                            ) {
-                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(44.dp)
-                                                .clip(CircleShape)
-                                                .background(if (isTvSelected) AmberWarm.copy(alpha = 0.2f) else Color(0xFF282834)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Tv,
-                                                contentDescription = null,
-                                                tint = if (isTvSelected) AmberWarm else TextMuted,
-                                                modifier = Modifier.size(24.dp)
-                                            )
-                                        }
-                                        if (isTvSelected) {
-                                            Icon(
-                                                imageVector = Icons.Default.CheckCircle,
-                                                contentDescription = "Seleccionado",
-                                                tint = AmberWarm,
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Text(
-                                        text = "Televisor Estándar",
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
-                                    )
-                                    Text(
-                                        text = "Orientación horizontal estándar a 10 pies. Dos páginas lado a lado con curvatura física 3D.",
-                                        fontSize = 12.sp,
-                                        color = TextMuted,
-                                        lineHeight = 17.sp
-                                    )
-                                }
-                            }
-
-                            // Card 2: Modo Techo / Proyector
-                            var isCeilingFocused by remember { mutableStateOf(false) }
-                            val isCeilingSelected = isCeilingMode
-
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(if (isCeilingFocused) Color(0xFF1E242B) else SurfaceContainerHigh)
-                                    .border(
-                                        width = if (isCeilingFocused) 2.5.dp else if (isCeilingSelected) 1.5.dp else 1.dp,
-                                        color = when {
-                                            isCeilingFocused -> AmberWarm
-                                            isCeilingSelected -> AmberWarm.copy(alpha = 0.8f)
-                                            else -> Color(0xFF333340)
-                                        },
-                                        shape = RoundedCornerShape(16.dp)
-                                    )
-                                    .onFocusChanged { isCeilingFocused = it.isFocused }
-                                    .onKeyEvent { event ->
-                                        if (event.type == KeyEventType.KeyDown &&
-                                            (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                        ) {
-                                            isCeilingMode = true
-                                            true
-                                        } else false
-                                    }
-                                    .focusable()
-                                    .clickable { isCeilingMode = true }
-                                    .padding(20.dp)
-                            ) {
-                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(44.dp)
-                                                .clip(CircleShape)
-                                                .background(if (isCeilingSelected) AmberWarm.copy(alpha = 0.2f) else Color(0xFF282834)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Flip,
-                                                contentDescription = null,
-                                                tint = if (isCeilingSelected) AmberWarm else TextMuted,
-                                                modifier = Modifier.size(24.dp)
-                                            )
-                                        }
-                                        if (isCeilingSelected) {
-                                            Icon(
-                                                imageVector = Icons.Default.CheckCircle,
-                                                contentDescription = "Seleccionado",
-                                                tint = AmberWarm,
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Text(
-                                        text = "Modo Techo / Proyector",
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
-                                    )
-                                    Text(
-                                        text = "Invierte y espeja verticalmente la imagen para leer acostado en la cama con proyector hacia el techo.",
-                                        fontSize = 12.sp,
-                                        color = TextMuted,
-                                        lineHeight = 17.sp
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
 
-                else -> {
-                    // ==========================================
-                    // STEP 3: ESTÉTICA Y PERFIL FAMILIAR
-                    // ==========================================
+                // =========================================================================
+                // SUB-PASO: INFO GDRIVE
+                // =========================================================================
+                SetupWizardStep.GDRIVE_INFO -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF4285F4).copy(alpha = 0.15f))
+                                .border(1.5.dp, Color(0xFF4285F4), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Cloud, contentDescription = null, tint = Color(0xFF4285F4), modifier = Modifier.size(36.dp))
+                        }
+                        Text(
+                            text = "Sincronización con Google Drive",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Podrás conectar y autorizar tu cuenta de Google Drive para sincronizar carpetas de libros en la nube. Esta función estará disponible en la sección de Ajustes > Conexiones Cloud de tu televisor.",
+                            fontSize = 13.sp,
+                            color = TextMuted,
+                            lineHeight = 20.sp,
+                            modifier = Modifier.fillMaxWidth(0.85f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+
+                // =========================================================================
+                // PASO 2: IDIOMA DE LA APLICACIÓN
+                // =========================================================================
+                SetupWizardStep.LANGUAGE -> {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // Section A: Theme Selection
                         Text(
-                            text = "Contraste de Lectura Recomendado para Pantallas Grandes:",
+                            text = "¿Qué idioma prefieres para la aplicación?",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Selecciona el idioma principal de la interfaz y la síntesis de voz.",
+                            fontSize = 13.sp,
+                            color = TextMuted
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(20.dp)
+                        ) {
+                            // Opción Español
+                            SetupOptionCard(
+                                title = "Español 🇪🇸",
+                                description = "Interfaz y voces neuronales en español",
+                                icon = Icons.Default.Language,
+                                iconColor = AmberWarm,
+                                isSelected = selectedLanguage == "es",
+                                focusRequester = initialFocus,
+                                modifier = Modifier.weight(1f),
+                                onSelect = { selectedLanguage = "es" }
+                            )
+
+                            // Opción Inglés
+                            SetupOptionCard(
+                                title = "English 🇺🇸",
+                                description = "Interface and neural text-to-speech in English",
+                                icon = Icons.Default.Language,
+                                iconColor = CyanElectric,
+                                isSelected = selectedLanguage == "en",
+                                modifier = Modifier.weight(1f),
+                                onSelect = { selectedLanguage = "en" }
+                            )
+                        }
+                    }
+                }
+
+                // =========================================================================
+                // PASO 3: TEMA DE LA APLICACIÓN (CLARO / OSCURO)
+                // =========================================================================
+                SetupWizardStep.THEME -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "Tema Visual de la Aplicación",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Elige la apariencia que mejor se adapte a tu televisor o proyector.",
+                            fontSize = 13.sp,
+                            color = TextMuted
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(20.dp)
+                        ) {
+                            // Modo Oscuro
+                            SetupOptionCard(
+                                title = "Tema Oscuro 🌙",
+                                description = "Fondos negros cinemáticos optimizados para TV, OLED y lectura nocturna",
+                                icon = Icons.Default.DarkMode,
+                                iconColor = CyanElectric,
+                                isSelected = isDarkTheme,
+                                focusRequester = initialFocus,
+                                modifier = Modifier.weight(1f),
+                                onSelect = { isDarkTheme = true }
+                            )
+
+                            // Modo Claro
+                            SetupOptionCard(
+                                title = "Tema Claro ☀️",
+                                description = "Mayor contraste diurno tipo papel pergamino claro",
+                                icon = Icons.Default.LightMode,
+                                iconColor = AmberWarm,
+                                isSelected = !isDarkTheme,
+                                modifier = Modifier.weight(1f),
+                                onSelect = { isDarkTheme = false }
+                            )
+                        }
+                    }
+                }
+
+                // =========================================================================
+                // PASO 4: PERFIL INICIAL (¿QUIÉN LEERÁ LOS LIBROS?)
+                // =========================================================================
+                SetupWizardStep.PROFILE -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "¿Quién leerá los libros?",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Crea tu perfil inicial de lectura para guardar el progreso de cada página y tus libros favoritos.",
                             fontSize = 13.sp,
                             color = TextMuted
                         )
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            val themes = listOf(
-                                Triple(ReadingTheme.OLED_PURE, "OLED Puro", "Negro absoluto (#000000)"),
-                                Triple(ReadingTheme.NIGHT_AMBER, "Ámbar Noche", "Cero luz azul (#FFA000)"),
-                                Triple(ReadingTheme.SEPIA_CINE, "Sepia Cine", "Tono cálido cinematográfico")
-                            )
-
-                            themes.forEach { (themeOption, title, desc) ->
-                                val isSelected = selectedTheme == themeOption
-                                var isFocused by remember { mutableStateOf(false) }
-
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isFocused) Color(0xFF1E242B) else SurfaceContainerHigh)
-                                        .border(
-                                            width = if (isFocused) 2.5.dp else if (isSelected) 1.5.dp else 1.dp,
-                                            color = when {
-                                                isFocused -> AmberWarm
-                                                isSelected -> AmberWarm
-                                                else -> Color(0xFF333340)
-                                            },
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                        .onFocusChanged { isFocused = it.isFocused }
-                                        .onKeyEvent { event ->
-                                            if (event.type == KeyEventType.KeyDown &&
-                                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                            ) {
-                                                selectedTheme = themeOption
-                                                true
-                                            } else false
-                                        }
-                                        .focusable()
-                                        .clickable { selectedTheme = themeOption }
-                                        .padding(14.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(18.dp)
-                                                .clip(CircleShape)
-                                                .background(
-                                                    when (themeOption) {
-                                                        ReadingTheme.OLED_PURE -> Color.Black
-                                                        ReadingTheme.NIGHT_AMBER -> AmberWarm
-                                                        else -> Color(0xFF26201A)
-                                                    }
-                                                )
-                                                .border(1.dp, Color.White.copy(alpha = 0.6f), CircleShape)
-                                        )
-                                        Column {
-                                            Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                                            Text(desc, fontSize = 10.sp, color = TextMuted)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(Color(0xFF282834))
-                        )
-
-                        // Section B: First Profile
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(24.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val parsedColor = try {
-                                Color(android.graphics.Color.parseColor(selectedColor))
-                            } catch (_: Exception) {
-                                AmberWarm
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .size(70.dp)
-                                    .clip(CircleShape)
-                                    .background(parsedColor)
-                                    .border(2.5.dp, Color.White, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = profileName.take(1).uppercase().ifBlank { "U" },
-                                    fontSize = 30.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFF131315)
-                                )
-                            }
-
+                            // Avatar Preview Card
                             Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(SurfaceContainerHigh)
+                                    .padding(20.dp)
                             ) {
-                                Text("Nombre del Perfil de Lectura:", fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
-
-                                var isNameFieldFocused by remember { mutableStateOf(false) }
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth(0.75f)
-                                        .height(48.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (isNameFieldFocused) Color(0xFF1E2A35) else SurfaceContainerHigh)
-                                        .border(
-                                            width = if (isNameFieldFocused) 2.dp else 1.dp,
-                                            color = if (isNameFieldFocused) AmberWarm else Color(0xFF4A4A58),
-                                            shape = RoundedCornerShape(10.dp)
-                                        )
-                                        .onFocusChanged { isNameFieldFocused = it.isFocused }
+                                        .size(64.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(android.graphics.Color.parseColor(selectedColor))),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    OutlinedTextField(
-                                        value = profileName,
-                                        onValueChange = { profileName = it },
-                                        placeholder = {
-                                            Text(
-                                                "Ej: Mi Perfil, Familia...",
-                                                color = TextMuted,
-                                                fontSize = 13.sp
-                                            )
-                                        },
-                                        singleLine = true,
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = Color.Transparent,
-                                            unfocusedBorderColor = Color.Transparent,
-                                            focusedTextColor = TextPrimary,
-                                            unfocusedTextColor = TextPrimary,
-                                            cursorColor = AmberWarm
-                                        ),
-                                        textStyle = androidx.compose.ui.text.TextStyle(
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Medium
-                                        ),
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(horizontal = 4.dp)
+                                    Text(
+                                        text = profileName.take(1).uppercase(),
+                                        fontSize = 28.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color.Black
                                     )
                                 }
+                                Text(profileName, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            }
 
-                                Text("Color de Avatar:", fontSize = 11.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    presetColors.forEach { hex ->
-                                        val isColorSelected = selectedColor == hex
-                                        var isColorFocused by remember { mutableStateOf(false) }
-                                        val c = try { Color(android.graphics.Color.parseColor(hex)) } catch (_: Exception) { AmberWarm }
+                            // Inputs y colores
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Text("Nombre del Perfil:", fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
+                                OutlinedTextField(
+                                    value = profileName,
+                                    onValueChange = { profileName = it },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(0.8f),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = AmberWarm,
+                                        unfocusedBorderColor = Color(0xFF383842),
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary
+                                    )
+                                )
 
+                                Text("Color Favorito:", fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    presetColors.forEach { colorHex ->
+                                        val isColorSelected = selectedColor == colorHex
+                                        var isFocused by remember { mutableStateOf(false) }
                                         Box(
                                             modifier = Modifier
-                                                .size(if (isColorFocused) 36.dp else 30.dp)
+                                                .size(38.dp)
+                                                .scale(if (isFocused) 1.2f else 1f)
                                                 .clip(CircleShape)
-                                                .background(c)
+                                                .background(Color(android.graphics.Color.parseColor(colorHex)))
                                                 .border(
-                                                    width = when {
-                                                        isColorFocused -> 3.dp
-                                                        isColorSelected -> 2.dp
-                                                        else -> 0.dp
-                                                    },
-                                                    color = Color.White,
+                                                    width = if (isColorSelected || isFocused) 2.5.dp else 1.dp,
+                                                    color = if (isFocused) Color.White else if (isColorSelected) TextPrimary else Color.Transparent,
                                                     shape = CircleShape
                                                 )
-                                                .onFocusChanged { isColorFocused = it.isFocused }
+                                                .onFocusChanged { isFocused = it.isFocused }
                                                 .onKeyEvent { event ->
                                                     if (event.type == KeyEventType.KeyDown &&
                                                         (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                                     ) {
-                                                        selectedColor = hex
+                                                        selectedColor = colorHex
                                                         true
                                                     } else false
                                                 }
                                                 .focusable()
-                                                .clickable { selectedColor = hex },
+                                                .clickable { selectedColor = colorHex },
                                             contentAlignment = Alignment.Center
                                         ) {
                                             if (isColorSelected) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = null,
-                                                    tint = Color(0xFF131315),
-                                                    modifier = Modifier.size(15.dp)
-                                                )
+                                                Icon(Icons.Default.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
                                             }
                                         }
                                     }
@@ -729,49 +728,95 @@ fun SetupWizardScreen(
                 }
             }
 
-            // Footer Navigation Buttons
+            // Barra inferior de botones de navegación (Atrás / Siguiente / Finalizar)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                when (step) {
-                    1 -> {
-                        // Step 1: Test & Sync, Skip, Next
-                        var isTestFocused by remember { mutableStateOf(false) }
-                        var isSkipFocused by remember { mutableStateOf(false) }
-                        var isNextFocused by remember { mutableStateOf(false) }
+                // Botón Atrás (disponible en todos los pasos excepto el inicial)
+                if (step != SetupWizardStep.WELCOME_CHOICE) {
+                    var isBackFocused by remember { mutableStateOf(false) }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isBackFocused) AmberWarm else SurfaceRaised)
+                            .border(1.dp, if (isBackFocused) Color.White else Color(0xFF383842), RoundedCornerShape(12.dp))
+                            .onFocusChanged { isBackFocused = it.isFocused }
+                            .onKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown &&
+                                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                ) {
+                                    step = when (step) {
+                                        SetupWizardStep.OPDS_FORM, SetupWizardStep.WIFI_INFO, SetupWizardStep.GDRIVE_INFO -> SetupWizardStep.WELCOME_CHOICE
+                                        SetupWizardStep.LANGUAGE -> SetupWizardStep.WELCOME_CHOICE
+                                        SetupWizardStep.THEME -> SetupWizardStep.LANGUAGE
+                                        SetupWizardStep.PROFILE -> SetupWizardStep.THEME
+                                        else -> SetupWizardStep.WELCOME_CHOICE
+                                    }
+                                    true
+                                } else false
+                            }
+                            .focusable()
+                            .clickable {
+                                step = when (step) {
+                                    SetupWizardStep.OPDS_FORM, SetupWizardStep.WIFI_INFO, SetupWizardStep.GDRIVE_INFO -> SetupWizardStep.WELCOME_CHOICE
+                                    SetupWizardStep.LANGUAGE -> SetupWizardStep.WELCOME_CHOICE
+                                    SetupWizardStep.THEME -> SetupWizardStep.LANGUAGE
+                                    SetupWizardStep.PROFILE -> SetupWizardStep.THEME
+                                    else -> SetupWizardStep.WELCOME_CHOICE
+                                }
+                            }
+                            .padding(horizontal = 20.dp, vertical = 12.dp)
+                    ) {
+                        Text(
+                            text = "< Atrás",
+                            color = if (isBackFocused) Color(0xFF131315) else TextMuted,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(1.dp))
+                }
 
+                // Botón de acción derecha
+                when (step) {
+                    SetupWizardStep.WELCOME_CHOICE -> {
+                        // En la bienvenida las 4 tarjetas navegan directamente con un clic
+                        Text(
+                            text = "Navega con las flechas del mando y presiona OK para seleccionar",
+                            fontSize = 12.sp,
+                            color = TextMuted
+                        )
+                    }
+
+                    SetupWizardStep.OPDS_FORM -> {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            // Test Button
+                            // Botón Probar
+                            var isTestFocused by remember { mutableStateOf(false) }
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isTestFocused) AmberWarm else CyanElectric)
+                                    .background(if (isTestFocused) AmberWarm else SurfaceRaised)
+                                    .border(1.dp, if (isTestFocused) Color.White else Color(0xFF383842), RoundedCornerShape(12.dp))
                                     .onFocusChanged { isTestFocused = it.isFocused }
                                     .onKeyEvent { event ->
                                         if (event.type == KeyEventType.KeyDown &&
                                             (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                         ) {
+                                            isConnecting = true
                                             scope.launch {
-                                                isConnecting = true
-                                                testResult = null
-                                                val cfg = ServerConfig(serverUrl.trim(), username.trim(), password.trim())
-                                                val scanResult = repository.scanServerLibrary(cfg)
+                                                val res = OpdsClient.fetchFeed(serverUrl.trim(), username.trim(), password.trim())
                                                 isConnecting = false
-                                                if (scanResult.isSuccess) {
-                                                    val feed = scanResult.getOrNull()!!
-                                                    if (feed.books.isNotEmpty()) {
-                                                        testSuccess = true
-                                                        testResult = "¡Conexión exitosa! Sincronizados ${feed.books.size} libros EPUB."
-                                                    } else {
-                                                        testSuccess = false
-                                                        testResult = "Se conectó al servidor pero no se encontraron libros EPUB."
-                                                    }
+                                                if (res.isSuccess) {
+                                                    testSuccess = true
+                                                    testResult = "¡Conexión exitosa! Catálogo detectado."
                                                 } else {
                                                     testSuccess = false
-                                                    val err = scanResult.exceptionOrNull()?.message ?: "Error de conexión"
-                                                    testResult = "Fallo al conectar: $err"
+                                                    testResult = "Error al conectar: ${res.exceptionOrNull()?.message}"
                                                 }
                                             }
                                             true
@@ -779,189 +824,140 @@ fun SetupWizardScreen(
                                     }
                                     .focusable()
                                     .clickable {
+                                        isConnecting = true
                                         scope.launch {
-                                            isConnecting = true
-                                            testResult = null
-                                            val cfg = ServerConfig(serverUrl.trim(), username.trim(), password.trim())
-                                            val scanResult = repository.scanServerLibrary(cfg)
+                                            val res = OpdsClient.fetchFeed(serverUrl.trim(), username.trim(), password.trim())
                                             isConnecting = false
-                                            if (scanResult.isSuccess) {
-                                                val feed = scanResult.getOrNull()!!
-                                                if (feed.books.isNotEmpty()) {
-                                                    testSuccess = true
-                                                    testResult = "¡Conexión exitosa! Sincronizados ${feed.books.size} libros EPUB."
-                                                } else {
-                                                    testSuccess = false
-                                                    testResult = "Se conectó al servidor pero no se encontraron libros EPUB."
-                                                }
+                                            if (res.isSuccess) {
+                                                testSuccess = true
+                                                testResult = "¡Conexión exitosa! Catálogo detectado."
                                             } else {
                                                 testSuccess = false
-                                                val err = scanResult.exceptionOrNull()?.message ?: "Error de conexión"
-                                                testResult = "Fallo al conectar: $err"
+                                                testResult = "Error al conectar: ${res.exceptionOrNull()?.message}"
                                             }
                                         }
                                     }
-                                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                                    .padding(horizontal = 18.dp, vertical = 12.dp)
                             ) {
                                 Text(
-                                    text = "Probar y Sincronizar",
-                                    color = Color(0xFF131315),
+                                    text = "Probar Conexión",
+                                    color = if (isTestFocused) Color(0xFF131315) else TextPrimary,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
 
-                            // Skip Button
+                            // Botón Siguiente
+                            var isNextFocused by remember { mutableStateOf(false) }
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isSkipFocused) AmberWarm else SurfaceRaised)
-                                    .border(1.dp, if (isSkipFocused) Color.White else Color(0xFF383842), RoundedCornerShape(12.dp))
-                                    .onFocusChanged { isSkipFocused = it.isFocused }
+                                    .background(if (isNextFocused) CyanElectric else AmberWarm)
+                                    .onFocusChanged { isNextFocused = it.isFocused }
                                     .onKeyEvent { event ->
                                         if (event.type == KeyEventType.KeyDown &&
                                             (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                         ) {
-                                            step = 2
+                                            if (serverUrl.isNotBlank() && serverUrl != "http://") {
+                                                repository.saveServerConfig(ServerConfig(serverUrl.trim(), username.trim(), password.trim()))
+                                            }
+                                            step = SetupWizardStep.LANGUAGE
                                             true
                                         } else false
                                     }
                                     .focusable()
-                                    .clickable { step = 2 }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                                    .clickable {
+                                        if (serverUrl.isNotBlank() && serverUrl != "http://") {
+                                            repository.saveServerConfig(ServerConfig(serverUrl.trim(), username.trim(), password.trim()))
+                                        }
+                                        step = SetupWizardStep.LANGUAGE
+                                    }
+                                    .padding(horizontal = 22.dp, vertical = 12.dp)
                             ) {
-                                Text(
-                                    text = "Configurar Más Tarde",
-                                    color = if (isSkipFocused) Color(0xFF131315) else TextMuted,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
+                                Text("Siguiente >", color = Color(0xFF131315), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
                             }
                         }
+                    }
 
-                        // Next Step
+                    SetupWizardStep.WIFI_INFO, SetupWizardStep.GDRIVE_INFO -> {
+                        var isNextFocused by remember { mutableStateOf(false) }
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (isNextFocused) AmberWarm else SurfaceContainerHigh)
-                                .border(1.dp, if (isNextFocused) Color.White else AmberWarm, RoundedCornerShape(12.dp))
+                                .background(if (isNextFocused) CyanElectric else AmberWarm)
                                 .onFocusChanged { isNextFocused = it.isFocused }
                                 .onKeyEvent { event ->
                                     if (event.type == KeyEventType.KeyDown &&
                                         (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                     ) {
-                                        val cfg = ServerConfig(serverUrl.trim(), username.trim(), password.trim())
-                                        repository.saveServerConfig(cfg)
-                                        step = 2
+                                        step = SetupWizardStep.LANGUAGE
+                                        true
+                                    } else false
+                                }
+                                .focusable()
+                                .clickable { step = SetupWizardStep.LANGUAGE }
+                                .padding(horizontal = 24.dp, vertical = 12.dp)
+                        ) {
+                            Text("Continuar >", color = Color(0xFF131315), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
+                        }
+                    }
+
+                    SetupWizardStep.LANGUAGE -> {
+                        var isNextFocused by remember { mutableStateOf(false) }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isNextFocused) CyanElectric else AmberWarm)
+                                .onFocusChanged { isNextFocused = it.isFocused }
+                                .onKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyDown &&
+                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        repository.setAppLanguage(selectedLanguage)
+                                        step = SetupWizardStep.THEME
                                         true
                                     } else false
                                 }
                                 .focusable()
                                 .clickable {
-                                    val cfg = ServerConfig(serverUrl.trim(), username.trim(), password.trim())
-                                    repository.saveServerConfig(cfg)
-                                    step = 2
+                                    repository.setAppLanguage(selectedLanguage)
+                                    step = SetupWizardStep.THEME
                                 }
-                                .padding(horizontal = 22.dp, vertical = 12.dp)
+                                .padding(horizontal = 24.dp, vertical = 12.dp)
                         ) {
-                            Text(
-                                text = "Siguiente >",
-                                color = if (isNextFocused) Color(0xFF131315) else TextPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text("Siguiente >", color = Color(0xFF131315), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
                         }
                     }
 
-                    2 -> {
-                        // Step 2: Back and Next
-                        var isBackFocused by remember { mutableStateOf(false) }
+                    SetupWizardStep.THEME -> {
                         var isNextFocused by remember { mutableStateOf(false) }
-
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (isBackFocused) AmberWarm else SurfaceRaised)
-                                .border(1.dp, if (isBackFocused) Color.White else Color(0xFF383842), RoundedCornerShape(12.dp))
-                                .onFocusChanged { isBackFocused = it.isFocused }
-                                .onKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyDown &&
-                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                    ) {
-                                        step = 1
-                                        true
-                                    } else false
-                                }
-                                .focusable()
-                                .clickable { step = 1 }
-                                .padding(horizontal = 18.dp, vertical = 12.dp)
-                        ) {
-                            Text(
-                                text = "< Atrás",
-                                color = if (isBackFocused) Color(0xFF131315) else TextMuted,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isNextFocused) AmberWarm else SurfaceContainerHigh)
-                                .border(1.dp, if (isNextFocused) Color.White else AmberWarm, RoundedCornerShape(12.dp))
+                                .background(if (isNextFocused) CyanElectric else AmberWarm)
                                 .onFocusChanged { isNextFocused = it.isFocused }
                                 .onKeyEvent { event ->
                                     if (event.type == KeyEventType.KeyDown &&
                                         (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                     ) {
-                                        step = 3
+                                        repository.setDarkTheme(isDarkTheme)
+                                        step = SetupWizardStep.PROFILE
                                         true
                                     } else false
                                 }
                                 .focusable()
-                                .clickable { step = 3 }
-                                .padding(horizontal = 22.dp, vertical = 12.dp)
+                                .clickable {
+                                    repository.setDarkTheme(isDarkTheme)
+                                    step = SetupWizardStep.PROFILE
+                                }
+                                .padding(horizontal = 24.dp, vertical = 12.dp)
                         ) {
-                            Text(
-                                text = "Siguiente >",
-                                color = if (isNextFocused) Color(0xFF131315) else TextPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text("Siguiente >", color = Color(0xFF131315), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
                         }
                     }
 
-                    3 -> {
-                        // Step 3: Back and Finish
-                        var isBackFocused by remember { mutableStateOf(false) }
+                    SetupWizardStep.PROFILE -> {
                         var isFinishFocused by remember { mutableStateOf(false) }
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isBackFocused) AmberWarm else SurfaceRaised)
-                                .border(1.dp, if (isBackFocused) Color.White else Color(0xFF383842), RoundedCornerShape(12.dp))
-                                .onFocusChanged { isBackFocused = it.isFocused }
-                                .onKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyDown &&
-                                        (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                                    ) {
-                                        step = 2
-                                        true
-                                    } else false
-                                }
-                                .focusable()
-                                .clickable { step = 2 }
-                                .padding(horizontal = 18.dp, vertical = 12.dp)
-                        ) {
-                            Text(
-                                text = "< Atrás",
-                                color = if (isBackFocused) Color(0xFF131315) else TextMuted,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(14.dp))
@@ -972,15 +968,13 @@ fun SetupWizardScreen(
                                     if (event.type == KeyEventType.KeyDown &&
                                         (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
                                     ) {
-                                        // Save settings, create profile, finish
-                                        val updatedSettings = repository.getReadingSettings().copy(
-                                            ceilingMode = isCeilingMode,
-                                            verticalMirror = isCeilingMode,
-                                            rotation180 = isCeilingMode,
-                                            theme = selectedTheme
+                                        repository.setAppLanguage(selectedLanguage)
+                                        repository.setDarkTheme(isDarkTheme)
+                                        repository.createProfile(
+                                            name = profileName.trim().ifBlank { if (selectedLanguage == "en") "My Profile" else "Mi Perfil" },
+                                            colorHex = selectedColor,
+                                            preferredLanguage = selectedLanguage
                                         )
-                                        repository.saveReadingSettings(updatedSettings)
-                                        repository.createProfile(profileName.trim().ifBlank { "Mi Perfil" }, selectedColor)
                                         repository.setSetupCompleted(true)
                                         onSetupFinished()
                                         true
@@ -988,21 +982,20 @@ fun SetupWizardScreen(
                                 }
                                 .focusable()
                                 .clickable {
-                                    val updatedSettings = repository.getReadingSettings().copy(
-                                        ceilingMode = isCeilingMode,
-                                        verticalMirror = isCeilingMode,
-                                        rotation180 = isCeilingMode,
-                                        theme = selectedTheme
+                                    repository.setAppLanguage(selectedLanguage)
+                                    repository.setDarkTheme(isDarkTheme)
+                                    repository.createProfile(
+                                        name = profileName.trim().ifBlank { if (selectedLanguage == "en") "My Profile" else "Mi Perfil" },
+                                        colorHex = selectedColor,
+                                        preferredLanguage = selectedLanguage
                                     )
-                                    repository.saveReadingSettings(updatedSettings)
-                                    repository.createProfile(profileName.trim().ifBlank { "Mi Perfil" }, selectedColor)
                                     repository.setSetupCompleted(true)
                                     onSetupFinished()
                                 }
                                 .padding(horizontal = 28.dp, vertical = 14.dp)
                         ) {
                             Text(
-                                text = "Comenzar a Disfrutar CalibroTV",
+                                text = "¡Comenzar a Leer!",
                                 color = Color(0xFF131315),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold
@@ -1011,6 +1004,91 @@ fun SetupWizardScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Tarjeta navegable con D-Pad para selecciones de configuración
+ */
+@Composable
+private fun SetupOptionCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    iconColor: Color,
+    modifier: Modifier = Modifier,
+    isSelected: Boolean = false,
+    focusRequester: FocusRequester? = null,
+    onSelect: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    val baseModifier = if (focusRequester != null) {
+        modifier.focusRequester(focusRequester)
+    } else {
+        modifier
+    }
+
+    Box(
+        modifier = baseModifier
+            .scale(if (isFocused) 1.04f else 1f)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (isFocused) SurfaceRaised else if (isSelected) SurfaceContainerHighest else SurfaceContainerHigh)
+            .border(
+                width = if (isFocused) 2.dp else if (isSelected) 1.5.dp else 1.dp,
+                color = if (isFocused) AmberWarm else if (isSelected) CyanElectric else Color(0xFF333340),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .onFocusChanged { isFocused = it.isFocused }
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
+                ) {
+                    onSelect()
+                    true
+                } else false
+            }
+            .focusable()
+            .clickable { onSelect() }
+            .padding(18.dp)
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(iconColor.copy(alpha = 0.16f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(24.dp))
+                }
+                if (isSelected) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = CyanElectric, modifier = Modifier.size(22.dp))
+                }
+            }
+
+            Text(
+                text = title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isFocused) AmberWarm else TextPrimary
+            )
+
+            Text(
+                text = description,
+                fontSize = 11.sp,
+                color = TextMuted,
+                lineHeight = 15.sp
+            )
         }
     }
 }

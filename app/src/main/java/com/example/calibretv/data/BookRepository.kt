@@ -37,7 +37,7 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
-class BookRepository(private val context: Context) {
+class BookRepository(val context: Context) {
     private val prefs = PreferencesManager(context)
     private val db = AppDatabase.getInstance(context)
     private val bookDao = db.bookDao()
@@ -109,6 +109,12 @@ class BookRepository(private val context: Context) {
 
     fun getReadingSettings(): ReadingSettings = prefs.getReadingSettings()
     fun saveReadingSettings(settings: ReadingSettings) = prefs.saveReadingSettings(settings)
+
+    fun isDarkTheme(): Boolean = prefs.isDarkTheme()
+    fun setDarkTheme(isDark: Boolean) = prefs.setDarkTheme(isDark)
+
+    fun getAppLanguage(): String = prefs.getAppLanguage()
+    fun setAppLanguage(lang: String) = prefs.setAppLanguage(lang)
 
     fun getActiveProfile(): UserProfile = prefs.getActiveProfile()
     fun saveActiveProfile(profile: UserProfile) = prefs.saveActiveProfile(profile)
@@ -222,15 +228,30 @@ class BookRepository(private val context: Context) {
     fun getCachedBooks(): List<Book> {
         inMemoryBooks?.let { return it }
         return runBlocking(Dispatchers.IO) {
+            val config = getServerConfig()
             val entities = bookDao.getAllBooks()
-            val books = if (entities.isEmpty()) {
+
+            // Si no hay servidor configurado, purgar cualquier portada/libro fantasma de prueba no descargado físicamente
+            val validEntities = if (config.serverUrl.isBlank()) {
+                val ghosts = entities.filter {
+                    it.epubUrl?.contains("duckdns.org") == true && !File(context.filesDir, "book_${it.id}.epub").exists()
+                }
+                if (ghosts.isNotEmpty()) {
+                    ghosts.forEach { bookDao.deleteBook(it.id) }
+                    entities.filterNot { it.epubUrl?.contains("duckdns.org") == true && !File(context.filesDir, "book_${it.id}.epub").exists() }
+                } else entities
+            } else {
+                entities
+            }
+
+            val books = if (validEntities.isEmpty()) {
                 val legacy = prefs.getCachedBooks()
-                if (legacy.isNotEmpty()) {
+                if (legacy.isNotEmpty() && config.serverUrl.isNotBlank()) {
                     bookDao.upsertBooks(legacy.map { it.toEntity() })
                     legacy
                 } else emptyList()
             } else {
-                entities.map { it.toBook() }
+                validEntities.map { it.toBook() }
             }
             inMemoryBooks = books
             books
@@ -349,20 +370,26 @@ class BookRepository(private val context: Context) {
      * Performs incremental comparison preserving local reading progress.
      */
     suspend fun scanServerLibrary(config: ServerConfig): Result<OpdsFeedContent> = withContext(Dispatchers.IO) {
-        // Try REST API first
-        val apiBooksRes = com.example.calibretv.data.api.ApiClient.fetchBooks(500)
-        if (apiBooksRes.isSuccess && apiBooksRes.getOrNull()!!.isNotEmpty()) {
-            val books = apiBooksRes.getOrNull()!!
-            saveServerConfig(config)
-            val mergedBooks = books.map { newBook ->
-                val savedPct = getBookProgressPercent(newBook.id)
-                if (savedPct > 0) newBook.copy(progressPercent = savedPct) else newBook
+        if (config.serverUrl.isBlank()) {
+            return@withContext Result.failure(Exception("No hay servidor configurado"))
+        }
+
+        // Si el usuario configuró explícitamente un endpoint REST API de personajes
+        if (config.serverUrl.contains("/personajes") || config.serverUrl.contains("/api")) {
+            val apiBooksRes = com.example.calibretv.data.api.ApiClient.fetchBooks(500)
+            if (apiBooksRes.isSuccess && apiBooksRes.getOrNull()!!.isNotEmpty()) {
+                val books = apiBooksRes.getOrNull()!!
+                saveServerConfig(config)
+                val mergedBooks = books.map { newBook ->
+                    val savedPct = getBookProgressPercent(newBook.id)
+                    if (savedPct > 0) newBook.copy(progressPercent = savedPct) else newBook
+                }
+                saveCachedBooks(mergedBooks)
+                try {
+                    loadAndApplyShelves(config)
+                } catch (_: Exception) {}
+                return@withContext Result.success(OpdsFeedContent(title = "Biblioteca", categories = emptyList(), books = mergedBooks))
             }
-            saveCachedBooks(mergedBooks)
-            try {
-                loadAndApplyShelves(config)
-            } catch (_: Exception) {}
-            return@withContext Result.success(OpdsFeedContent(title = "Biblioteca", categories = emptyList(), books = mergedBooks))
         }
 
         val scanResult = OpdsClient.fetchLibraryCatalog(
@@ -435,20 +462,22 @@ class BookRepository(private val context: Context) {
             )
         }
 
-        // 3. If no cached books, scan via ApiClient / Server
-        val scanResult = scanServerLibrary(config)
-        if (scanResult.isSuccess) {
-            val feed = scanResult.getOrNull()!!
-            if (feed.books.isNotEmpty()) {
-                val annotated = feed.books.map { b ->
-                    val realPct = getBookProgressPercent(b.id)
-                    b.copy(progressPercent = if (realPct > 0) realPct else b.progressPercent)
+        // 3. Solo escanear el servidor si el usuario ha configurado una URL válida
+        if (config.serverUrl.isNotBlank()) {
+            val scanResult = scanServerLibrary(config)
+            if (scanResult.isSuccess) {
+                val feed = scanResult.getOrNull()!!
+                if (feed.books.isNotEmpty()) {
+                    val annotated = feed.books.map { b ->
+                        val realPct = getBookProgressPercent(b.id)
+                        b.copy(progressPercent = if (realPct > 0) realPct else b.progressPercent)
+                    }
+                    return@withContext feed.copy(books = annotated)
                 }
-                return@withContext feed.copy(books = annotated)
             }
         }
 
-        // 4. No fake mockup data: Return empty feed if not configured or empty
+        // 4. Si no hay libros ni servidor configurado, devolver catálogo vacío
         OpdsFeedContent(
             title = "Biblioteca Calibre",
             categories = listOf(OpdsCategory("cat_all", "Todos", "")),

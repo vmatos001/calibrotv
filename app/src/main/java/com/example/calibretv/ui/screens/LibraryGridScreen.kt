@@ -557,17 +557,19 @@ fun LibraryGridScreen(
         // Modal de Ficha Curada (Descarga, Compra QR o Lectura directa en 3D)
         selectedCuratedBook?.let { curatedBook ->
             val cachedBooks = repository.getCachedBooks()
-            val isDownloaded = remember(curatedBook.id, cachedBooks) {
-                CuratorRepository.isBookDownloaded(curatedBook.id, repository) ||
-                cachedBooks.any { 
-                    (it.id == curatedBook.id || it.title.equals(curatedBook.title, ignoreCase = true)) &&
-                    (!it.epubUrl.isNullOrBlank() && File(it.epubUrl.removePrefix("file://")).exists())
-                }
+            var isCuratedDownloaded by remember(curatedBook.id) {
+                mutableStateOf(
+                    CuratorRepository.isBookDownloaded(curatedBook.id, repository) ||
+                    cachedBooks.any { 
+                        (it.id == curatedBook.id || it.title.equals(curatedBook.title, ignoreCase = true)) &&
+                        (!it.epubUrl.isNullOrBlank() && File(it.epubUrl.removePrefix("file://")).exists())
+                    }
+                )
             }
 
             CuratedBookModal(
                 book = curatedBook,
-                isDownloaded = isDownloaded,
+                isDownloaded = isCuratedDownloaded,
                 isDownloading = isDownloadingCuratedBook,
                 isDarkTheme = isDarkTheme,
                 onDownload = {
@@ -575,7 +577,11 @@ fun LibraryGridScreen(
                     coroutineScope.launch {
                         val res = CuratorRepository.downloadPublicDomainBook(context, curatedBook, repository)
                         if (res.isSuccess) {
+                            isCuratedDownloaded = true
                             feedContent = repository.getFeed()
+                            android.widget.Toast.makeText(context, "¡Descarga completada! Ya puedes abrir el libro.", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            android.widget.Toast.makeText(context, "Error al descargar: ${res.exceptionOrNull()?.message ?: "Comprueba tu conexión"}", android.widget.Toast.LENGTH_LONG).show()
                         }
                         isDownloadingCuratedBook = false
                     }

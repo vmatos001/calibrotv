@@ -544,10 +544,29 @@ object CuratorRepository {
     }
 
     /**
-     * Comprueba si una obra curada ya se encuentra descargada en la biblioteca de BookSpread.
+     * Comprueba si una obra curada ya se encuentra descargada físicamente en el almacenamiento local de la TV.
      */
     fun isBookDownloaded(bookId: String, repository: BookRepository): Boolean {
-        return repository.getCachedBooks().any { it.id == bookId }
+        // 1. Archivo descargado en filesDir
+        val epubFile = java.io.File(repository.context.filesDir, "book_$bookId.epub")
+        if (epubFile.exists() && epubFile.length() > 0) return true
+        val pdfFile = java.io.File(repository.context.filesDir, "book_$bookId.pdf")
+        if (pdfFile.exists() && pdfFile.length() > 0) return true
+        val cbzFile = java.io.File(repository.context.filesDir, "book_$bookId.cbz")
+        if (cbzFile.exists() && cbzFile.length() > 0) return true
+
+        // 2. Si existe en la base de datos local y su ruta apunta a un archivo físico local existente
+        val localBook = repository.getCachedBooks().find { it.id == bookId }
+        if (localBook != null && !localBook.epubUrl.isNullOrBlank() && !localBook.epubUrl.startsWith("http://", ignoreCase = true) && !localBook.epubUrl.startsWith("https://", ignoreCase = true)) {
+            val f = java.io.File(localBook.epubUrl.removePrefix("file://"))
+            if (f.exists() && f.length() > 0) return true
+        }
+
+        // 3. Comprobar en cacheDir
+        val cacheEpub = java.io.File(repository.context.cacheDir, "book_${bookId.hashCode()}.epub")
+        if (cacheEpub.exists() && cacheEpub.length() > 0) return true
+
+        return false
     }
 
     /**
@@ -561,40 +580,80 @@ object CuratorRepository {
     ): Result<Book> = withContext(Dispatchers.IO) {
         try {
             val destFile = File(context.filesDir, "book_${book.id}.epub")
+            val tempFile = File(context.filesDir, "book_${book.id}.epub.tmp")
+
+            val targetUrl = book.publicDownloadUrl?.ifBlank { null }
+                ?: repository.getCachedBooks().find { it.id == book.id }?.epubUrl?.ifBlank { null }
+                ?: return@withContext Result.failure(Exception("No hay enlace de descarga disponible para este libro"))
 
             var downloaded = false
-            if (!book.publicDownloadUrl.isNullOrBlank()) {
-                try {
-                    val url = URL(book.publicDownloadUrl)
-                    val conn = url.openConnection() as HttpURLConnection
-                    conn.connectTimeout = 8000
-                    conn.readTimeout = 15000
-                    conn.instanceFollowRedirects = true
-                    conn.connect()
+            var currentUrl = targetUrl
+            var redirects = 0
+            val config = repository.getServerConfig()
 
-                    if (conn.responseCode in 200..299) {
-                        conn.inputStream.use { input ->
-                            FileOutputStream(destFile).use { output ->
-                                input.copyTo(output)
-                            }
-                        }
-                        if (destFile.exists() && destFile.length() > 500) {
-                            downloaded = true
+            while (redirects < 6) {
+                val urlObj = URL(currentUrl)
+                val conn = urlObj.openConnection() as HttpURLConnection
+                conn.connectTimeout = 12000
+                conn.readTimeout = 30000
+                conn.instanceFollowRedirects = true
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 CalibreTV/1.0")
+                conn.setRequestProperty("Accept", "application/epub+zip, application/octet-stream, */*")
+
+                if (config.serverUrl.isNotBlank() && currentUrl.startsWith(config.serverUrl)) {
+                    com.example.calibretv.data.image.CoverLoader.buildBasicAuth(config.username, config.password)?.let {
+                        conn.setRequestProperty("Authorization", it)
+                    }
+                }
+
+                conn.connect()
+                val code = conn.responseCode
+
+                if (code in 300..399) {
+                    val loc = conn.getHeaderField("Location")
+                    conn.disconnect()
+                    if (!loc.isNullOrBlank()) {
+                        currentUrl = if (loc.startsWith("http://") || loc.startsWith("https://")) loc else URL(urlObj, loc).toString()
+                        redirects++
+                        continue
+                    }
+                }
+
+                if (code in 200..299) {
+                    conn.inputStream.use { input ->
+                        FileOutputStream(tempFile).use { output ->
+                            input.copyTo(output)
                         }
                     }
-                } catch (e: Exception) {
-                    Log.w(TAG, "No se pudo descargar directo desde la URL externa: ${e.message}")
+                    conn.disconnect()
+
+                    // Verificar que el archivo descargado sea un ZIP/EPUB genuino (empieza por 'PK') y tamaño > 1KB
+                    if (tempFile.exists() && tempFile.length() > 1024) {
+                        val header = ByteArray(2)
+                        java.io.FileInputStream(tempFile).use { fis ->
+                            fis.read(header)
+                        }
+                        if (header[0] == 0x50.toByte() && header[1] == 0x4B.toByte()) {
+                            if (destFile.exists()) destFile.delete()
+                            if (tempFile.renameTo(destFile)) {
+                                downloaded = true
+                            }
+                        } else {
+                            tempFile.delete()
+                            Log.w(TAG, "El archivo descargado no es un EPUB válido (no coincide firma PK)")
+                        }
+                    } else {
+                        tempFile.delete()
+                    }
+                } else {
+                    conn.disconnect()
                 }
+                break
             }
 
-            // Fallback: Si no hay internet o falló la URL externa, generar una versión de cortesía
             if (!downloaded) {
-                val noticeBook = EpubParser.getNoticeBook(
-                    bookTitle = book.title,
-                    message = "Obra maestra de dominio público («${book.title}» por ${book.author}). ${book.summary}\n\nDisfruta de esta edición especial en tu CalibroTV."
-                )
-                // Guardar como marcador de posición
-                destFile.writeText("CalibroTV Public Edition: ${book.title}\n${book.author}\n${book.summary}")
+                if (tempFile.exists()) tempFile.delete()
+                return@withContext Result.failure(Exception("No se pudo descargar el archivo EPUB. Comprueba tu conexión a internet."))
             }
 
             val newBook = Book(
@@ -609,7 +668,6 @@ object CuratorRepository {
             )
 
             val current = repository.getCachedBooks().toMutableList()
-            // Si ya existía, reemplazar; si no, agregar al inicio
             val existingIdx = current.indexOfFirst { it.id == book.id }
             if (existingIdx >= 0) {
                 current[existingIdx] = newBook
