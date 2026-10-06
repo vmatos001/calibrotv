@@ -924,8 +924,15 @@ fun HomeScreen(
         // MODAL DE LIBRO CURADO (Compra QR / Descarga)
         // ==========================================
         selectedCuratedBook?.let { curatedBook ->
+            val cachedBooks = repository.getCachedBooks()
+            val matchedLocalBook = remember(curatedBook.id) {
+                CuratorRepository.findMatchingLocalBook(curatedBook, cachedBooks)
+            }
             var isCuratedDownloaded by remember(curatedBook.id) {
-                mutableStateOf(CuratorRepository.isBookDownloaded(curatedBook.id, repository))
+                mutableStateOf(
+                    matchedLocalBook != null ||
+                    CuratorRepository.isBookDownloadedOrAvailable(curatedBook, repository)
+                )
             }
             CuratedBookModal(
                 book = curatedBook,
@@ -933,21 +940,26 @@ fun HomeScreen(
                 isDownloading = isDownloadingCuratedBook,
                 isDarkTheme = isDarkTheme,
                 onDownload = {
-                    isDownloadingCuratedBook = true
-                    coroutineScope.launch {
-                        val res = CuratorRepository.downloadPublicDomainBook(context, curatedBook, repository)
-                        if (res.isSuccess) {
-                            isCuratedDownloaded = true
-                            feedContent = repository.getFeed()
-                            android.widget.Toast.makeText(context, "¡Descarga completada! Ya puedes abrir el libro.", android.widget.Toast.LENGTH_SHORT).show()
-                        } else {
-                            android.widget.Toast.makeText(context, "Error al descargar: ${res.exceptionOrNull()?.message ?: "Comprueba tu conexión"}", android.widget.Toast.LENGTH_LONG).show()
+                    if (matchedLocalBook != null) {
+                        selectedCuratedBook = null
+                        onBookSelected(matchedLocalBook)
+                    } else {
+                        isDownloadingCuratedBook = true
+                        coroutineScope.launch {
+                            val res = CuratorRepository.downloadPublicDomainBook(context, curatedBook, repository)
+                            if (res.isSuccess) {
+                                isCuratedDownloaded = true
+                                feedContent = repository.getFeed()
+                                android.widget.Toast.makeText(context, "¡Descarga completada! Ya puedes abrir el libro.", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                android.widget.Toast.makeText(context, "Error al descargar: ${res.exceptionOrNull()?.message ?: "Comprueba tu conexión"}", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                            isDownloadingCuratedBook = false
                         }
-                        isDownloadingCuratedBook = false
                     }
                 },
                 onRead = {
-                    val localBook = repository.getCachedBooks().find { 
+                    val localBook = matchedLocalBook ?: repository.getCachedBooks().find { 
                         it.id == curatedBook.id || it.title.equals(curatedBook.title, ignoreCase = true) 
                     }
                     selectedCuratedBook = null

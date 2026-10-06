@@ -544,28 +544,58 @@ class BookRepository(val context: Context) {
     private fun downloadEpub(epubUrl: String, destFile: File): Boolean {
         return try {
             val config = getServerConfig()
-            val url = URL(epubUrl)
-            val conn = url.openConnection() as HttpURLConnection
-            SslHelper.configureHttps(conn)
-            conn.connectTimeout = 10000
-            conn.readTimeout = 25000
-            conn.instanceFollowRedirects = true
-            conn.setRequestProperty("User-Agent", "CalibreTV/1.0 (Android TV)")
             val auth = CoverLoader.buildBasicAuth(config.username, config.password)
-            if (auth != null) conn.setRequestProperty("Authorization", auth)
-            conn.connect()
+            var currentUrl = epubUrl
+            var redirects = 0
+            var cookies: String? = null
 
-            if (conn.responseCode in 200..299) {
-                conn.inputStream.use { input ->
-                    FileOutputStream(destFile).use { output ->
-                        input.copyTo(output)
-                    }
+            while (redirects < 6) {
+                val url = URL(currentUrl)
+                val conn = url.openConnection() as HttpURLConnection
+                SslHelper.configureHttps(conn)
+                conn.connectTimeout = 15000
+                conn.readTimeout = 45000
+                conn.instanceFollowRedirects = false
+                conn.setRequestProperty("User-Agent", "CalibroTV/3.0 (Android TV)")
+                if (!auth.isNullOrBlank()) {
+                    conn.setRequestProperty("Authorization", auth)
                 }
-                true
-            } else {
-                false
+                if (!cookies.isNullOrBlank()) {
+                    conn.setRequestProperty("Cookie", cookies)
+                }
+                conn.connect()
+
+                val code = conn.responseCode
+                if (code in 300..399) {
+                    val location = conn.getHeaderField("Location") ?: return false
+                    conn.getHeaderField("Set-Cookie")?.let { sc ->
+                        cookies = sc.split(";").firstOrNull()
+                    }
+                    currentUrl = CoverLoader.resolveRedirectUrl(currentUrl, location)
+                    redirects++
+                    continue
+                }
+
+                if (code in 200..299) {
+                    val tempFile = File(destFile.parentFile, "${destFile.name}.tmp")
+                    conn.inputStream.use { input ->
+                        FileOutputStream(tempFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    if (tempFile.exists() && tempFile.length() > 0L) {
+                        if (destFile.exists()) destFile.delete()
+                        tempFile.renameTo(destFile)
+                        return true
+                    }
+                    return false
+                }
+                android.util.Log.w("BookRepository", "HTTP $code downloading $currentUrl")
+                return false
             }
-        } catch (_: Exception) {
+            false
+        } catch (e: Exception) {
+            android.util.Log.e("BookRepository", "Failed to download $epubUrl: ${e.message}", e)
             false
         }
     }

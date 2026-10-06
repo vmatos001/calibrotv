@@ -170,6 +170,8 @@ fun YourBooksScreen(
     }
 
     val prefs = remember { PreferencesManager(context) }
+    val config = remember { repository.getServerConfig() }
+    val authHeader = remember(config) { com.example.calibretv.data.image.CoverLoader.buildBasicAuth(config.username, config.password) }
     var isDarkTheme by remember { mutableStateOf(prefs.isDarkTheme()) }
     val coroutineScope = rememberCoroutineScope()
     val sidebarFocusRequester = remember { FocusRequester() }
@@ -376,6 +378,7 @@ fun YourBooksScreen(
                         YourBookItemCard(
                             book = book,
                             sizeBytes = sizeBytes,
+                            authHeader = authHeader,
                             isDarkTheme = isDarkTheme,
                             isInteractive = !isAnyModalOpen,
                             isLeftEdge = isLeftEdge,
@@ -521,6 +524,7 @@ fun YourBooksScreen(
 private fun YourBookItemCard(
     book: Book,
     sizeBytes: Long,
+    authHeader: String? = null,
     isDarkTheme: Boolean = true,
     isInteractive: Boolean = true,
     isLeftEdge: Boolean = false,
@@ -529,7 +533,7 @@ private fun YourBookItemCard(
     onDeleteClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
-    val coverBmp = rememberCoverImage(book.coverUrl, null)
+    val coverBmp = rememberCoverImage(book.coverUrl, authHeader)
 
     Column(
         modifier = Modifier

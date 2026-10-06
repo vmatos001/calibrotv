@@ -261,7 +261,34 @@ fun LibraryGridScreen(
     val allBooks = remember(curatedSections, feedContent) {
         val cloudBooks = CuratorRepository.getAllCuratedBooks().map { it.toBook() }
         val feedBooks = feedContent?.books ?: emptyList()
-        (cloudBooks + feedBooks).distinctBy { it.id }
+        val mergedList = mutableListOf<Book>()
+        val matchedFeedIds = mutableSetOf<String>()
+
+        cloudBooks.forEach { cBook ->
+            val matchingFeed = feedBooks.find { f ->
+                f.id == cBook.id ||
+                CuratorRepository.normalizeTitleForMatching(f.title) == CuratorRepository.normalizeTitleForMatching(cBook.title)
+            }
+            if (matchingFeed != null) {
+                matchedFeedIds.add(matchingFeed.id)
+                mergedList.add(
+                    matchingFeed.copy(
+                        coverUrl = if (!matchingFeed.coverUrl.isNullOrBlank()) matchingFeed.coverUrl else cBook.coverUrl,
+                        category = if (matchingFeed.category.isBlank() || matchingFeed.category.equals("General", ignoreCase = true)) cBook.category else matchingFeed.category,
+                        shelves = (matchingFeed.shelves + cBook.shelves).distinct(),
+                        summary = if (matchingFeed.summary.isBlank()) cBook.summary else matchingFeed.summary
+                    )
+                )
+            } else {
+                mergedList.add(cBook)
+            }
+        }
+
+        feedBooks.filterNot { it.id in matchedFeedIds }.forEach {
+            mergedList.add(it)
+        }
+
+        mergedList
     }
 
     // Circular Shelf Filters (Sección A: Estanterías de Personajes y Dificultad)
@@ -557,13 +584,13 @@ fun LibraryGridScreen(
         // Modal de Ficha Curada (Descarga, Compra QR o Lectura directa en 3D)
         selectedCuratedBook?.let { curatedBook ->
             val cachedBooks = repository.getCachedBooks()
+            val matchedLocalBook = remember(curatedBook.id) {
+                CuratorRepository.findMatchingLocalBook(curatedBook, cachedBooks)
+            }
             var isCuratedDownloaded by remember(curatedBook.id) {
                 mutableStateOf(
-                    CuratorRepository.isBookDownloaded(curatedBook.id, repository) ||
-                    cachedBooks.any { 
-                        (it.id == curatedBook.id || it.title.equals(curatedBook.title, ignoreCase = true)) &&
-                        (!it.epubUrl.isNullOrBlank() && File(it.epubUrl.removePrefix("file://")).exists())
-                    }
+                    matchedLocalBook != null ||
+                    CuratorRepository.isBookDownloadedOrAvailable(curatedBook, repository)
                 )
             }
 
@@ -573,21 +600,26 @@ fun LibraryGridScreen(
                 isDownloading = isDownloadingCuratedBook,
                 isDarkTheme = isDarkTheme,
                 onDownload = {
-                    isDownloadingCuratedBook = true
-                    coroutineScope.launch {
-                        val res = CuratorRepository.downloadPublicDomainBook(context, curatedBook, repository)
-                        if (res.isSuccess) {
-                            isCuratedDownloaded = true
-                            feedContent = repository.getFeed()
-                            android.widget.Toast.makeText(context, "¡Descarga completada! Ya puedes abrir el libro.", android.widget.Toast.LENGTH_SHORT).show()
-                        } else {
-                            android.widget.Toast.makeText(context, "Error al descargar: ${res.exceptionOrNull()?.message ?: "Comprueba tu conexión"}", android.widget.Toast.LENGTH_LONG).show()
+                    if (matchedLocalBook != null) {
+                        selectedCuratedBook = null
+                        onBookSelected(matchedLocalBook)
+                    } else {
+                        isDownloadingCuratedBook = true
+                        coroutineScope.launch {
+                            val res = CuratorRepository.downloadPublicDomainBook(context, curatedBook, repository)
+                            if (res.isSuccess) {
+                                isCuratedDownloaded = true
+                                feedContent = repository.getFeed()
+                                android.widget.Toast.makeText(context, "¡Descarga completada! Ya puedes abrir el libro.", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                android.widget.Toast.makeText(context, "Error al descargar: ${res.exceptionOrNull()?.message ?: "Comprueba tu conexión"}", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                            isDownloadingCuratedBook = false
                         }
-                        isDownloadingCuratedBook = false
                     }
                 },
                 onRead = {
-                    val localBook = repository.getCachedBooks().find { 
+                    val localBook = matchedLocalBook ?: repository.getCachedBooks().find { 
                         it.id == curatedBook.id || it.title.equals(curatedBook.title, ignoreCase = true)
                     }
                     selectedCuratedBook = null

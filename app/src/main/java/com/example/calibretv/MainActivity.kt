@@ -13,6 +13,7 @@ import com.example.calibretv.theme.CalibreTVTheme
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    com.example.calibretv.data.image.CoverLoader.init(this)
 
     enableEdgeToEdge()
     setContent {

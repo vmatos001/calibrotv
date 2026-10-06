@@ -89,7 +89,7 @@ fun CuratedBookModal(
     onDismiss: () -> Unit
 ) {
     val hasFreeDownload = book.isPublicDomain || !book.publicDownloadUrl.isNullOrBlank()
-    val isCommercial = !hasFreeDownload && (!book.affiliateQrUrl.isNullOrBlank() || book.difficultyLevel in 4..5)
+    val isCommercial = !isDownloaded && !hasFreeDownload && (!book.affiliateQrUrl.isNullOrBlank() || book.difficultyLevel in 4..5)
 
     // Fondo semi-transparente oscuro
     Box(
@@ -563,7 +563,7 @@ private fun PublicDomainModalContent(
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
-                            text = "LIBRE ACCESO",
+                            text = if (isDownloaded) "EN TU BIBLIOTECA" else "LIBRE ACCESO",
                             color = if (isDarkTheme) Color(0xFF34D399) else Color(0xFF15803D),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.ExtraBold
@@ -607,7 +607,7 @@ private fun PublicDomainModalContent(
                     )
                     Text(text = "•", color = if (isDarkTheme) TextMuted else Color(0xFF78716C), fontSize = 12.sp)
                     Text(
-                        text = "Gratis (Dominio Público)",
+                        text = if (isDownloaded) "Disponible en Tus Libros" else if (book.isPublicDomain) "Gratis (Dominio Público)" else "Descarga Gratuita",
                         color = if (isDarkTheme) Color(0xFF34D399) else Color(0xFF15803D),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold

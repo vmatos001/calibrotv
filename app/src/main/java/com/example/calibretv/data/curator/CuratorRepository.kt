@@ -543,8 +543,51 @@ object CuratorRepository {
         )
     }
 
+    fun normalizeTitleForMatching(title: String): String {
+        return title.lowercase()
+            .replace(Regex("""\b(el|la|los|las|the|a|an|de|del|en|un|una|unos|unas|y|o)\b"""), " ")
+            .replace(Regex("""\(.*?\)|\[.*?\]"""), " ")
+            .replace(Regex("""[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]"""), " ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+    }
+
     /**
-     * Comprueba si una obra curada ya se encuentra descargada físicamente en el almacenamiento local de la TV.
+     * Busca si un libro curado ya existe en la biblioteca del usuario (Tus Libros / OPDS / almacenamiento local).
+     * Realiza búsqueda por ID exacto y por coincidencia inteligente de título y autor.
+     */
+    fun findMatchingLocalBook(
+        curatedBook: CuratedBook,
+        cachedBooks: List<Book>
+    ): Book? {
+        if (cachedBooks.isEmpty()) return null
+
+        // 1. Coincidencia exacta por ID
+        val byId = cachedBooks.find { it.id == curatedBook.id }
+        if (byId != null) return byId
+
+        // 2. Normalización de títulos
+        val normCurated = normalizeTitleForMatching(curatedBook.title)
+        if (normCurated.isBlank()) return null
+
+        // 2a. Coincidencia exacta de título normalizado
+        val exactTitle = cachedBooks.find { normalizeTitleForMatching(it.title) == normCurated }
+        if (exactTitle != null) return exactTitle
+
+        // 2b. Coincidencia por contención (si tiene longitud suficiente >= 4 caracteres)
+        val subMatch = cachedBooks.find { b ->
+            val norm = normalizeTitleForMatching(b.title)
+            (norm.length >= 4 && normCurated.length >= 4) &&
+            (norm.contains(normCurated) || normCurated.contains(norm))
+        }
+        if (subMatch != null) return subMatch
+
+        return null
+    }
+
+    /**
+     * Comprueba si una obra curada ya se encuentra descargada físicamente en el almacenamiento local de la TV
+     * o está disponible para lectura en la biblioteca personal del usuario ("Tus Libros").
      */
     fun isBookDownloaded(bookId: String, repository: BookRepository): Boolean {
         // 1. Archivo descargado en filesDir
@@ -557,9 +600,13 @@ object CuratorRepository {
 
         // 2. Si existe en la base de datos local y su ruta apunta a un archivo físico local existente
         val localBook = repository.getCachedBooks().find { it.id == bookId }
-        if (localBook != null && !localBook.epubUrl.isNullOrBlank() && !localBook.epubUrl.startsWith("http://", ignoreCase = true) && !localBook.epubUrl.startsWith("https://", ignoreCase = true)) {
-            val f = java.io.File(localBook.epubUrl.removePrefix("file://"))
-            if (f.exists() && f.length() > 0) return true
+        if (localBook != null && !localBook.epubUrl.isNullOrBlank()) {
+            if (!localBook.epubUrl.startsWith("http://", ignoreCase = true) && !localBook.epubUrl.startsWith("https://", ignoreCase = true)) {
+                val f = java.io.File(localBook.epubUrl.removePrefix("file://"))
+                if (f.exists() && f.length() > 0) return true
+            } else {
+                return true
+            }
         }
 
         // 3. Comprobar en cacheDir
@@ -567,6 +614,16 @@ object CuratorRepository {
         if (cacheEpub.exists() && cacheEpub.length() > 0) return true
 
         return false
+    }
+
+    fun isBookDownloadedOrAvailable(
+        curatedBook: CuratedBook,
+        repository: BookRepository
+    ): Boolean {
+        if (isBookDownloaded(curatedBook.id, repository)) return true
+        val cached = repository.getCachedBooks()
+        val match = findMatchingLocalBook(curatedBook, cached)
+        return match != null
     }
 
     /**
