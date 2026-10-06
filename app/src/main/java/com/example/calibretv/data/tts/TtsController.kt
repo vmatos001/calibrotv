@@ -174,6 +174,7 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
         if (text.isBlank()) return
 
         Log.i(TAG, "Leyendo página con Microsoft Edge TTS (Voz: $localeCode)...")
+        readPageEdge(text, speedRate, pitch, localeCode)
     }
 
     private fun readPageEdge(text: String, speedRate: Float, pitch: Float, localeCode: String) {
@@ -205,12 +206,11 @@ class TtsController(private val context: Context) : TextToSpeech.OnInitListener 
             var nextAudio: ByteArray? = firstAudio
             var completedAll = true
 
-            // Si falla la conexión a internet en el primer chunk, alertar
+            // Si falla la conexión a internet en el primer chunk, usar motor nativo como fallback
             if (firstAudio == null) {
-                Log.w(TAG, "Edge TTS online no respondió (posible falta de internet).")
+                Log.w(TAG, "Edge TTS online no respondió (posible falta de internet). Activando motor nativo como fallback...")
                 withContext(Dispatchers.Main) {
-                    _isPlaying.value = false
-                    android.widget.Toast.makeText(context, "No se pudo conectar al servicio de voz en la nube. Comprueba tu conexión a Internet.", android.widget.Toast.LENGTH_LONG).show()
+                    readPageNative(text, speedRate, pitch, localeCode)
                 }
                 return@launch
             }

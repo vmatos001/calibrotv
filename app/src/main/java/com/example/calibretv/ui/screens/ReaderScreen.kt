@@ -48,9 +48,13 @@ import androidx.compose.material.icons.filled.LastPage
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.mutableLongStateOf
+import com.example.calibretv.data.tts.MediaKeyEventBus
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.BorderStroke
@@ -362,8 +366,18 @@ fun ReaderScreen(
         }
     }
 
+    var lastTtsToggleTime by remember { mutableLongStateOf(0L) }
+
     fun toggleTts() {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastTtsToggleTime < 500L) {
+            android.util.Log.d("ReaderScreen", "toggleTts: ignorado por debounce (${now - lastTtsToggleTime}ms)")
+            return
+        }
+        lastTtsToggleTime = now
+
         if (isTtsActive) {
+            android.util.Log.i("ReaderScreen", "toggleTts: Pausando lectura TTS...")
             ttsAutoAdvanceJob?.cancel()
             ttsAutoAdvanceJob = null
             ttsController.stop()
@@ -374,10 +388,19 @@ fun ReaderScreen(
             val pageText = listOf(leftText, rightText).filter { it.isNotBlank() }.joinToString("\n\n")
             if (pageText.isNotBlank()) {
                 val activeVoice = TtsVoiceCatalog.ensureValidVoiceCode(settings.ttsVoiceLocale, bookLanguage)
+                android.util.Log.i("ReaderScreen", "toggleTts: Iniciando lectura TTS con voz $activeVoice...")
                 ttsController.readPage(pageText, settings.ttsSpeedRate, settings.ttsPitch, activeVoice)
             } else {
+                android.util.Log.i("ReaderScreen", "toggleTts: Pliego sin texto, avanzando...")
                 advanceToNextReadableSpread(currentSpreadIndex + 1)
             }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        MediaKeyEventBus.playPauseEvents.collect {
+            android.util.Log.i("ReaderScreen", "MediaKeyEventBus: Recibida tecla Play/Pause del control remoto")
+            toggleTts()
         }
     }
 
@@ -1076,7 +1099,7 @@ fun ReaderScreen(
                                     )
                                     VerticalHudOptionButton(
                                         title = if (isTtsActive) "Pausar" else "Leer en Voz",
-                                        icon = Icons.Filled.RecordVoiceOver,
+                                        icon = if (isTtsActive) Icons.Filled.Pause else Icons.Filled.RecordVoiceOver,
                                         isPrimary = isTtsActive,
                                         onClick = {
                                             toggleTts()
@@ -1316,16 +1339,22 @@ fun ReaderScreen(
 
                             // 5. Grupo Voz TTS
                             HudTabButton(
-                                title = ReaderHudCategory.VOZ_TTS.title,
-                                icon = ReaderHudCategory.VOZ_TTS.icon,
+                                title = if (isTtsActive) "Pausar Voz" else ReaderHudCategory.VOZ_TTS.title,
+                                icon = if (isTtsActive) Icons.Filled.Pause else ReaderHudCategory.VOZ_TTS.icon,
                                 isSelected = selectedHudCategory == ReaderHudCategory.VOZ_TTS,
+                                isPrimary = isTtsActive,
                                 onFocus = {
                                     if (selectedHudCategory != null) {
                                         selectedHudCategory = ReaderHudCategory.VOZ_TTS
                                     }
                                 },
                                 onClick = {
-                                    selectedHudCategory = if (selectedHudCategory == ReaderHudCategory.VOZ_TTS) null else ReaderHudCategory.VOZ_TTS
+                                    if (isTtsActive) {
+                                        toggleTts()
+                                    } else {
+                                        selectedHudCategory = ReaderHudCategory.VOZ_TTS
+                                        toggleTts()
+                                    }
                                 }
                             )
 
@@ -1630,6 +1659,14 @@ private fun HudActionButton(
     onFocus: () -> Unit = {}
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    var lastClickTime by remember { mutableLongStateOf(0L) }
+    val debouncedClick = {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastClickTime > 350L) {
+            lastClickTime = now
+            onClick()
+        }
+    }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1658,11 +1695,14 @@ private fun HudActionButton(
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown &&
                     (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)) {
-                    onClick()
+                    debouncedClick()
                     true
                 } else false
             }
-            .clickable { onClick() }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { debouncedClick() }
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Icon(
@@ -1687,11 +1727,20 @@ private fun HudTabButton(
     title: String,
     icon: ImageVector,
     isSelected: Boolean,
+    isPrimary: Boolean = false,
     modifier: Modifier = Modifier,
     onFocus: () -> Unit = {},
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    var lastClickTime by remember { mutableLongStateOf(0L) }
+    val debouncedClick = {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastClickTime > 350L) {
+            lastClickTime = now
+            onClick()
+        }
+    }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1703,13 +1752,14 @@ private fun HudTabButton(
             .background(
                 when {
                     isFocused -> AmberWarm
+                    isPrimary -> AmberWarm.copy(alpha = 0.45f)
                     isSelected -> AmberWarm.copy(alpha = 0.35f)
                     else -> Color.White.copy(alpha = 0.08f)
                 }
             )
             .border(
-                width = if (isFocused) 2.dp else if (isSelected) 1.dp else 0.dp,
-                color = if (isFocused) Color.White else if (isSelected) AmberWarm else Color.Transparent,
+                width = if (isFocused) 2.dp else if (isPrimary || isSelected) 1.5.dp else 0.dp,
+                color = if (isFocused) Color.White else if (isPrimary) CyanElectric else if (isSelected) AmberWarm else Color.Transparent,
                 shape = RoundedCornerShape(8.dp)
             )
             .onFocusChanged {
@@ -1720,28 +1770,31 @@ private fun HudTabButton(
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
                     if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
-                        onClick()
+                        debouncedClick()
                         true
                     } else if (event.key == Key.DirectionUp && !isSelected) {
-                        onClick()
+                        debouncedClick()
                         true
                     } else false
                 } else false
             }
-            .clickable { onClick() }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { debouncedClick() }
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (isFocused) Color(0xFF131315) else if (isSelected) AmberWarm else TextMuted,
+            tint = if (isFocused) Color(0xFF131315) else if (isPrimary) CyanElectric else if (isSelected) AmberWarm else TextMuted,
             modifier = Modifier.size(15.dp)
         )
         Text(
             text = title,
-            color = if (isFocused) Color(0xFF131315) else if (isSelected) Color.White else TextMuted,
+            color = if (isFocused) Color(0xFF131315) else if (isPrimary) CyanElectric else if (isSelected) Color.White else TextMuted,
             fontSize = 12.sp,
-            fontWeight = if (isFocused || isSelected) FontWeight.Bold else FontWeight.Medium,
+            fontWeight = if (isFocused || isPrimary || isSelected) FontWeight.Bold else FontWeight.Medium,
             maxLines = 1,
             softWrap = false
         )
@@ -1780,6 +1833,14 @@ private fun VerticalHudOptionButton(
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    var lastClickTime by remember { mutableLongStateOf(0L) }
+    val debouncedClick = {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastClickTime > 350L) {
+            lastClickTime = now
+            onClick()
+        }
+    }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1806,11 +1867,14 @@ private fun VerticalHudOptionButton(
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown &&
                     (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)) {
-                    onClick()
+                    debouncedClick()
                     true
                 } else false
             }
-            .clickable { onClick() }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { debouncedClick() }
             .padding(horizontal = 10.dp, vertical = 7.dp)
     ) {
         Icon(
