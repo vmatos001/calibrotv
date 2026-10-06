@@ -137,6 +137,7 @@ import com.example.calibretv.ui.components.NotesModal
 import com.example.calibretv.ui.components.QuoteCardModal
 import com.example.calibretv.ui.components.TvNavTab
 import com.example.calibretv.ui.components.TvTopBar
+import com.example.calibretv.ui.utils.KeepScreenOnEffect
 import kotlinx.coroutines.launch
 
 enum class ReaderHudCategory(val title: String, val icon: ImageVector) {
@@ -191,6 +192,7 @@ fun ReaderScreen(
     onTabSelected: (TvNavTab) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
+    KeepScreenOnEffect()
     var settings by remember { mutableStateOf(repository.getReadingSettings()) }
     var activeProfile by remember { mutableStateOf(repository.getActiveProfile()) }
     var parsedBook by remember { mutableStateOf<ParsedBook?>(null) }

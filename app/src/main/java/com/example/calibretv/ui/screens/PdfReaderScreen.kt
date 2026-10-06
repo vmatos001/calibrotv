@@ -37,6 +37,7 @@ import com.example.calibretv.data.model.AmbientSound
 import com.example.calibretv.data.sound.AmbientSoundManager
 import com.example.calibretv.ui.components.NotesModal
 import com.example.calibretv.ui.components.QuizDialog
+import com.example.calibretv.ui.utils.KeepScreenOnEffect
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -112,6 +113,7 @@ fun PdfReaderScreen(
     repository: BookRepository,
     onBack: () -> Unit
 ) {
+    KeepScreenOnEffect()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }

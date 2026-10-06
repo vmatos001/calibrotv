@@ -12,8 +12,8 @@ android {
         applicationId = "com.calibrotv.app"
         minSdk = 23
         targetSdk = 34
-        versionCode = 54
-        versionName = "3.40"
+        versionCode = 55
+        versionName = "3.41"
         ndk {
             abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
         }

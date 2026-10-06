@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import com.example.calibretv.ui.utils.KeepScreenOnEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -177,6 +178,7 @@ private fun ComicReaderContent(
     repository: BookRepository?,
     onBack: () -> Unit
 ) {
+    KeepScreenOnEffect()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current.density
     val readerFocusRequester = remember { FocusRequester() }
