@@ -572,4 +572,16 @@ object EpubParser {
     fun getSampleSpreads(bookTitle: String = "Crónicas del Vacío"): List<PageSpread> {
         return paginate(getSampleBook(bookTitle), 18, 0)
     }
+
+    /**
+     * Elimina el directorio de assets extraídos de un libro EPUB para liberar almacenamiento.
+     */
+    fun cleanExtractedAssets(epubFile: File) {
+        try {
+            val assetsDir = File(epubFile.parentFile, "${epubFile.nameWithoutExtension}_assets")
+            if (assetsDir.exists() && assetsDir.isDirectory) {
+                assetsDir.deleteRecursively()
+            }
+        } catch (_: Exception) {}
+    }
 }

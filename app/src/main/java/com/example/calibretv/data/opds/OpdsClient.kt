@@ -231,7 +231,7 @@ object OpdsClient {
                                     }
                                 } catch (_: Exception) {}
                             }
-                            "name", "author" -> {
+                            "name", "author", "creator" -> {
                                 val a = try { parser.nextText().trim() } catch (_: Exception) { "" }
                                 if (a.isNotBlank() && currentAuthor.isBlank()) currentAuthor = a
                             }
