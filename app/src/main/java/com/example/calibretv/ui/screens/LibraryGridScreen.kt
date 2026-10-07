@@ -35,12 +35,14 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import com.example.calibretv.ui.components.TvProfilePill
+import com.example.calibretv.ui.components.UniversalSearchModal
 import com.example.calibretv.ui.components.UserProfilesDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -92,6 +94,7 @@ import com.example.calibretv.theme.SurfaceContainerHighest
 import com.example.calibretv.theme.SurfaceRaised
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
+import com.example.calibretv.theme.TextSecondary
 import com.example.calibretv.ui.components.Book3DView
 import com.example.calibretv.ui.components.CuratedBookModal
 import com.example.calibretv.ui.components.TvNavTab
@@ -216,11 +219,14 @@ fun LibraryGridScreen(
     // Modal state for Curated Book Details (Cloud inspiration showcase)
     var selectedCuratedBook by remember { mutableStateOf<CuratedBook?>(null) }
     var isDownloadingCuratedBook by remember { mutableStateOf(false) }
+    var isSearchOpen by remember { mutableStateOf(false) }
     var curatedSections by remember { mutableStateOf(CuratorRepository.getCuratedSections()) }
     val bookFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
 
     BackHandler {
-        if (selectedCuratedBook != null) {
+        if (isSearchOpen) {
+            isSearchOpen = false
+        } else if (selectedCuratedBook != null) {
             selectedCuratedBook = null
         } else if (showUserProfilesModal) {
             showUserProfilesModal = false
@@ -414,26 +420,74 @@ fun LibraryGridScreen(
     val COLUMNS = 7
 
     val screenBg = if (isDarkTheme) BackgroundDark else CanvasBackgroundLight
-    val isAnyModalOpen = selectedCuratedBook != null || showUserProfilesModal
+    val isAnyModalOpen = selectedCuratedBook != null || showUserProfilesModal || isSearchOpen
 
     CalibreTVTheme(isDarkTheme = isDarkTheme) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(screenBg)
-        ) {
+        if (isSearchOpen) {
+            UniversalSearchModal(
+                repository = repository,
+                isDarkTheme = isDarkTheme,
+                onBookSelected = { book ->
+                    isSearchOpen = false
+                    onBookSelected(book)
+                },
+                onDismiss = { isSearchOpen = false }
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(screenBg)
+            ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(start = 68.dp)
             ) {
                 Column(modifier = Modifier.fillMaxSize().background(screenBg)) {
-                    // Header Bar (Título centrado, sin texto azul, reloj y perfil a la derecha)
+                    // Header Bar (Buscador a la izquierda, título centrado, reloj y perfil a la derecha)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(start = 20.dp, end = 36.dp, top = 14.dp, bottom = 10.dp)
                     ) {
+                        // Botón de Búsqueda Universal (D-Pad navegable)
+                        var isSearchBtnFocused by remember { mutableStateOf(false) }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(
+                                    if (isSearchBtnFocused) AmberWarm
+                                    else if (isDarkTheme) Color.White.copy(alpha = 0.08f)
+                                    else Color.Black.copy(alpha = 0.05f)
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSearchBtnFocused) AmberWarm else (if (isDarkTheme) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.1f)),
+                                    shape = RoundedCornerShape(20.dp)
+                                )
+                                .clickable { isSearchOpen = true }
+                                .onFocusChanged { isSearchBtnFocused = it.isFocused }
+                                .focusable()
+                                .padding(horizontal = 14.dp, vertical = 7.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Buscar",
+                                tint = if (isSearchBtnFocused) Color(0xFF131316) else if (isDarkTheme) AmberWarm else InkPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Buscar libros o clásicos...",
+                                color = if (isSearchBtnFocused) Color(0xFF131316) else if (isDarkTheme) TextSecondary else InkSecondary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
                         Text(
                             text = "ESTANTERÍA DE LIBROS",
                             color = if (isDarkTheme) TextPrimary else InkPrimary,
@@ -657,6 +711,7 @@ fun LibraryGridScreen(
             }
         )
     }
+}
 }
 }
 

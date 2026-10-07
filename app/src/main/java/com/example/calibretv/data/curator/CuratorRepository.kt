@@ -383,6 +383,42 @@ object CuratorRepository {
                         publicDownloadUrl = "https://www.gutenberg.org/ebooks/5200.epub.images",
                         approximatePrice = "Gratis (Dominio Público)",
                         year = "1915"
+                    ),
+                    CuratedBook(
+                        id = "pub_dracula",
+                        title = "Drácula",
+                        author = "Bram Stoker",
+                        coverUrl = "https://covers.openlibrary.org/b/id/12818862-L.jpg",
+                        summary = "El joven abogado Jonathan Harker viaja a Transilvania para encontrarse con el misterioso Conde Drácula. La obra cumbre inmortal del terror gótico.",
+                        category = "Terror Gótico",
+                        isPublicDomain = true,
+                        publicDownloadUrl = "https://www.gutenberg.org/ebooks/345.epub.images",
+                        approximatePrice = "Gratis (Dominio Público)",
+                        year = "1897"
+                    ),
+                    CuratedBook(
+                        id = "pub_frankenstein",
+                        title = "Frankenstein",
+                        author = "Mary Shelley",
+                        coverUrl = "https://covers.openlibrary.org/b/id/12693895-L.jpg",
+                        summary = "Víctor Frankenstein desafía los límites de la vida creando un ser con restos humanos. Una obra maestra sobre la ambición científica y la soledad.",
+                        category = "Ciencia Ficción Clásica",
+                        isPublicDomain = true,
+                        publicDownloadUrl = "https://www.gutenberg.org/ebooks/84.epub.images",
+                        approximatePrice = "Gratis (Dominio Público)",
+                        year = "1818"
+                    ),
+                    CuratedBook(
+                        id = "pub_alicia",
+                        title = "Alicia en el País de las Maravillas",
+                        author = "Lewis Carroll",
+                        coverUrl = "https://covers.openlibrary.org/b/id/8314134-L.jpg",
+                        summary = "Al caer por una madriguera, Alicia entra en un mundo mágico habitado por personajes inolvidables: el Sombrerero Loco, el Conejo Blanco y la Reina de Corazones.",
+                        category = "Fantasía Clásica",
+                        isPublicDomain = true,
+                        publicDownloadUrl = "https://www.gutenberg.org/ebooks/11.epub.images",
+                        approximatePrice = "Gratis (Dominio Público)",
+                        year = "1865"
                     )
                 )
             ),

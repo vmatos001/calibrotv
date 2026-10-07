@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
@@ -82,6 +83,7 @@ import com.example.calibretv.ui.components.Book3DView
 import com.example.calibretv.ui.components.TvNavTab
 import com.example.calibretv.ui.components.TvProfilePill
 import com.example.calibretv.ui.components.TvSidebar
+import com.example.calibretv.ui.components.UniversalSearchModal
 import com.example.calibretv.ui.components.UserProfilesDialog
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.focus.FocusRequester
@@ -183,17 +185,33 @@ fun YourBooksScreen(
     val textSecondaryColor = if (isDarkTheme) TextSecondary else InkSecondary
     val textMutedColor = if (isDarkTheme) TextMuted else InkMuted
 
-    val isAnyModalOpen = bookToManage != null || bookToDelete != null || showUserProfilesModal
+    var isSearchOpen by remember { mutableStateOf(false) }
+    val isAnyModalOpen = bookToManage != null || bookToDelete != null || showUserProfilesModal || isSearchOpen
 
     BackHandler {
-        onNavigateToHome()
+        if (isSearchOpen) {
+            isSearchOpen = false
+        } else {
+            onNavigateToHome()
+        }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(screenBg)
-    ) {
+    if (isSearchOpen) {
+        UniversalSearchModal(
+            repository = repository,
+            isDarkTheme = isDarkTheme,
+            onBookSelected = { book ->
+                isSearchOpen = false
+                onBookSelected(book)
+            },
+            onDismiss = { isSearchOpen = false }
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(screenBg)
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -209,6 +227,43 @@ fun YourBooksScreen(
                     .fillMaxWidth()
                     .padding(start = 20.dp, end = 36.dp, top = 14.dp, bottom = 10.dp)
             ) {
+                // Botón de Búsqueda Universal (D-Pad navegable)
+                var isSearchBtnFocused by remember { mutableStateOf(false) }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            if (isSearchBtnFocused) AmberWarm
+                            else if (isDarkTheme) Color.White.copy(alpha = 0.08f)
+                            else Color.Black.copy(alpha = 0.05f)
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = if (isSearchBtnFocused) AmberWarm else (if (isDarkTheme) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.1f)),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                        .clickable { isSearchOpen = true }
+                        .onFocusChanged { isSearchBtnFocused = it.isFocused }
+                        .focusable()
+                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Buscar",
+                        tint = if (isSearchBtnFocused) Color(0xFF131316) else if (isDarkTheme) AmberWarm else InkPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Buscar libros o clásicos...",
+                        color = if (isSearchBtnFocused) Color(0xFF131316) else if (isDarkTheme) TextSecondary else InkSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
                 Text(
                     text = "TUS LIBROS • MEMORIA TV",
                     color = textPrimaryColor,
@@ -393,26 +448,28 @@ fun YourBooksScreen(
     }
 
         // Rail de Navegación Lateral Flotante (Overlay)
-        TvSidebar(
-            modifier = Modifier.align(Alignment.CenterStart),
-            currentTab = TvNavTab.TUS_LIBROS,
-            onTabSelected = { tab ->
-                when (tab) {
-                    TvNavTab.HOME -> onNavigateToHome()
-                    TvNavTab.BIBLIOTECA -> onNavigateToLibrary()
-                    TvNavTab.TUS_LIBROS -> {}
-                    TvNavTab.LECTOR_3D -> onNavigateToReader()
-                    TvNavTab.AJUSTES -> onNavigateToSettings()
-                }
-            },
-            isDarkTheme = isDarkTheme,
-            onToggleTheme = {
-                val newTheme = !isDarkTheme
-                isDarkTheme = newTheme
-                coroutineScope.launch { prefs.setDarkTheme(newTheme) }
-            },
-            focusRequester = sidebarFocusRequester
-        )
+        if (!isSearchOpen) {
+            TvSidebar(
+                modifier = Modifier.align(Alignment.CenterStart),
+                currentTab = TvNavTab.TUS_LIBROS,
+                onTabSelected = { tab ->
+                    when (tab) {
+                        TvNavTab.HOME -> onNavigateToHome()
+                        TvNavTab.BIBLIOTECA -> onNavigateToLibrary()
+                        TvNavTab.TUS_LIBROS -> {}
+                        TvNavTab.LECTOR_3D -> onNavigateToReader()
+                        TvNavTab.AJUSTES -> onNavigateToSettings()
+                    }
+                },
+                isDarkTheme = isDarkTheme,
+                onToggleTheme = {
+                    val newTheme = !isDarkTheme
+                    isDarkTheme = newTheme
+                    coroutineScope.launch { prefs.setDarkTheme(newTheme) }
+                },
+                focusRequester = sidebarFocusRequester
+            )
+        }
     }
 
     // Modal de Gestión / Lectura
@@ -517,6 +574,8 @@ fun YourBooksScreen(
             },
             onDismiss = { showUserProfilesModal = false }
         )
+    }
+
     }
 }
 
