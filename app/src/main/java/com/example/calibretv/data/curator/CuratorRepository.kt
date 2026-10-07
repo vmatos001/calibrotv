@@ -32,10 +32,17 @@ object CuratorRepository {
      */
     fun getCuratedSections(): List<CuratorSection> {
         val cms = cachedCmsSections
+        val offline = getOfflineCuratedSections()
         if (!cms.isNullOrEmpty()) {
-            return cms
+            val combined = cms.toMutableList()
+            for (sec in offline) {
+                if (combined.none { it.id == sec.id || it.name.equals(sec.name, ignoreCase = true) }) {
+                    combined.add(sec)
+                }
+            }
+            return combined
         }
-        return getOfflineCuratedSections()
+        return offline
     }
 
     private const val FIRESTORE_BASE = "https://firestore.googleapis.com/v1/projects/bookspread-app-2026/databases/(default)/documents"
@@ -231,7 +238,9 @@ object CuratorRepository {
     }
 
     fun getAllCuratedBooks(): List<CuratedBook> {
-        return getCuratedSections().flatMap { it.books }.distinctBy { it.id }
+        val cmsBooks = cachedCmsSections?.flatMap { it.books } ?: emptyList()
+        val offlineBooks = getOfflineCuratedSections().flatMap { it.books }
+        return (cmsBooks + offlineBooks).distinctBy { it.id }
     }
 
     suspend fun fetchHeroBanner(cmsUrl: String? = null, language: String = "es"): HeroBanner? {
@@ -419,6 +428,96 @@ object CuratorRepository {
                         publicDownloadUrl = "https://www.gutenberg.org/ebooks/11.epub.images",
                         approximatePrice = "Gratis (Dominio Público)",
                         year = "1865"
+                    ),
+                    CuratedBook(
+                        id = "pub_verne_viaje",
+                        title = "Viaje al Centro de la Tierra",
+                        author = "Julio Verne",
+                        coverUrl = "https://covers.openlibrary.org/b/id/8235116-L.jpg",
+                        summary = "El profesor Otto Lidenbrock y su sobrino Axel descifran un manuscrito rúnico y descienden al interior del planeta a través de un cráter en Islandia, descubriendo un prodigioso mundo subterráneo lleno de océanos perdidos y seres prehistóricos.",
+                        category = "Aventuras Clásicas",
+                        isPublicDomain = true,
+                        publicDownloadUrl = "https://www.gutenberg.org/ebooks/4791.epub.images",
+                        approximatePrice = "Gratis (Dominio Público)",
+                        year = "1864"
+                    ),
+                    CuratedBook(
+                        id = "pub_verne_veinte_mil",
+                        title = "Veinte Mil Leguas de Viaje Submarino",
+                        author = "Julio Verne",
+                        coverUrl = "https://covers.openlibrary.org/b/id/8739194-L.jpg",
+                        summary = "A bordo del mítico submarino Nautilus, el enigmático Capitán Nemo surca los abismos marinos con un ideal implacable de libertad y rebeldía frente a las potencias mundiales. Una de las mayores cumbres de la literatura fantástica.",
+                        category = "Aventuras Científicas",
+                        isPublicDomain = true,
+                        publicDownloadUrl = "https://www.gutenberg.org/ebooks/164.epub.images",
+                        approximatePrice = "Gratis (Dominio Público)",
+                        year = "1870"
+                    ),
+                    CuratedBook(
+                        id = "pub_verne_vuelta_mundo",
+                        title = "La Vuelta al Mundo en Ochenta Días",
+                        author = "Julio Verne",
+                        coverUrl = "https://covers.openlibrary.org/b/id/8226191-L.jpg",
+                        summary = "El flemático caballero británico Phileas Fogg y su leal asistente Picaporte aceptan una osada apuesta en el Reform Club de Londres: circunnavegar el planeta en tan solo 80 días, superando trenes, vapores, elefantes y persecuciones.",
+                        category = "Aventuras y Viajes",
+                        isPublicDomain = true,
+                        publicDownloadUrl = "https://www.gutenberg.org/ebooks/103.epub.images",
+                        approximatePrice = "Gratis (Dominio Público)",
+                        year = "1872"
+                    ),
+                    CuratedBook(
+                        id = "com_king_it",
+                        title = "It (Eso)",
+                        author = "Stephen King",
+                        coverUrl = "https://covers.openlibrary.org/b/id/8569284-L.jpg",
+                        summary = "En el sombrío pueblo de Derry, Maine, siete amigos de la infancia se enfrentan a un mal ancestral metamórfico que acecha bajo la forma de Pennywise el payaso bailarín. Veintiocho años después, el grupo debe reunirse para destruir la pesadilla de una vez por todas.",
+                        category = "Terror y Suspense",
+                        isPublicDomain = false,
+                        affiliateQrUrl = "https://www.amazon.es/dp/8497593790?tag=calibrotv-21",
+                        approximatePrice = "12,95 €",
+                        year = "1986",
+                        difficultyLevel = 4,
+                        storeLinks = BookStoreLinks(
+                            amazon = "https://www.amazon.es/dp/8497593790?tag=calibrotv-21",
+                            casaDelLibro = "https://www.casadellibro.com/libro-it-edicion-bolsillo/9788497593793/1089920",
+                            googlePlay = "https://play.google.com/store/search?q=It+Stephen+King&c=books"
+                        )
+                    ),
+                    CuratedBook(
+                        id = "com_king_resplandor",
+                        title = "El Resplandor",
+                        author = "Stephen King",
+                        coverUrl = "https://covers.openlibrary.org/b/id/12376585-L.jpg",
+                        summary = "Jack Torrance acepta el trabajo de vigilante de invierno en el colosal y desolado Hotel Overlook. Aislados por la nieve, siniestras entidades espectrales manipulan su cordura mientras su hijo Danny percibe los horrores con su don telepático.",
+                        category = "Terror Psicológico",
+                        isPublicDomain = false,
+                        affiliateQrUrl = "https://www.amazon.es/dp/8497593723?tag=calibrotv-21",
+                        approximatePrice = "11,95 €",
+                        year = "1977",
+                        difficultyLevel = 4,
+                        storeLinks = BookStoreLinks(
+                            amazon = "https://www.amazon.es/dp/8497593723?tag=calibrotv-21",
+                            casaDelLibro = "https://www.casadellibro.com/libro-el-resplandor/9788497593724/1089913",
+                            googlePlay = "https://play.google.com/store/search?q=El+resplandor+Stephen+King&c=books"
+                        )
+                    ),
+                    CuratedBook(
+                        id = "com_king_misery",
+                        title = "Misery",
+                        author = "Stephen King",
+                        coverUrl = "https://covers.openlibrary.org/b/id/8259296-L.jpg",
+                        summary = "El famoso escritor Paul Sheldon queda atrapado en una ventisca y es rescatado por Annie Wilkes, su admiradora más devota. Al enterarse de que su autor favorito ha acabado con la heroína de su saga, la admiración se transforma en un implacable y perturbador secuestro.",
+                        category = "Suspense Psicológico",
+                        isPublicDomain = false,
+                        affiliateQrUrl = "https://www.amazon.es/dp/8497595467?tag=calibrotv-21",
+                        approximatePrice = "10,95 €",
+                        year = "1987",
+                        difficultyLevel = 4,
+                        storeLinks = BookStoreLinks(
+                            amazon = "https://www.amazon.es/dp/8497595467?tag=calibrotv-21",
+                            casaDelLibro = "https://www.casadellibro.com/libro-misery/9788497595469/1089914",
+                            googlePlay = "https://play.google.com/store/search?q=Misery+Stephen+King&c=books"
+                        )
                     )
                 )
             ),

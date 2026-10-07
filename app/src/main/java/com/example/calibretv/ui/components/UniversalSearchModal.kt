@@ -133,6 +133,7 @@ fun UniversalSearchModal(
 
     var selectedBookResult by remember { mutableStateOf<UnifiedBookResult?>(null) }
     var curatedModalBook by remember { mutableStateOf<CuratedBook?>(null) }
+    var showFullSummaryDialog by remember { mutableStateOf(false) }
 
     // Estado de descarga activa en la TV
     var downloadingBookId by remember { mutableStateOf<String?>(null) }
@@ -141,7 +142,6 @@ fun UniversalSearchModal(
     val downloadedIds = remember { mutableSetOf<String>() }
 
     var searchJob by remember { mutableStateOf<Job?>(null) }
-    val searchInputFocusRequester = remember { FocusRequester() }
     val firstChipFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
@@ -149,6 +149,22 @@ fun UniversalSearchModal(
         try {
             firstChipFocusRequester.requestFocus()
         } catch (_: Exception) {}
+    }
+
+    // Auto-enriquecimiento de sinopsis en español al seleccionar cualquier libro
+    LaunchedEffect(selectedBookResult?.id) {
+        val current = selectedBookResult ?: return@LaunchedEffect
+        if (current.summary.isBlank() ||
+            current.summary.contains("preservada por Project Gutenberg") ||
+            current.summary.contains("Registro editorial de Open Library") ||
+            current.summary.contains("Bestseller editorial registrado") ||
+            current.summary.length < 50
+        ) {
+            val rich = BookSearchManager.fetchRichSummary(current.title, current.author)
+            if (rich.isNotBlank() && selectedBookResult?.id == current.id) {
+                selectedBookResult = current.copy(summary = rich)
+            }
+        }
     }
 
     // Chips de sugerencias rápidas para el control remoto
@@ -193,15 +209,20 @@ fun UniversalSearchModal(
             commercialResults = BookSearchManager.searchCommercial(q)
             publicDomainResults = BookSearchManager.searchCuratedPublicDomain(q)
 
+            val immediateFound = localResults + publicDomainResults + commercialResults
+            if (immediateFound.isNotEmpty()) {
+                selectedBookResult = immediateFound.first()
+            }
+
             // Esperar un instante antes de llamadas remotas
-            delay(350L)
+            delay(200L)
             val fullResults = BookSearchManager.searchAll(q, repository)
             localResults = fullResults.localResults
             publicDomainResults = fullResults.publicDomainResults
             commercialResults = fullResults.commercialResults
             isSearching = false
 
-            // Auto-seleccionar el primer resultado para previsualizar
+            // Auto-seleccionar el primer resultado para previsualizar si no coincide
             val allFound = localResults + publicDomainResults + commercialResults
             if (allFound.isNotEmpty() && (selectedBookResult == null || !allFound.any { it.id == selectedBookResult?.id })) {
                 selectedBookResult = allFound.first()
@@ -214,7 +235,9 @@ fun UniversalSearchModal(
     }
 
     BackHandler {
-        if (curatedModalBook != null) {
+        if (showFullSummaryDialog) {
+            showFullSummaryDialog = false
+        } else if (curatedModalBook != null) {
             curatedModalBook = null
         } else {
             onDismiss()
@@ -336,16 +359,15 @@ fun UniversalSearchModal(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Campo de Entrada de Texto con estilo TV Box
-                var isInputFocused by remember { mutableStateOf(false) }
+                // Visor de Entrada de Búsqueda (Sin activar teclado virtual de Fire OS)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .background(SurfaceCard)
                         .border(
-                            width = if (isInputFocused) 2.dp else 1.dp,
-                            color = if (isInputFocused) AmberWarm else Color.White.copy(alpha = 0.12f),
+                            width = 1.dp,
+                            color = if (searchQuery.isNotEmpty()) AmberWarm.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.12f),
                             shape = RoundedCornerShape(12.dp)
                         )
                         .padding(horizontal = 14.dp, vertical = 10.dp)
@@ -358,55 +380,58 @@ fun UniversalSearchModal(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
-                            tint = if (isInputFocused) AmberWarm else TextMuted,
+                            tint = if (searchQuery.isNotEmpty()) AmberWarm else TextMuted,
                             modifier = Modifier.size(20.dp)
                         )
                         Box(modifier = Modifier.weight(1f)) {
                             if (searchQuery.isEmpty()) {
                                 Text(
-                                    text = "Escribe un título, autor o clásico (ej: Drácula, El Principito...)",
+                                    text = "Escribe abajo con el control o elige una sugerencia...",
                                     color = TextMuted.copy(alpha = 0.6f),
-                                    fontSize = 14.sp
+                                    fontSize = 13.sp
+                                )
+                            } else {
+                                Text(
+                                    text = searchQuery,
+                                    color = TextPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
-                            BasicTextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                textStyle = TextStyle(
-                                    color = TextPrimary,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium
-                                ),
-                                cursorBrush = SolidColor(AmberWarm),
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(searchInputFocusRequester)
-                                    .onFocusChanged { isInputFocused = it.isFocused }
-                            )
                         }
 
                         if (searchQuery.isNotEmpty()) {
                             var isClearFocused by remember { mutableStateOf(false) }
                             Box(
                                 modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(CircleShape)
+                                    .clip(RoundedCornerShape(8.dp))
                                     .background(if (isClearFocused) AmberWarm else Color.White.copy(alpha = 0.1f))
                                     .clickable {
                                         searchQuery = ""
                                         selectedBookResult = null
                                     }
                                     .onFocusChanged { isClearFocused = it.isFocused }
-                                    .focusable(),
+                                    .focusable()
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Clear,
-                                    contentDescription = "Limpiar",
-                                    tint = if (isClearFocused) Color.Black else TextPrimary,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Clear,
+                                        contentDescription = "Limpiar",
+                                        tint = if (isClearFocused) Color.Black else TextPrimary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "Limpiar",
+                                        color = if (isClearFocused) Color.Black else TextPrimary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
 
@@ -788,21 +813,55 @@ fun UniversalSearchModal(
                             Spacer(modifier = Modifier.height(14.dp))
 
                             // Caja de Sinopsis / Descripción
+                            val isLongSummary = book.summary.length > 150 || book.summary.lines().size > 4
+                            var isSummaryCardFocused by remember { mutableStateOf(false) }
+
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(SurfaceCard)
-                                    .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(10.dp))
+                                    .background(if (isSummaryCardFocused) SurfaceFocused else SurfaceCard)
+                                    .border(
+                                        width = if (isSummaryCardFocused) 1.5.dp else 1.dp,
+                                        color = if (isSummaryCardFocused) AmberWarm else Color.White.copy(alpha = 0.08f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .then(
+                                        if (isLongSummary) {
+                                            Modifier
+                                                .clickable { showFullSummaryDialog = true }
+                                                .onFocusChanged { isSummaryCardFocused = it.isFocused }
+                                                .focusable()
+                                        } else Modifier
+                                    )
                                     .padding(12.dp)
                             ) {
-                                Text(
-                                    text = if (book.summary.isNotBlank()) book.summary else "Una obra literaria indispensable disponible para disfrutar en pantalla grande con CalibroTV 3D.",
-                                    color = TextSecondary,
-                                    fontSize = 11.sp,
-                                    lineHeight = 16.sp,
-                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        text = if (book.summary.isNotBlank()) book.summary else "Una obra literaria indispensable disponible para disfrutar en pantalla grande con CalibroTV 3D.",
+                                        color = TextSecondary,
+                                        fontSize = 11.sp,
+                                        lineHeight = 16.sp,
+                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                        maxLines = 4,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+
+                                    if (isLongSummary) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isSummaryCardFocused) "▶ [OK] Leer reseña completa..." else "📖 Leer más...",
+                                                color = AmberWarm,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -1012,6 +1071,100 @@ fun UniversalSearchModal(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Modal Flotante de Reseña y Sinopsis Completa con Navegación D-Pad
+        if (showFullSummaryDialog && selectedBookResult != null) {
+            val currentSummaryBook = selectedBookResult!!
+            val closeBtnFocusRequester = remember { FocusRequester() }
+            LaunchedEffect(Unit) {
+                delay(120L)
+                try { closeBtnFocusRequester.requestFocus() } catch (_: Exception) {}
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.85f))
+                    .clickable { showFullSummaryDialog = false },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.72f)
+                        .fillMaxHeight(0.82f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(BackgroundDark)
+                        .border(1.5.dp, AmberWarm.copy(alpha = 0.8f), RoundedCornerShape(16.dp))
+                        .clickable(enabled = false) {}
+                        .padding(28.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            Text(
+                                text = "RESEÑA Y SINOPSIS EDITORIAL",
+                                color = AmberWarm,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 1.2.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = currentSummaryBook.title,
+                                color = TextPrimary,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = FontFamily.Serif
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "por ${currentSummaryBook.author}",
+                                color = AmberWarm,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = currentSummaryBook.summary,
+                                color = TextPrimary.copy(alpha = 0.92f),
+                                fontSize = 13.sp,
+                                lineHeight = 22.sp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        var isCloseSummaryFocused by remember { mutableStateOf(false) }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isCloseSummaryFocused) AmberWarm else SurfaceRaised)
+                                .border(1.dp, if (isCloseSummaryFocused) AmberWarm else Color.White.copy(alpha = 0.15f), RoundedCornerShape(10.dp))
+                                .clickable { showFullSummaryDialog = false }
+                                .onFocusChanged { isCloseSummaryFocused = it.isFocused }
+                                .focusRequester(closeBtnFocusRequester)
+                                .focusable()
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Volver al libro (Cerrar reseña)",
+                                color = if (isCloseSummaryFocused) Color(0xFF131316) else TextPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }

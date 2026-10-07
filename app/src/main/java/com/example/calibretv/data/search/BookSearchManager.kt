@@ -64,13 +64,67 @@ object BookSearchManager {
         OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(4, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.SECONDS)
             .build()
     }
 
     // Cache en memoria para portadas enriquecidas (evita llamadas redundantes a Open Library)
     private val enrichedCoverCache = ConcurrentHashMap<String, String>()
+
+    // Cache en memoria para sinopsis y reseñas enriquecidas (Wikipedia en español y Open Library)
+    private val enrichedSummaryCache = ConcurrentHashMap<String, String>()
+
+    /**
+     * Expande alias comunes de búsqueda para autores y clásicos traducidos al español.
+     * Ejemplo: "julio verne" -> "Jules Verne" (Gutenberg indexa nombres oficiales franceses/ingleses).
+     */
+    fun getQuerySearchTerms(query: String): List<String> {
+        val q = query.trim().lowercase()
+        val terms = mutableListOf<String>()
+        terms.add(query.trim())
+
+        when {
+            q.contains("julio verne") -> {
+                terms.add("Jules Verne")
+                terms.add("Verne")
+            }
+            q.contains("verne") -> {
+                terms.add("Jules Verne")
+            }
+            q.contains("alejandro dumas") -> {
+                terms.add("Alexandre Dumas")
+            }
+            q.contains("principito") -> {
+                terms.add("Saint-Exupery")
+                terms.add("Antoine de Saint-Exupéry")
+            }
+            q.contains("quijote") -> {
+                terms.add("Cervantes")
+                terms.add("Don Quijote")
+            }
+            q.contains("poe") -> {
+                terms.add("Edgar Allan Poe")
+            }
+            q.contains("tolstoi") -> {
+                terms.add("Leo Tolstoy")
+                terms.add("Tolstoy")
+            }
+            q.contains("dostoievski") || q.contains("dostoyevski") -> {
+                terms.add("Fyodor Dostoyevsky")
+            }
+            q.contains("stephen king") || q.contains("king") -> {
+                terms.add("Stephen King")
+            }
+            q.contains("lovecraft") -> {
+                terms.add("H. P. Lovecraft")
+            }
+            q.contains("conan doyle") -> {
+                terms.add("Arthur Conan Doyle")
+            }
+        }
+        return terms.distinct()
+    }
 
     // =========================================================================
     // 1. BÚSQUEDA LOCAL ("TUS LIBROS" / ROOM)
@@ -81,12 +135,18 @@ object BookSearchManager {
         val filtered = if (q.isBlank()) {
             allCached.take(20)
         } else {
+            val terms = getQuerySearchTerms(q).map { it.lowercase() }
             allCached.filter { b ->
-                b.title.lowercase().contains(q) ||
-                b.author.lowercase().contains(q) ||
-                b.category.lowercase().contains(q) ||
-                b.tags.any { it.lowercase().contains(q) } ||
-                b.shelves.any { it.lowercase().contains(q) }
+                val titleLow = b.title.lowercase()
+                val authorLow = b.author.lowercase()
+                val catLow = b.category.lowercase()
+                terms.any { t ->
+                    titleLow.contains(t) ||
+                    authorLow.contains(t) ||
+                    catLow.contains(t) ||
+                    b.tags.any { it.lowercase().contains(t) } ||
+                    b.shelves.any { it.lowercase().contains(t) }
+                }
             }
         }
 
@@ -122,11 +182,18 @@ object BookSearchManager {
         val filtered = if (q.isBlank()) {
             allCurated.take(20)
         } else {
+            val terms = getQuerySearchTerms(q).map { it.lowercase() }
             allCurated.filter { c ->
-                c.title.lowercase().contains(q) ||
-                c.author.lowercase().contains(q) ||
-                c.category.lowercase().contains(q) ||
-                c.summary.lowercase().contains(q)
+                val titleLow = c.title.lowercase()
+                val authorLow = c.author.lowercase()
+                val catLow = c.category.lowercase()
+                val sumLow = c.summary.lowercase()
+                terms.any { t ->
+                    titleLow.contains(t) ||
+                    authorLow.contains(t) ||
+                    catLow.contains(t) ||
+                    sumLow.contains(t)
+                }
             }
         }
 
@@ -151,28 +218,45 @@ object BookSearchManager {
 
     /**
      * Busca en Project Gutenberg a través de la API rápida de Gutendex.
+     * Si la consulta en español no devuelve resultados (ej: "Julio Verne"),
+     * recurre automáticamente a los alias oficiales (ej: "Jules Verne").
      */
     suspend fun searchGutenberg(query: String): List<UnifiedBookResult> = withContext(Dispatchers.IO) {
         val q = query.trim()
         if (q.isBlank()) return@withContext emptyList()
 
+        val searchTerms = getQuerySearchTerms(q)
+        // Usar término prioritario canónico para acelerar búsqueda (evita esperas redundantes)
+        val primaryTerm = if (searchTerms.size > 1) searchTerms[1] else searchTerms[0]
+        val res = executeGutenbergSearch(primaryTerm)
+        if (res.isNotEmpty()) {
+            return@withContext res
+        }
+
+        if (searchTerms.size > 1 && primaryTerm != searchTerms[0]) {
+            return@withContext executeGutenbergSearch(searchTerms[0])
+        }
+        emptyList()
+    }
+
+    private fun executeGutenbergSearch(q: String): List<UnifiedBookResult> {
         try {
             val encoded = URLEncoder.encode(q, "UTF-8")
             val url = "https://gutendex.com/books/?search=$encoded"
             val req = Request.Builder()
                 .url(url)
-                .header("User-Agent", "CalibroTV/3.45 (Android TV)")
+                .header("User-Agent", "CalibroTV/3.50 (Android TV)")
                 .build()
 
             val response = httpClient.newCall(req).execute()
-            if (!response.isSuccessful) return@withContext emptyList()
+            if (!response.isSuccessful) return emptyList()
 
-            val body = response.body?.string() ?: return@withContext emptyList()
+            val body = response.body?.string() ?: return emptyList()
             val json = JSONObject(body)
-            val results = json.optJSONArray("results") ?: return@withContext emptyList()
+            val results = json.optJSONArray("results") ?: return emptyList()
 
             val list = mutableListOf<UnifiedBookResult>()
-            val maxItems = minOf(results.length(), 6)
+            val maxItems = minOf(results.length(), 8)
 
             for (i in 0 until maxItems) {
                 val item = results.optJSONObject(i) ?: continue
@@ -213,15 +297,15 @@ object BookSearchManager {
                     )
                 )
             }
-            list
+            return list
         } catch (e: Exception) {
-            Log.w(TAG, "Error consultando Gutenberg: ${e.message}")
-            emptyList()
+            Log.w(TAG, "Error consultando Gutenberg con término '$q': ${e.message}")
+            return emptyList()
         }
     }
 
     /**
-     * Busca en Open Library (Internet Archive) para libros de dominio público y portadas de alta fidelidad.
+     * Busca en Open Library (Internet Archive) para libros de dominio público y novedades editoriales.
      */
     suspend fun searchOpenLibrary(query: String): List<UnifiedBookResult> = withContext(Dispatchers.IO) {
         val q = query.trim()
@@ -229,10 +313,10 @@ object BookSearchManager {
 
         try {
             val encoded = URLEncoder.encode(q, "UTF-8")
-            val url = "https://openlibrary.org/search.json?q=$encoded&fields=key,title,author_name,cover_i,ia,ebook_access&limit=6"
+            val url = "https://openlibrary.org/search.json?q=$encoded&fields=key,title,author_name,cover_i,ia,ebook_access&limit=8"
             val req = Request.Builder()
                 .url(url)
-                .header("User-Agent", "CalibroTV/3.45 (Android TV)")
+                .header("User-Agent", "CalibroTV/3.50 (Android TV)")
                 .build()
 
             val response = httpClient.newCall(req).execute()
@@ -264,15 +348,21 @@ object BookSearchManager {
                     "https://archive.org/download/$iaId/$iaId.epub"
                 } else null
 
+                val isCommercial = downloadUrl == null
+
                 list.add(
                     UnifiedBookResult(
                         id = "ol_${doc.optString("key", i.toString()).replace("/", "_")}",
                         title = cleanTitle(rawTitle),
                         author = author,
                         coverUrl = coverUrl,
-                        summary = "Registro editorial de Open Library / Internet Archive.",
-                        category = if (downloadUrl != null) SearchCategory.PUBLIC_DOMAIN else SearchCategory.COMMERCIAL,
-                        sourceName = "Open Library",
+                        summary = if (isCommercial) {
+                            "Bestseller editorial registrado en el catálogo internacional de Open Library."
+                        } else {
+                            "Registro editorial de Open Library / Internet Archive con descarga libre."
+                        },
+                        category = if (isCommercial) SearchCategory.COMMERCIAL else SearchCategory.PUBLIC_DOMAIN,
+                        sourceName = if (isCommercial) "Bestseller Editorial" else "Open Library",
                         downloadUrl = downloadUrl
                     )
                 )
@@ -293,10 +383,14 @@ object BookSearchManager {
         val filtered = if (q.isBlank()) {
             allCurated
         } else {
-            allCurated.filter {
-                it.title.lowercase().contains(q) ||
-                it.author.lowercase().contains(q) ||
-                it.category.lowercase().contains(q)
+            val terms = getQuerySearchTerms(q).map { it.lowercase() }
+            allCurated.filter { item ->
+                val titleLow = item.title.lowercase()
+                val authorLow = item.author.lowercase()
+                val catLow = item.category.lowercase()
+                terms.any { t ->
+                    titleLow.contains(t) || authorLow.contains(t) || catLow.contains(t)
+                }
             }
         }
 
@@ -317,7 +411,7 @@ object BookSearchManager {
     }
 
     // =========================================================================
-    // 4. ESTRATEGIA HÍBRIDA DE ENRIQUECIMIENTO DE PORTADAS HD
+    // 4. ESTRATEGIA HÍBRIDA DE ENRIQUECIMIENTO DE PORTADAS HD Y SINOPSIS
     // =========================================================================
 
     /**
@@ -338,7 +432,7 @@ object BookSearchManager {
             val url = "https://openlibrary.org/search.json?q=$q&fields=cover_i&limit=1"
             val req = Request.Builder()
                 .url(url)
-                .header("User-Agent", "CalibroTV/3.45 (Android TV)")
+                .header("User-Agent", "CalibroTV/3.50 (Android TV)")
                 .build()
 
             val resp = httpClient.newCall(req).execute()
@@ -360,6 +454,90 @@ object BookSearchManager {
         currentCoverUrl
     }
 
+    /**
+     * Obtiene una sinopsis rica, atractiva y literaria en español mediante
+     * la API REST de Wikipedia en español (https://es.wikipedia.org/api/rest_v1/page/summary)
+     * o mediante Open Library Works.
+     */
+    suspend fun fetchRichSummary(title: String, author: String): String = withContext(Dispatchers.IO) {
+        val cacheKey = "$title|$author".lowercase().trim()
+        enrichedSummaryCache[cacheKey]?.let { return@withContext it }
+
+        val cleanTitleStr = cleanTitle(title)
+            .replace(Regex("(?i)\\b(vol\\.?|tomo|parte|libro|edición|ed\\.?)\\s*\\d+.*"), "")
+            .trim()
+
+        val candidates = listOf(
+            cleanTitleStr,
+            "${cleanTitleStr}_(novela)",
+            "${cleanTitleStr}_(libro)"
+        ).distinct()
+
+        for (candidate in candidates) {
+            try {
+                val encoded = URLEncoder.encode(candidate.replace(" ", "_"), "UTF-8")
+                val url = "https://es.wikipedia.org/api/rest_v1/page/summary/$encoded"
+                val req = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "CalibroTV/3.50 (Android TV; info@calibrotv.app)")
+                    .build()
+
+                val resp = httpClient.newCall(req).execute()
+                if (resp.isSuccessful) {
+                    val body = resp.body?.string() ?: continue
+                    val json = JSONObject(body)
+                    val extract = json.optString("extract", "")
+                    if (extract.isNotBlank() && extract.length > 30 && !extract.contains("puede referirse a:")) {
+                        enrichedSummaryCache[cacheKey] = extract
+                        return@withContext extract
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        // Si Wikipedia directa no devolvió, intentar Open Library Works
+        try {
+            val q = URLEncoder.encode("$cleanTitleStr $author", "UTF-8")
+            val searchUrl = "https://openlibrary.org/search.json?q=$q&fields=key&limit=1"
+            val req = Request.Builder()
+                .url(searchUrl)
+                .header("User-Agent", "CalibroTV/3.50 (Android TV)")
+                .build()
+
+            val resp = httpClient.newCall(req).execute()
+            if (resp.isSuccessful) {
+                val body = resp.body?.string() ?: ""
+                val json = JSONObject(body)
+                val docs = json.optJSONArray("docs")
+                if (docs != null && docs.length() > 0) {
+                    val key = docs.getJSONObject(0).optString("key", "")
+                    if (key.isNotBlank()) {
+                        val workUrl = "https://openlibrary.org$key.json"
+                        val workResp = httpClient.newCall(Request.Builder().url(workUrl).build()).execute()
+                        if (workResp.isSuccessful) {
+                            val workBody = workResp.body?.string() ?: ""
+                            val workJson = JSONObject(workBody)
+                            val descObj = workJson.opt("description")
+                            val descText = when (descObj) {
+                                is String -> descObj
+                                is JSONObject -> descObj.optString("value", "")
+                                else -> ""
+                            }
+                            if (descText.isNotBlank() && descText.length > 30) {
+                                val cleanedDesc = descText.replace(Regex("\\[.*?\\]\\(.*?\\)"), "").trim()
+                                enrichedSummaryCache[cacheKey] = cleanedDesc
+                                return@withContext cleanedDesc
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        val fallback = "Obra literaria destacada de $author, disponible para disfrutar con la mejor experiencia visual en CalibroTV."
+        fallback
+    }
+
     // =========================================================================
     // 5. BÚSQUEDA INTEGRADA TOTAL (UNIFIED SEARCH)
     // =========================================================================
@@ -377,7 +555,7 @@ object BookSearchManager {
      * Ejecuta la búsqueda concurrente a través de las 3 fuentes:
      * - Memoria local ("Tus Libros")
      * - Obras de Dominio Público con portadas enriquecidas (Gutenberg, Open Library, Standard Ebooks)
-     * - Bestsellers Comerciales
+     * - Bestsellers Comerciales (Curados locales + Novedades de Open Library)
      */
     suspend fun searchAll(
         query: String,
@@ -397,9 +575,21 @@ object BookSearchManager {
         val curatedPublicDeferred = async(Dispatchers.Default) { searchCuratedPublicDomain(cleanQuery) }
         val commercialDeferred = async(Dispatchers.Default) { searchCommercial(cleanQuery) }
 
-        // 2. Remotos (Gutenberg + Open Library en paralelo)
-        val gutenbergDeferred = async(Dispatchers.IO) { searchGutenberg(cleanQuery) }
-        val openLibraryDeferred = async(Dispatchers.IO) { searchOpenLibrary(cleanQuery) }
+        // 2. Remotos (Gutenberg + Open Library en paralelo con tiempo límite defensivo de 4s)
+        val gutenbergDeferred = async(Dispatchers.IO) {
+            try {
+                kotlinx.coroutines.withTimeoutOrNull(4000L) { searchGutenberg(cleanQuery) } ?: emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+        val openLibraryDeferred = async(Dispatchers.IO) {
+            try {
+                kotlinx.coroutines.withTimeoutOrNull(4500L) { searchOpenLibrary(cleanQuery) } ?: emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
 
         val localList = localDeferred.await()
         val curatedPublicList = curatedPublicDeferred.await()
@@ -438,8 +628,11 @@ object BookSearchManager {
             if (seenTitles.add(key)) combinedPublic.add(item)
         }
 
-        // 4. Deduplicar Comerciales (excluyendo los que ya están en local o dominio público)
-        val finalCommercial = commercialList.filter { c ->
+        // 4. Unificar Comerciales (Curados locales + Comerciales de Open Library) deduplicando
+        val openLibraryCommercial = openLibraryList.filter { it.category == SearchCategory.COMMERCIAL }
+        val combinedCommercial = (commercialList + openLibraryCommercial).distinctBy { normalizeTitle(it.title) }
+
+        val finalCommercial = combinedCommercial.filter { c ->
             val key = normalizeTitle(c.title)
             !seenTitles.contains(key) && localList.none { normalizeTitle(it.title) == key }
         }
