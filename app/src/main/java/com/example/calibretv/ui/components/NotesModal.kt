@@ -35,7 +35,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -113,7 +112,7 @@ fun NotesModal(
     var noteToDelete by remember { mutableStateOf<String?>(null) }
 
     val dateFormat = remember {
-        SimpleDateFormat("dd/MM/yyyy • HH:mm", Locale.getDefault())
+        SimpleDateFormat("dd/MM/yy • HH:mm", Locale.getDefault())
     }
 
     fun dismissAnimated() {
@@ -197,11 +196,11 @@ fun NotesModal(
             ) {
                 Column(
                     modifier = Modifier
-                        .width(460.dp)
+                        .width(276.dp)
                         .fillMaxHeight()
-                        .padding(top = 18.dp, bottom = 18.dp, end = 20.dp)
+                        .padding(top = 16.dp, bottom = 16.dp, end = 16.dp)
                         .clickable(enabled = false) {}, // Evita cerrar al hacer click dentro del bento
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // ==========================================
                     // 1. CONTENEDOR BENTO SUPERIOR: QR COMPANION
@@ -213,14 +212,25 @@ fun NotesModal(
                             .clip(RoundedCornerShape(18.dp))
                             .background(Color(0xFF16161A).copy(alpha = 0.98f))
                             .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(18.dp))
-                            .padding(16.dp)
+                            .padding(14.dp)
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
-                            // Código QR enmarcado en blanco para óptimo contraste con cámaras
+                            // Título arriba del recuadro del QR
+                            Text(
+                                text = "Escribe desde tu móvil",
+                                color = TextPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Recuadro del QR
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
@@ -232,11 +242,11 @@ fun NotesModal(
                                     Image(
                                         bitmap = qrBitmap!!.asImageBitmap(),
                                         contentDescription = "Código QR para escribir notas desde smartphone",
-                                        modifier = Modifier.size(118.dp)
+                                        modifier = Modifier.size(136.dp)
                                     )
                                 } else {
                                     Box(
-                                        modifier = Modifier.size(118.dp),
+                                        modifier = Modifier.size(136.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         CircularProgressIndicator(
@@ -248,70 +258,36 @@ fun NotesModal(
                                 }
                             }
 
-                            // Información y llamada a la acción
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.Center
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Descripción abajo
+                            Text(
+                                text = "Escanea el código QR con tu móvil para agregar notas con teclado táctil.",
+                                color = TextMuted,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Estado Wifi activo
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(AmberWarm.copy(alpha = 0.16f))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.QrCode,
-                                        contentDescription = null,
-                                        tint = AmberWarm,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Text(
-                                        text = "COMPANION MÓVIL",
-                                        color = AmberWarm,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.5.sp
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                Text(
-                                    text = "Escribe desde tu móvil",
-                                    color = TextPrimary,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
+                                        .size(7.dp)
+                                        .background(Color(0xFF4CAF50), CircleShape)
                                 )
-
-                                Spacer(modifier = Modifier.height(4.dp))
-
                                 Text(
-                                    text = "Escanea el código QR con tu smartphone para escribir reflexiones con teclado táctil.",
-                                    color = TextMuted,
-                                    fontSize = 11.sp,
-                                    lineHeight = 15.sp
+                                    text = "Wifi activo",
+                                    color = Color(0xFF81C784),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold
                                 )
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(7.dp)
-                                            .background(Color(0xFF4CAF50), CircleShape)
-                                    )
-                                    Text(
-                                        text = "Sincronización en vivo vía WiFi",
-                                        color = Color(0xFF81C784),
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
                             }
                         }
                     }
@@ -327,7 +303,7 @@ fun NotesModal(
                             .clip(RoundedCornerShape(18.dp))
                             .background(Color(0xFF16161A).copy(alpha = 0.98f))
                             .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(18.dp))
-                            .padding(16.dp)
+                            .padding(14.dp)
                     ) {
                         Column(modifier = Modifier.fillMaxSize()) {
                             // Cabecera Bento Inferior
@@ -338,25 +314,25 @@ fun NotesModal(
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.Edit,
                                         contentDescription = null,
                                         tint = AmberWarm,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
                                     Text(
-                                        text = "Notas del Libro",
+                                        text = "Notas",
                                         color = TextPrimary,
-                                        fontSize = 16.sp,
+                                        fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(6.dp))
                                             .background(Color.White.copy(alpha = 0.08f))
-                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
                                         Text(
                                             text = "${notesList.size}",
@@ -426,23 +402,23 @@ fun NotesModal(
                                         imageVector = Icons.Filled.Edit,
                                         contentDescription = null,
                                         tint = TextMuted.copy(alpha = 0.4f),
-                                        modifier = Modifier.size(46.dp)
+                                        modifier = Modifier.size(36.dp)
                                     )
-                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = "Aún no tienes notas en este libro",
+                                        text = "Aún no tienes notas",
                                         color = TextPrimary,
-                                        fontSize = 14.sp,
+                                        fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = "Apunta la cámara de tu móvil al código QR superior para redactar tu primera nota o reflexión.",
+                                        text = "Escanea el código QR superior para redactar tu primera nota.",
                                         color = TextMuted,
                                         fontSize = 11.sp,
                                         lineHeight = 15.sp,
                                         textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(horizontal = 24.dp)
+                                        modifier = Modifier.padding(horizontal = 8.dp)
                                     )
                                 }
                             } else {
