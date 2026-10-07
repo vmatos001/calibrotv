@@ -213,6 +213,10 @@ fun ReaderScreen(
     var selectedHudCategory by remember { mutableStateOf<ReaderHudCategory?>(null) }
     var showNotesModal by remember { mutableStateOf(false) }
     var showQuoteCardModal by remember { mutableStateOf(false) }
+    var isSelectingQuoteMode by remember { mutableStateOf(false) }
+    var quoteSentences by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedQuoteIndex by remember { mutableIntStateOf(0) }
+    var selectedQuoteText by remember { mutableStateOf("") }
 
     val curlAnim = remember { Animatable(0f) }
     val readerFocusRequester = remember { FocusRequester() }
@@ -512,7 +516,38 @@ fun ReaderScreen(
             .focusable()
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
-                    if (showBottomHud) {
+                    if (isSelectingQuoteMode) {
+                        when (keyEvent.key) {
+                            Key.DirectionRight, Key.DirectionDown -> {
+                                if (quoteSentences.isNotEmpty()) {
+                                    selectedQuoteIndex = (selectedQuoteIndex + 1).coerceAtMost(quoteSentences.lastIndex)
+                                }
+                                true
+                            }
+                            Key.DirectionLeft, Key.DirectionUp -> {
+                                if (quoteSentences.isNotEmpty()) {
+                                    selectedQuoteIndex = (selectedQuoteIndex - 1).coerceAtLeast(0)
+                                }
+                                true
+                            }
+                            Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                                val chosen = quoteSentences.getOrNull(selectedQuoteIndex)
+                                if (!chosen.isNullOrBlank()) {
+                                    selectedQuoteText = chosen
+                                    isSelectingQuoteMode = false
+                                    showQuoteCardModal = true
+                                } else {
+                                    isSelectingQuoteMode = false
+                                }
+                                true
+                            }
+                            Key.Back, Key.Escape -> {
+                                isSelectingQuoteMode = false
+                                true
+                            }
+                            else -> true
+                        }
+                    } else if (showBottomHud) {
                         when (keyEvent.key) {
                             Key.Back, Key.Escape -> {
                                 if (selectedHudCategory != null) {
@@ -623,6 +658,12 @@ fun ReaderScreen(
                     .background(pageBg)
             ) {
                 // 1. Base Layer: Underneath spreads
+                val highlightedSentenceText = if (isSelectingQuoteMode) {
+                    quoteSentences.getOrNull(selectedQuoteIndex) ?: ""
+                } else {
+                    currentSentenceText
+                }
+
                 Row(modifier = Modifier.fillMaxSize()) {
                     // Left Page
                     Box(
@@ -643,7 +684,7 @@ fun ReaderScreen(
                             accentColor = accentColor,
                             isLeft = true,
                             readingFont = settings.readingFont,
-                            activeSentenceText = currentSentenceText
+                            activeSentenceText = highlightedSentenceText
                         )
                     }
 
@@ -666,7 +707,7 @@ fun ReaderScreen(
                             accentColor = accentColor,
                             isLeft = false,
                             readingFont = settings.readingFont,
-                            activeSentenceText = currentSentenceText
+                            activeSentenceText = highlightedSentenceText
                         )
                     }
                 }
@@ -1187,7 +1228,28 @@ fun ReaderScreen(
                                         onClick = {
                                             selectedHudCategory = null
                                             showBottomHud = false
-                                            showQuoteCardModal = true
+                                            if (isTtsPlaying || ttsController.isPlaying.value) {
+                                                ttsAutoAdvanceJob?.cancel()
+                                                ttsAutoAdvanceJob = null
+                                                ttsController.stop()
+                                            }
+                                            val curr = spreads.getOrNull(currentSpreadIndex)
+                                            val sentences = mutableListOf<String>()
+                                            curr?.leftPage?.paragraphs?.forEach { para ->
+                                                sentences.addAll(TtsController.splitIntoSpeechChunks(para))
+                                            }
+                                            curr?.rightPage?.paragraphs?.forEach { para ->
+                                                sentences.addAll(TtsController.splitIntoSpeechChunks(para))
+                                            }
+                                            if (sentences.isNotEmpty()) {
+                                                quoteSentences = sentences
+                                                selectedQuoteIndex = 0
+                                                isSelectingQuoteMode = true
+                                                try { readerFocusRequester.requestFocus() } catch (_: Exception) {}
+                                            } else {
+                                                selectedQuoteText = book.summary?.takeIf { it.isNotBlank() } ?: book.title
+                                                showQuoteCardModal = true
+                                            }
                                         }
                                     )
                                     val timerLabel = when {
@@ -1395,6 +1457,51 @@ fun ReaderScreen(
         }
 
         // ==========================================
+        // BANNER MODO SELECCIÓN DE FRASE (TV)
+        // ==========================================
+        AnimatedVisibility(
+            visible = isSelectingQuoteMode,
+            enter = fadeIn(tween(200)) + slideInVertically(
+                initialOffsetY = { -it },
+                animationSpec = tween(250)
+            ),
+            exit = fadeOut(tween(150)) + slideOutVertically(
+                targetOffsetY = { -it },
+                animationSpec = tween(200)
+            ),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 28.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .shadow(16.dp, RoundedCornerShape(24.dp), spotColor = Color.Black.copy(alpha = 0.6f))
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color(0xFF16161A).copy(alpha = 0.96f))
+                    .border(1.dp, AmberWarm.copy(alpha = 0.7f), RoundedCornerShape(24.dp))
+                    .padding(horizontal = 22.dp, vertical = 10.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = null,
+                        tint = AmberWarm,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Navega con flechas ◄ ► ▲ ▼ para elegir una frase • OK para compartir • Atrás para salir",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+
+        // ==========================================
         // MODALES INTEGRADOS EN EL LECTOR 3D
         // ==========================================
         if (showNotesModal) {
@@ -1410,14 +1517,16 @@ fun ReaderScreen(
         }
 
         if (showQuoteCardModal) {
-            val sampleQuote = currentSpread?.leftPage?.paragraphs?.firstOrNull { it.length > 30 }
-                ?: currentSpread?.rightPage?.paragraphs?.firstOrNull { it.length > 30 }
-                ?: book.summary?.takeIf { it.isNotBlank() }
-                ?: book.title
+            val finalQuote = selectedQuoteText.ifBlank {
+                currentSpread?.leftPage?.paragraphs?.firstOrNull { it.length > 30 }
+                    ?: currentSpread?.rightPage?.paragraphs?.firstOrNull { it.length > 30 }
+                    ?: book.summary?.takeIf { it.isNotBlank() }
+                    ?: book.title
+            }
             QuoteCardModal(
                 book = book,
                 repository = repository,
-                selectedQuote = sampleQuote,
+                selectedQuote = finalQuote,
                 isDarkTheme = true,
                 onDismiss = {
                     showQuoteCardModal = false
@@ -1498,18 +1607,39 @@ private fun buildHighlightedParagraph(
     accentColor: Color
 ): AnnotatedString {
     val cleanActive = activeText.trim()
-    if (cleanActive.isBlank() || !fullText.contains(cleanActive, ignoreCase = true)) {
+    if (cleanActive.isBlank()) return AnnotatedString(fullText)
+
+    var startIdx = fullText.indexOf(cleanActive, ignoreCase = true)
+    var matchLength = cleanActive.length
+
+    if (startIdx == -1) {
+        val snippet = cleanActive.take(25).trim()
+        if (snippet.length >= 8) {
+            startIdx = fullText.indexOf(snippet, ignoreCase = true)
+            if (startIdx != -1) {
+                val remaining = fullText.substring(startIdx)
+                val punctIdx = remaining.indexOfFirst { it == '.' || it == '?' || it == '!' || it == '…' }
+                matchLength = if (punctIdx != -1 && punctIdx <= cleanActive.length + 15) {
+                    punctIdx + 1
+                } else {
+                    minOf(cleanActive.length, remaining.length)
+                }
+            }
+        }
+    }
+
+    if (startIdx == -1) {
         return AnnotatedString(fullText)
     }
-    val startIdx = fullText.indexOf(cleanActive, ignoreCase = true)
-    val endIdx = startIdx + cleanActive.length
+
+    val endIdx = (startIdx + matchLength).coerceAtMost(fullText.length)
     return buildAnnotatedString {
         append(fullText.substring(0, startIdx))
         withStyle(
             SpanStyle(
-                background = accentColor.copy(alpha = 0.28f),
+                background = accentColor.copy(alpha = 0.35f),
                 color = textColor,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.Bold
             )
         ) {
             append(fullText.substring(startIdx, endIdx))
