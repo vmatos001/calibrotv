@@ -641,20 +641,41 @@ class WifiImportServer(private val context: Context, private val repository: Boo
                         height: auto;
                         display: block;
                     }
-                    .btn {
-                        display: inline-block;
-                        background: #C5A059;
+                    .btn-share {
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        background: linear-gradient(135deg, #D4AF37 0%, #C5A059 100%);
                         color: #0C0A09;
-                        padding: 14px 28px;
+                        padding: 15px 32px;
                         font-size: 16px;
-                        font-weight: bold;
-                        border-radius: 24px;
+                        font-weight: 700;
+                        border-radius: 28px;
+                        border: none;
+                        cursor: pointer;
                         text-decoration: none;
                         letter-spacing: 0.5px;
-                        box-shadow: 0 4px 16px rgba(197,160,89,0.3);
+                        box-shadow: 0 6px 20px rgba(197,160,89,0.35);
+                        transition: all 0.2s ease;
+                        width: 100%;
+                        max-width: 320px;
+                    }
+                    .btn-share:active {
+                        transform: scale(0.97);
+                        box-shadow: 0 2px 10px rgba(197,160,89,0.2);
+                    }
+                    .btn-share svg {
+                        margin-right: 8px;
+                    }
+                    .secondary-link {
+                        margin-top: 14px;
+                        color: #8C827A;
+                        font-size: 13px;
+                        text-decoration: underline;
+                        cursor: pointer;
                     }
                     .tip {
-                        margin-top: 16px;
+                        margin-top: 18px;
                         color: #A8A29E;
                         font-size: 13px;
                         max-width: 300px;
@@ -664,17 +685,91 @@ class WifiImportServer(private val context: Context, private val repository: Boo
             </head>
             <body>
                 <div class="header">
-                    <span class="badge">BookSpread • Selección Editorial</span>
+                    <span class="badge">BookSpread • Cita Literaria</span>
                 </div>
                 <div class="preview-card">
-                    <img src="/quote?cardId=${escapeHtml(cardId)}" alt="BookSpread Quote Card">
+                    <img id="cardImg" src="/quote?cardId=${escapeHtml(cardId)}" alt="BookSpread Quote Card">
                 </div>
-                <a href="/quote?cardId=${escapeHtml(cardId)}" download="BookSpread_Quote_${cardId.take(8)}.png" class="btn">
-                    📥 Descargar Quote Card (PNG)
+
+                <button id="shareBtn" onclick="handleShare()" class="btn-share">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="18" cy="5" r="3"></circle>
+                        <circle cx="6" cy="12" r="3"></circle>
+                        <circle cx="18" cy="19" r="3"></circle>
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                    </svg>
+                    <span>Compartir Tarjeta</span>
+                </button>
+
+                <a href="/quote?cardId=${escapeHtml(cardId)}" download="BookSpread_Cita_${cardId.take(8)}.png" class="secondary-link">
+                    O guardar imagen directamente
                 </a>
+
                 <p class="tip">
-                    📱 Mantén pulsada la imagen para guardarla o compartirla directamente en WhatsApp, Instagram Stories o redes sociales.
+                    📲 Pulsa <b>Compartir Tarjeta</b> para abrir WhatsApp, Instagram Stories, Twitter o guardar la imagen en alta resolución.
                 </p>
+
+                <script>
+                    async function handleShare() {
+                        const btn = document.getElementById('shareBtn');
+                        const originalHtml = btn.innerHTML;
+                        btn.disabled = true;
+                        btn.style.opacity = '0.75';
+                        btn.innerHTML = '<span>⏳ Preparando tarjeta...</span>';
+
+                        const imgUrl = '/quote?cardId=${escapeHtml(cardId)}';
+
+                        try {
+                            const response = await fetch(imgUrl);
+                            const blob = await response.blob();
+                            const file = new File([blob], 'BookSpread_Cita_${cardId.take(8)}.png', { type: 'image/png' });
+
+                            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                                await navigator.share({
+                                    files: [file],
+                                    title: 'Cita en BookSpread',
+                                    text: 'Compartido desde BookSpread 3D'
+                                });
+                                btn.innerHTML = originalHtml;
+                                btn.style.opacity = '1';
+                                btn.disabled = false;
+                                return;
+                            } else if (navigator.share) {
+                                await navigator.share({
+                                    title: 'Cita en BookSpread',
+                                    text: 'Compartido desde BookSpread 3D',
+                                    url: window.location.href
+                                });
+                                btn.innerHTML = originalHtml;
+                                btn.style.opacity = '1';
+                                btn.disabled = false;
+                                return;
+                            }
+                        } catch (err) {
+                            if (err.name !== 'AbortError') {
+                                console.warn('Share error:', err);
+                            } else {
+                                btn.innerHTML = originalHtml;
+                                btn.style.opacity = '1';
+                                btn.disabled = false;
+                                return;
+                            }
+                        }
+
+                        // Fallback a descarga si no hay Web Share API soportado
+                        const dl = document.createElement('a');
+                        dl.href = imgUrl;
+                        dl.download = 'BookSpread_Cita_${cardId.take(8)}.png';
+                        document.body.appendChild(dl);
+                        dl.click();
+                        document.body.removeChild(dl);
+
+                        btn.innerHTML = originalHtml;
+                        btn.style.opacity = '1';
+                        btn.disabled = false;
+                    }
+                </script>
             </body>
             </html>
         """.trimIndent()

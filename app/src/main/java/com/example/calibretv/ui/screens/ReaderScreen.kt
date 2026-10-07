@@ -1527,9 +1527,11 @@ fun ReaderScreen(
                 book = book,
                 repository = repository,
                 selectedQuote = finalQuote,
+                bookLanguage = bookLanguage,
                 isDarkTheme = true,
                 onDismiss = {
                     showQuoteCardModal = false
+                    isSelectingQuoteMode = false
                     try { readerFocusRequester.requestFocus() } catch (_: Exception) {}
                 }
             )

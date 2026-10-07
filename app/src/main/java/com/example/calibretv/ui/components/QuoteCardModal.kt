@@ -94,6 +94,7 @@ fun QuoteCardModal(
     book: Book,
     repository: BookRepository,
     selectedQuote: String? = null,
+    bookLanguage: String = "es",
     isDarkTheme: Boolean = PreferencesManager(LocalContext.current).isDarkTheme(),
     onDismiss: () -> Unit
 ) {
@@ -138,9 +139,11 @@ fun QuoteCardModal(
 
         // 1. Generar la tarjeta editorial en Bitmap de alta resolución (9:16)
         val bmp = QuoteCardGenerator.generateQuoteCardBitmap(
+            context = context,
             quoteText = cleanQuote,
             bookTitle = book.title,
-            author = book.author
+            author = book.author,
+            bookLanguage = bookLanguage
         )
         cardBitmap = bmp
 
@@ -427,8 +430,11 @@ fun QuoteCardModal(
                                                 .background(Color.White.copy(alpha = 0.08f))
                                         )
                                         Spacer(modifier = Modifier.height(6.dp))
+                                        val displayTitle = remember(book.title, bookLanguage) {
+                                            QuoteCardGenerator.selectTitleForLanguage(book.title, bookLanguage)
+                                        }
                                         Text(
-                                            text = book.title,
+                                            text = displayTitle,
                                             color = AmberWarm,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
