@@ -1,10 +1,20 @@
 package com.example.calibretv.ui.components
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,17 +28,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.QrCode
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -54,7 +64,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.calibretv.data.BookRepository
@@ -63,27 +73,23 @@ import com.example.calibretv.data.server.QrCodeGenerator
 import com.example.calibretv.data.server.WifiImportServer
 import com.example.calibretv.data.storage.BookNoteEntity
 import com.example.calibretv.data.storage.PreferencesManager
-import com.example.calibretv.theme.AccentGold
-import com.example.calibretv.theme.AntiqueIvory
-import com.example.calibretv.theme.BackgroundDark
-import com.example.calibretv.theme.CyanElectric
-import com.example.calibretv.theme.InkPrimary
-import com.example.calibretv.theme.InkSecondary
-import com.example.calibretv.theme.SurfaceContainer
-import com.example.calibretv.theme.SurfaceContainerHigh
-import com.example.calibretv.theme.SurfaceContainerHighest
+import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.TextMuted
 import com.example.calibretv.theme.TextPrimary
 import com.example.calibretv.theme.TextSecondary
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Dialog modal for reading notes and reviews in BookSpread v3.0.
- * Includes a real-time QR code linked to the local HTTP server so readers
- * can compose thoughts with their smartphone keyboard without tedious D-Pad typing.
+ * 📱 Panel Bento de Anotaciones & Companion Móvil para CalibroTV.
+ *
+ * Se despliega lateralmente desde el borde derecho:
+ * - Contenedor Bento Superior: Código QR y enlace WiFi en tiempo real para escribir desde el smartphone.
+ * - Contenedor Bento Inferior: Lista de notas del libro con navegación vertical completa por D-Pad,
+ *   scroll fluido y opciones de eliminación con confirmación.
  */
 @Composable
 fun NotesModal(
@@ -96,14 +102,31 @@ fun NotesModal(
     val scope = rememberCoroutineScope()
     val activeProfile = remember { repository.getActiveProfile() }
     val wifiServer = remember { WifiImportServer.getInstance(context, repository) }
-    val closeFocusRequester = remember { FocusRequester() }
 
+    val closeFocusRequester = remember { FocusRequester() }
+    val firstNoteFocusRequester = remember { FocusRequester() }
+
+    var isVisible by remember { mutableStateOf(false) }
     var notesList by remember { mutableStateOf<List<BookNoteEntity>>(emptyList()) }
     var serverUrl by remember { mutableStateOf("") }
     var qrBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var noteToDelete by remember { mutableStateOf<String?>(null) }
 
     val dateFormat = remember {
         SimpleDateFormat("dd/MM/yyyy • HH:mm", Locale.getDefault())
+    }
+
+    fun dismissAnimated() {
+        scope.launch {
+            isVisible = false
+            delay(220L)
+            onDismiss()
+        }
+    }
+
+    // Intercepta el botón Atrás del control remoto
+    BackHandler {
+        dismissAnimated()
     }
 
     LaunchedEffect(Unit) {
@@ -111,13 +134,21 @@ fun NotesModal(
             wifiServer.startServer(8080)
         }
         serverUrl = wifiServer.buildUrl("/note?bookId=${book.id}&profileId=${activeProfile.id}")
-        qrBitmap = QrCodeGenerator.generateQrBitmap(serverUrl, 320, 320)
-
+        qrBitmap = QrCodeGenerator.generateQrBitmap(serverUrl, 300, 300)
         notesList = repository.getNotes(book.id, activeProfile.id)
-        closeFocusRequester.requestFocus()
+        isVisible = true
+
+        delay(150L)
+        try {
+            if (notesList.isNotEmpty()) {
+                firstNoteFocusRequester.requestFocus()
+            } else {
+                closeFocusRequester.requestFocus()
+            }
+        } catch (_: Exception) {}
     }
 
-    // Escucha en tiempo real de nuevas notas enviadas desde el smartphone
+    // Sincronización en tiempo real de notas agregadas desde el móvil
     LaunchedEffect(Unit) {
         repository.noteAddedEvents.collect { newNote ->
             if (newNote.bookId == book.id) {
@@ -126,317 +157,435 @@ fun NotesModal(
         }
     }
 
-    val modalBg = if (isDarkTheme) SurfaceContainer else Color(0xFFF7F5F0)
-    val cardBg = if (isDarkTheme) SurfaceContainerHigh else Color.White
-    val textPrimary = if (isDarkTheme) TextPrimary else InkPrimary
-    val textSecondary = if (isDarkTheme) TextMuted else InkSecondary
-
-    // Overlay oscurecido modal
+    // Capa base que cubre la pantalla
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = if (isDarkTheme) 0.88f else 0.65f))
-            .clickable { onDismiss() }
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown && (event.key == Key.Back || event.key == Key.Escape)) {
-                    onDismiss()
+                    dismissAnimated()
                     true
                 } else false
-            },
-        contentAlignment = Alignment.Center
+            }
     ) {
+        // Scrim semitransparente izquierdo (hacer clic o tap cierra el panel)
         Box(
             modifier = Modifier
-                .fillMaxWidth(0.88f)
-                .fillMaxHeight(0.84f)
-                .shadow(24.dp, RoundedCornerShape(16.dp))
-                .clip(RoundedCornerShape(16.dp))
-                .background(modalBg)
-                .clickable(enabled = false) {} // Evitar dismiss al hacer clic dentro
-                .padding(28.dp)
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.52f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { dismissAnimated() }
+        )
+
+        // Contenedor Bento anclado a la derecha con animación deslizante
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.CenterEnd
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Header superior
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.Edit,
-                                contentDescription = null,
-                                tint = AccentGold,
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Anotaciones & Reseñas • Companion Móvil",
-                                color = AccentGold,
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Serif
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "${book.title} — Lector: ${activeProfile.name}",
-                            color = textSecondary,
-                            fontSize = 14.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    // Contador de notas
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isDarkTheme) SurfaceContainerHigh else Color(0xFFE2E7E2))
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = "${notesList.size} ${if (notesList.size == 1) "nota" else "notas"}",
-                            color = textPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Contenido principal en dos columnas (QR móvil | Lista de notas en vivo)
-                Row(
+            AnimatedVisibility(
+                visible = isVisible,
+                enter = slideInHorizontally(
+                    initialOffsetX = { fullWidth -> fullWidth },
+                    animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(200)),
+                exit = slideOutHorizontally(
+                    targetOffsetX = { fullWidth -> fullWidth },
+                    animationSpec = tween(durationMillis = 220, easing = FastOutLinearInEasing)
+                ) + fadeOut(animationSpec = tween(150))
+            ) {
+                Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(28.dp)
+                        .width(460.dp)
+                        .fillMaxHeight()
+                        .padding(top = 18.dp, bottom = 18.dp, end = 20.dp)
+                        .clickable(enabled = false) {}, // Evita cerrar al hacer click dentro del bento
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    // Columna Izquierda: QR Companion
+                    // ==========================================
+                    // 1. CONTENEDOR BENTO SUPERIOR: QR COMPANION
+                    // ==========================================
                     Box(
                         modifier = Modifier
-                            .weight(0.42f)
-                            .fillMaxHeight()
-                            .shadow(if (isDarkTheme) 0.dp else 4.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.05f))
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(cardBg)
-                            .padding(20.dp),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .shadow(16.dp, RoundedCornerShape(18.dp), spotColor = Color.Black.copy(alpha = 0.5f))
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(Color(0xFF16161A).copy(alpha = 0.98f))
+                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(18.dp))
+                            .padding(16.dp)
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            if (qrBitmap != null) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color.White)
-                                        .padding(8.dp)
-                                ) {
+                            // Código QR enmarcado en blanco para óptimo contraste con cámaras
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.White)
+                                    .padding(6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (qrBitmap != null) {
                                     Image(
                                         bitmap = qrBitmap!!.asImageBitmap(),
-                                        contentDescription = "QR para escribir notas",
-                                        modifier = Modifier.size(190.dp)
+                                        contentDescription = "Código QR para escribir notas desde smartphone",
+                                        modifier = Modifier.size(118.dp)
                                     )
+                                } else {
+                                    Box(
+                                        modifier = Modifier.size(118.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            color = AmberWarm,
+                                            modifier = Modifier.size(28.dp),
+                                            strokeWidth = 2.5.dp
+                                        )
+                                    }
                                 }
-                            } else {
-                                Box(
+                            }
+
+                            // Información y llamada a la acción
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                                     modifier = Modifier
-                                        .size(190.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(if (isDarkTheme) SurfaceContainerHigh else Color(0xFFF1F5F1)),
-                                    contentAlignment = Alignment.Center
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(AmberWarm.copy(alpha = 0.16f))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.QrCode,
                                         contentDescription = null,
-                                        tint = AccentGold,
-                                        modifier = Modifier.size(48.dp)
+                                        tint = AmberWarm,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Text(
+                                        text = "COMPANION MÓVIL",
+                                        color = AmberWarm,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Text(
+                                    text = "Escribe desde tu móvil",
+                                    color = TextPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text(
+                                    text = "Escanea el código QR con tu smartphone para escribir reflexiones con teclado táctil.",
+                                    color = TextMuted,
+                                    fontSize = 11.sp,
+                                    lineHeight = 15.sp
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(7.dp)
+                                            .background(Color(0xFF4CAF50), CircleShape)
+                                    )
+                                    Text(
+                                        text = "Sincronización en vivo vía WiFi",
+                                        color = Color(0xFF81C784),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // ==========================================
+                    // 2. CONTENEDOR BENTO INFERIOR: TUS NOTAS
+                    // ==========================================
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .shadow(16.dp, RoundedCornerShape(18.dp), spotColor = Color.Black.copy(alpha = 0.5f))
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(Color(0xFF16161A).copy(alpha = 0.98f))
+                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(18.dp))
+                            .padding(16.dp)
+                    ) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // Cabecera Bento Inferior
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Edit,
+                                        contentDescription = null,
+                                        tint = AmberWarm,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "Notas del Libro",
+                                        color = TextPrimary,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color.White.copy(alpha = 0.08f))
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "${notesList.size}",
+                                            color = AmberWarm,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                // Botón Cerrar enfocado para TV
+                                var isCloseFocused by remember { mutableStateOf(false) }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier
+                                        .focusRequester(closeFocusRequester)
+                                        .onFocusChanged { isCloseFocused = it.isFocused }
+                                        .focusable()
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) { dismissAnimated() }
+                                        .onKeyEvent { event ->
+                                            if (event.type == KeyEventType.KeyDown &&
+                                                (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)) {
+                                                dismissAnimated()
+                                                true
+                                            } else false
+                                        }
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isCloseFocused) AmberWarm else Color.White.copy(alpha = 0.08f))
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isCloseFocused) AmberWarm else Color.White.copy(alpha = 0.12f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Close,
+                                        contentDescription = "Cerrar",
+                                        tint = if (isCloseFocused) Color(0xFF131316) else TextPrimary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "Cerrar",
+                                        color = if (isCloseFocused) Color(0xFF131316) else TextPrimary,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
                                     )
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                            Text(
-                                text = "📱 Escribe desde tu móvil",
-                                color = AccentGold,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "Escanea el código con tu teléfono para escribir cómodamente con teclado táctil.",
-                                color = textSecondary,
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
-                        }
-                    }
+                            // Lista scrolleable de notas
+                            if (notesList.isEmpty()) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Edit,
+                                        contentDescription = null,
+                                        tint = TextMuted.copy(alpha = 0.4f),
+                                        modifier = Modifier.size(46.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        text = "Aún no tienes notas en este libro",
+                                        color = TextPrimary,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "Apunta la cámara de tu móvil al código QR superior para redactar tu primera nota o reflexión.",
+                                        color = TextMuted,
+                                        fontSize = 11.sp,
+                                        lineHeight = 15.sp,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(horizontal = 24.dp)
+                                    )
+                                }
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    itemsIndexed(notesList, key = { _, note -> note.id }) { index, note ->
+                                        var isCardFocused by remember { mutableStateOf(false) }
 
-                    // Columna Derecha: Lista de Anotaciones en tiempo real
-                    Box(
-                        modifier = Modifier
-                            .weight(0.58f)
-                            .fillMaxHeight()
-                            .shadow(if (isDarkTheme) 0.dp else 4.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.05f))
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(cardBg)
-                            .padding(16.dp)
-                    ) {
-                        if (notesList.isEmpty()) {
-                            Column(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Edit,
-                                    contentDescription = null,
-                                    tint = textSecondary.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(54.dp)
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = "Aún no hay anotaciones para este libro",
-                                    color = textPrimary,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "Escanea el código QR de la izquierda para guardar tu primera cita o reflexión.",
-                                    color = textSecondary,
-                                    fontSize = 12.sp,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                            }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                items(notesList, key = { it.id }) { note ->
-                                    var isFocused by remember { mutableStateOf(false) }
-                                    val itemBg = when {
-                                        isFocused -> if (isDarkTheme) SurfaceContainerHighest else Color.White
-                                        else -> if (isDarkTheme) SurfaceContainerHigh else Color(0xFFF1F5F1)
-                                    }
-                                    val focusBorder = if (isFocused) {
-                                        if (isDarkTheme) AccentGold else CyanElectric
-                                    } else Color.Transparent
-
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(itemBg)
-                                            .border(
-                                                width = if (isFocused) 1.5.dp else 0.dp,
-                                                color = focusBorder,
-                                                shape = RoundedCornerShape(8.dp)
-                                            )
-                                            .focusable()
-                                            .onFocusChanged { isFocused = it.isFocused }
-                                            .padding(14.dp)
-                                    ) {
-                                        Column {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = dateFormat.format(Date(note.createdAt)),
-                                                    color = AccentGold,
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.SemiBold
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .then(
+                                                    if (index == 0) Modifier.focusRequester(firstNoteFocusRequester)
+                                                    else Modifier
                                                 )
-
-                                                IconButton(
-                                                    onClick = {
+                                                .scale(if (isCardFocused) 1.02f else 1.0f)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(if (isCardFocused) Color(0xFF25252D) else Color(0xFF1D1D22))
+                                                .border(
+                                                    width = if (isCardFocused) 1.5.dp else 1.dp,
+                                                    color = if (isCardFocused) AmberWarm else Color.White.copy(alpha = 0.08f),
+                                                    shape = RoundedCornerShape(12.dp)
+                                                )
+                                                .onFocusChanged { isCardFocused = it.isFocused }
+                                                .focusable()
+                                                .onKeyEvent { event ->
+                                                    if (event.type == KeyEventType.KeyDown) {
+                                                        when (event.key) {
+                                                            Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                                                                if (noteToDelete == note.id) {
+                                                                    scope.launch {
+                                                                        repository.deleteNote(note.id)
+                                                                        notesList = repository.getNotes(book.id, activeProfile.id)
+                                                                        noteToDelete = null
+                                                                    }
+                                                                } else {
+                                                                    noteToDelete = note.id
+                                                                }
+                                                                true
+                                                            }
+                                                            Key.DirectionLeft -> {
+                                                                dismissAnimated()
+                                                                true
+                                                            }
+                                                            else -> false
+                                                        }
+                                                    } else false
+                                                }
+                                                .clickable(
+                                                    interactionSource = remember { MutableInteractionSource() },
+                                                    indication = null
+                                                ) {
+                                                    if (noteToDelete == note.id) {
                                                         scope.launch {
                                                             repository.deleteNote(note.id)
                                                             notesList = repository.getNotes(book.id, activeProfile.id)
+                                                            noteToDelete = null
                                                         }
-                                                    },
-                                                    modifier = Modifier.size(24.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Filled.Delete,
-                                                        contentDescription = "Eliminar nota",
-                                                        tint = textSecondary,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
+                                                    } else {
+                                                        noteToDelete = note.id
+                                                    }
                                                 }
+                                                .padding(12.dp)
+                                        ) {
+                                            Column(modifier = Modifier.fillMaxWidth()) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = dateFormat.format(Date(note.createdAt)),
+                                                        color = AmberWarm,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
+
+                                                    if (noteToDelete == note.id) {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = "¿Borrar?",
+                                                                color = Color(0xFFFF5252),
+                                                                fontSize = 11.sp,
+                                                                fontWeight = FontWeight.Bold
+                                                            )
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .clip(RoundedCornerShape(4.dp))
+                                                                    .background(Color(0xFFD32F2F))
+                                                                    .clickable {
+                                                                        scope.launch {
+                                                                            repository.deleteNote(note.id)
+                                                                            notesList = repository.getNotes(book.id, activeProfile.id)
+                                                                            noteToDelete = null
+                                                                        }
+                                                                    }
+                                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                            ) {
+                                                                Text("Sí", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                            }
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .clip(RoundedCornerShape(4.dp))
+                                                                    .background(Color.White.copy(alpha = 0.15f))
+                                                                    .clickable { noteToDelete = null }
+                                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                            ) {
+                                                                Text("No", color = TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                            }
+                                                        }
+                                                    } else {
+                                                        Icon(
+                                                            imageVector = Icons.Filled.Delete,
+                                                            contentDescription = "Eliminar nota",
+                                                            tint = if (isCardFocused) AmberWarm else TextMuted,
+                                                            modifier = Modifier
+                                                                .size(16.dp)
+                                                                .clickable { noteToDelete = note.id }
+                                                        )
+                                                    }
+                                                }
+
+                                                Spacer(modifier = Modifier.height(6.dp))
+
+                                                Text(
+                                                    text = note.noteText,
+                                                    color = TextPrimary,
+                                                    fontSize = 13.sp,
+                                                    lineHeight = 19.sp,
+                                                    fontFamily = FontFamily.Serif
+                                                )
                                             }
-
-                                            Spacer(modifier = Modifier.height(6.dp))
-
-                                            Text(
-                                                text = note.noteText,
-                                                color = textPrimary,
-                                                fontSize = 14.sp,
-                                                lineHeight = 20.sp,
-                                                fontFamily = FontFamily.Serif
-                                            )
                                         }
                                     }
                                 }
                             }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // Barra inferior de botones
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    var isCloseFocused by remember { mutableStateOf(false) }
-                    val closeBtnBg = if (isCloseFocused) {
-                        AccentGold
-                    } else (if (isDarkTheme) SurfaceContainerHigh else Color(0xFFE2E7E2))
-                    val closeBtnText = if (isCloseFocused) {
-                        Color(0xFF111317)
-                    } else (if (isDarkTheme) AntiqueIvory else InkPrimary)
-
-                    Button(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .focusRequester(closeFocusRequester)
-                            .onFocusChanged { isCloseFocused = it.isFocused }
-                            .onKeyEvent { event ->
-                                if (event.type == KeyEventType.KeyDown &&
-                                    (event.key == Key.DirectionUp || event.key == Key.DirectionDown)) {
-                                    true
-                                } else false
-                            },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = closeBtnBg,
-                            contentColor = closeBtnText
-                        ),
-                        shape = RoundedCornerShape(24.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Volver a la Lectura",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
                         }
                     }
                 }

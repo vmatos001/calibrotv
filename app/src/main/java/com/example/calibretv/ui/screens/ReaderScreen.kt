@@ -128,7 +128,6 @@ import com.example.calibretv.data.model.ReadingSettings
 import com.example.calibretv.data.model.ReadingTheme
 import com.example.calibretv.theme.AmberWarm
 import com.example.calibretv.theme.BackgroundDark
-import com.example.calibretv.theme.CyanElectric
 import com.example.calibretv.theme.FontProvider
 import com.example.calibretv.theme.SurfaceContainerHigh
 import com.example.calibretv.theme.TextMuted
@@ -497,7 +496,7 @@ fun ReaderScreen(
     // Palette Colors based on Stitch Reading Themes (Including Pergamino Clásico)
     val (pageBg, pageText, accentColor) = when (settings.theme) {
         ReadingTheme.PERGAMINO -> Triple(Color(0xFFF4F1EA), Color(0xFF2C2A29), Color(0xFFC29B38))
-        ReadingTheme.OLED_PURE -> Triple(Color(0xFF000000), Color(0xFFE5E1E4), CyanElectric)
+        ReadingTheme.OLED_PURE -> Triple(Color(0xFF000000), Color(0xFFE5E1E4), AmberWarm)
         ReadingTheme.SEPIA_CINE -> Triple(Color(0xFF26201A), Color(0xFFE6DBCC), AmberWarm)
         ReadingTheme.NIGHT_AMBER -> Triple(Color(0xFF0D0D0D), Color(0xFFFFC664), AmberWarm)
         ReadingTheme.PROYECTOR_BLANCO -> Triple(Color(0xFFFFFFFF), Color(0xFF1A1A1A), Color(0xFF0066CC))
@@ -599,7 +598,7 @@ fun ReaderScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    CircularProgressIndicator(color = CyanElectric)
+                    CircularProgressIndicator(color = AmberWarm)
                     Text("Cargando pliegos 16:9...", color = Color.White.copy(alpha = 0.7f), fontSize = 16.sp)
                 }
             }
@@ -1225,7 +1224,7 @@ fun ReaderScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color(0xFF131315).copy(alpha = 0.96f))
-                        .border(1.5.dp, CyanElectric.copy(alpha = 0.4f), RoundedCornerShape(18.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(18.dp))
                         .padding(horizontal = 24.dp, vertical = 14.dp)
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1258,7 +1257,7 @@ fun ReaderScreen(
 
                             Text(
                                 text = "$currentProgressPct% • $remainingMin min restantes",
-                                color = CyanElectric,
+                                color = AmberWarm,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -1275,7 +1274,7 @@ fun ReaderScreen(
                                 modifier = Modifier
                                     .fillMaxWidth(currentProgressPct / 100f)
                                     .height(4.dp)
-                                    .background(CyanElectric, RoundedCornerShape(2.dp))
+                                    .background(AmberWarm, RoundedCornerShape(2.dp))
                             )
                         }
 
@@ -1675,7 +1674,7 @@ private fun HudActionButton(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = modifier
             .scale(if (isFocused) 1.06f else 1.0f)
-            .shadow(if (isFocused) 8.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = CyanElectric)
+            .shadow(if (isFocused) 8.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = AmberWarm.copy(alpha = 0.5f))
             .clip(RoundedCornerShape(8.dp))
             .background(
                 when {
@@ -1749,7 +1748,7 @@ private fun HudTabButton(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = modifier
             .scale(if (isFocused) 1.06f else 1.0f)
-            .shadow(if (isFocused) 8.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = CyanElectric)
+            .shadow(if (isFocused) 8.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = AmberWarm.copy(alpha = 0.5f))
             .clip(RoundedCornerShape(8.dp))
             .background(
                 when {
@@ -1761,7 +1760,7 @@ private fun HudTabButton(
             )
             .border(
                 width = if (isFocused) 2.dp else if (isPrimary || isSelected) 1.5.dp else 0.dp,
-                color = if (isFocused) Color.White else if (isPrimary) CyanElectric else if (isSelected) AmberWarm else Color.Transparent,
+                color = if (isFocused) Color.White else if (isPrimary || isSelected) AmberWarm else Color.Transparent,
                 shape = RoundedCornerShape(8.dp)
             )
             .onFocusChanged {
@@ -1789,12 +1788,12 @@ private fun HudTabButton(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (isFocused) Color(0xFF131315) else if (isPrimary) CyanElectric else if (isSelected) AmberWarm else TextMuted,
+            tint = if (isFocused) Color(0xFF131315) else if (isPrimary) AmberWarm else if (isSelected) AmberWarm else TextMuted,
             modifier = Modifier.size(15.dp)
         )
         Text(
             text = title,
-            color = if (isFocused) Color(0xFF131315) else if (isPrimary) CyanElectric else if (isSelected) Color.White else TextMuted,
+            color = if (isFocused) Color(0xFF131315) else if (isPrimary) AmberWarm else if (isSelected) Color.White else TextMuted,
             fontSize = 12.sp,
             fontWeight = if (isFocused || isPrimary || isSelected) FontWeight.Bold else FontWeight.Medium,
             maxLines = 1,
@@ -1812,10 +1811,10 @@ private fun FloatingHudMenuCard(
         modifier = Modifier
             .wrapContentWidth(unbounded = true, align = Alignment.CenterHorizontally)
             .width(width)
-            .shadow(16.dp, RoundedCornerShape(14.dp), spotColor = CyanElectric.copy(alpha = 0.4f))
+            .shadow(16.dp, RoundedCornerShape(14.dp), spotColor = Color.Black.copy(alpha = 0.6f))
             .clip(RoundedCornerShape(14.dp))
             .background(Color(0xFF161619).copy(alpha = 0.98f))
-            .border(1.2.dp, CyanElectric.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
             .padding(8.dp)
     ) {
         Column(
@@ -1850,7 +1849,7 @@ private fun VerticalHudOptionButton(
         modifier = Modifier
             .fillMaxWidth()
             .scale(if (isFocused) 1.04f else 1.0f)
-            .shadow(if (isFocused) 6.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = CyanElectric)
+            .shadow(if (isFocused) 6.dp else 0.dp, RoundedCornerShape(8.dp), spotColor = AmberWarm.copy(alpha = 0.4f))
             .clip(RoundedCornerShape(8.dp))
             .background(
                 when {
