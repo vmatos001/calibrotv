@@ -437,7 +437,7 @@ object CuratorRepository {
                         summary = "El profesor Otto Lidenbrock y su sobrino Axel descifran un manuscrito rúnico y descienden al interior del planeta a través de un cráter en Islandia, descubriendo un prodigioso mundo subterráneo lleno de océanos perdidos y seres prehistóricos.",
                         category = "Aventuras Clásicas",
                         isPublicDomain = true,
-                        publicDownloadUrl = "https://www.gutenberg.org/ebooks/4791.epub.images",
+                        publicDownloadUrl = "https://www.gutenberg.org/ebooks/18857.epub.images",
                         approximatePrice = "Gratis (Dominio Público)",
                         year = "1864"
                     ),
@@ -678,12 +678,17 @@ object CuratorRepository {
         )
     }
 
+    private val REGEX_ARTICLES = Regex("""\b(el|la|los|las|the|a|an|de|del|en|un|una|unos|unas|y|o)\b""")
+    private val REGEX_BRACKETS = Regex("""\(.*?\)|\[.*?\]""")
+    private val REGEX_CLEAN_CHARS = Regex("""[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]""")
+    private val REGEX_WHITESPACE = Regex("""\s+""")
+
     fun normalizeTitleForMatching(title: String): String {
         return title.lowercase()
-            .replace(Regex("""\b(el|la|los|las|the|a|an|de|del|en|un|una|unos|unas|y|o)\b"""), " ")
-            .replace(Regex("""\(.*?\)|\[.*?\]"""), " ")
-            .replace(Regex("""[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]"""), " ")
-            .replace(Regex("""\s+"""), " ")
+            .replace(REGEX_ARTICLES, " ")
+            .replace(REGEX_BRACKETS, " ")
+            .replace(REGEX_CLEAN_CHARS, " ")
+            .replace(REGEX_WHITESPACE, " ")
             .trim()
     }
 

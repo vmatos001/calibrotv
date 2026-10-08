@@ -140,7 +140,8 @@ object OpdsClient {
 
         var currentNextUrl = baseFeed.nextUrl
         var page = 1
-        while (!currentNextUrl.isNullOrBlank() && page < 60) {
+        val maxIndexPages = 10 // Protección contra saturación de memoria en TV: máximo ~500 libros por lote
+        while (!currentNextUrl.isNullOrBlank() && page < maxIndexPages) {
             page++
             val nextResult = fetchFeed(currentNextUrl, username, password)
             if (nextResult.isSuccess) {

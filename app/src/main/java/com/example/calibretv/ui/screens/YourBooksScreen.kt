@@ -25,24 +25,29 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -98,12 +103,27 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 
+enum class BookOriginFilter(val label: String) {
+    ALL("Todos"),
+    LOCAL("En Memoria TV"),
+    OPDS("Servidor OPDS"),
+    DRIVE("Google Drive")
+}
+
+data class YourBookEntry(
+    val book: Book,
+    val sizeBytes: Long,
+    val origin: BookOriginFilter,
+    val isDownloaded: Boolean
+)
+
 /**
  * Pantalla dedicada de «Tus Libros» (Sección 3.3 del Plan Maestro).
- * Funciona como Gestor Físico de Memoria en el televisor:
- * - Muestra los libros descargados físicamente en la TV con su tamaño en MB.
- * - Indicador de almacenamiento libre disponible en el dispositivo.
- * - Acción rápida con control remoto para [Liberar Espacio] eliminando el archivo local sin perder el historial.
+ * Funciona como Gestor Físico y Multifuente de Libros en el televisor:
+ * - Libros descargados en la memoria física de la TV (con tamaño en MB y liberación de espacio).
+ * - Libros en el Servidor OPDS (índice ligero con descarga/lectura bajo demanda lazyload).
+ * - Libros en Google Drive (índice ligero con descarga/lectura bajo demanda lazyload).
+ * - Paginación protegida para catálogos masivos (5.000+ libros).
  */
 @Composable
 fun YourBooksScreen(
@@ -119,34 +139,54 @@ fun YourBooksScreen(
     var activeProfile by remember { mutableStateOf(repository.getActiveProfile()) }
     var showUserProfilesModal by remember { mutableStateOf(false) }
 
-    // Lista de libros con archivos físicos existentes en el almacenamiento de la TV
-    var localBooksWithFiles by remember { mutableStateOf<List<Pair<Book, Long>>>(emptyList()) }
+    var selectedOriginFilter by remember { mutableStateOf(BookOriginFilter.ALL) }
+    var allYourBookEntries by remember { mutableStateOf<List<YourBookEntry>>(emptyList()) }
     var totalUsedBytes by remember { mutableStateOf(0L) }
     var freeStorageBytes by remember { mutableStateOf(0L) }
 
     var bookToDelete by remember { mutableStateOf<Book?>(null) }
-    var bookToManage by remember { mutableStateOf<Book?>(null) }
+    var bookToManage by remember { mutableStateOf<YourBookEntry?>(null) }
+    var isDownloadingBook by remember { mutableStateOf(false) }
 
     fun refreshStorageInfo() {
         val allBooks = repository.getCachedBooks()
-        val localList = mutableListOf<Pair<Book, Long>>()
+        val entryList = mutableListOf<YourBookEntry>()
         var sumBytes = 0L
 
         allBooks.forEach { book ->
             val path = book.epubUrl
             var size = 0L
-            if (!path.isNullOrBlank()) {
+            var isDown = false
+            if (!path.isNullOrBlank() && !path.startsWith("http://", ignoreCase = true) && !path.startsWith("https://", ignoreCase = true)) {
                 val cleanPath = path.removePrefix("file://")
                 val f = File(cleanPath)
-                if (f.exists() && f.isFile) {
+                if (f.exists() && f.isFile && f.length() > 0) {
                     size = f.length()
                     sumBytes += size
+                    isDown = true
                 }
             }
-            localList.add(Pair(book, size))
+            if (!isDown) {
+                val fEpub = File(context.filesDir, "book_${book.id}.epub")
+                if (fEpub.exists() && fEpub.length() > 0) {
+                    size = fEpub.length()
+                    sumBytes += size
+                    isDown = true
+                }
+            }
+
+            val origin = when {
+                book.tags.any { it.contains("Drive", ignoreCase = true) } ||
+                book.epubUrl?.contains("drive.google.com") == true -> BookOriginFilter.DRIVE
+                isDown -> BookOriginFilter.LOCAL
+                book.epubUrl?.startsWith("http", ignoreCase = true) == true -> BookOriginFilter.OPDS
+                else -> BookOriginFilter.LOCAL
+            }
+
+            entryList.add(YourBookEntry(book, size, origin, isDown))
         }
 
-        localBooksWithFiles = localList
+        allYourBookEntries = entryList
         totalUsedBytes = sumBytes
 
         try {
@@ -334,7 +374,7 @@ fun YourBooksScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "${localBooksWithFiles.size} libros en tu colección personal",
+                            text = "${allYourBookEntries.size} libros en tu catálogo",
                             color = textSecondaryColor,
                             fontSize = 13.sp
                         )
@@ -371,8 +411,74 @@ fun YourBooksScreen(
                 }
             }
 
-            // Grilla de libros locales o estado vacío
-            if (localBooksWithFiles.isEmpty()) {
+            // Pestañas Bento de Selección de Origen (Todos, Memoria TV, OPDS, Google Drive)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BookOriginFilter.values().forEach { filter ->
+                    val isSelected = selectedOriginFilter == filter
+                    var isPillFocused by remember { mutableStateOf(false) }
+                    val count = when (filter) {
+                        BookOriginFilter.ALL -> allYourBookEntries.size
+                        BookOriginFilter.LOCAL -> allYourBookEntries.count { it.isDownloaded }
+                        BookOriginFilter.OPDS -> allYourBookEntries.count { it.origin == BookOriginFilter.OPDS }
+                        BookOriginFilter.DRIVE -> allYourBookEntries.count { it.origin == BookOriginFilter.DRIVE }
+                    }
+                    val pillBg = when {
+                        isPillFocused -> AmberWarm
+                        isSelected -> if (isDarkTheme) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.12f)
+                        else -> if (isDarkTheme) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.04f)
+                    }
+                    val pillTextColor = when {
+                        isPillFocused -> Color(0xFF131316)
+                        isSelected -> AmberWarm
+                        else -> if (isDarkTheme) TextSecondary else InkSecondary
+                    }
+                    val pillBorder = when {
+                        isPillFocused -> AmberWarm
+                        isSelected -> AmberWarm.copy(alpha = 0.5f)
+                        else -> Color.Transparent
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(pillBg)
+                            .border(1.dp, pillBorder, RoundedCornerShape(18.dp))
+                            .clickable { selectedOriginFilter = filter }
+                            .onFocusChanged { isPillFocused = it.isFocused }
+                            .focusable()
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "${filter.label} ($count)",
+                            color = pillTextColor,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected || isPillFocused) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            val filteredEntries = remember(allYourBookEntries, selectedOriginFilter) {
+                when (selectedOriginFilter) {
+                    BookOriginFilter.ALL -> allYourBookEntries
+                    BookOriginFilter.LOCAL -> allYourBookEntries.filter { it.isDownloaded }
+                    BookOriginFilter.OPDS -> allYourBookEntries.filter { it.origin == BookOriginFilter.OPDS }
+                    BookOriginFilter.DRIVE -> allYourBookEntries.filter { it.origin == BookOriginFilter.DRIVE }
+                }
+            }
+            var visibleLimit by remember { mutableIntStateOf(60) }
+            val visibleEntries = filteredEntries.take(visibleLimit)
+
+            // Grilla de libros o estado vacío
+            if (filteredEntries.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -391,7 +497,12 @@ fun YourBooksScreen(
                         )
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            text = "No tienes libros sincronizados ni descargados en este televisor",
+                            text = when (selectedOriginFilter) {
+                                BookOriginFilter.LOCAL -> "No tienes libros descargados en la memoria de la TV"
+                                BookOriginFilter.OPDS -> "No hay libros del Servidor OPDS en tu catálogo"
+                                BookOriginFilter.DRIVE -> "No hay libros vinculados desde Google Drive"
+                                BookOriginFilter.ALL -> "No tienes libros en tu colección personal"
+                            },
                             color = textPrimaryColor,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
@@ -428,19 +539,49 @@ fun YourBooksScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    itemsIndexed(localBooksWithFiles, key = { _, pair -> pair.first.id }) { index, (book, sizeBytes) ->
+                    itemsIndexed(visibleEntries, key = { _, entry -> "${entry.book.id}_${entry.origin.name}" }) { index, entry ->
                         val isLeftEdge = index % COLUMNS_COUNT == 0
                         YourBookItemCard(
-                            book = book,
-                            sizeBytes = sizeBytes,
+                            entry = entry,
                             authHeader = authHeader,
                             isDarkTheme = isDarkTheme,
                             isInteractive = !isAnyModalOpen,
                             isLeftEdge = isLeftEdge,
                             onLeftAtBoundary = { sidebarFocusRequester.requestFocus() },
-                            onClick = { bookToManage = book },
-                            onDeleteClick = { bookToDelete = book }
+                            onClick = { bookToManage = entry },
+                            onDeleteClick = { bookToDelete = entry.book }
                         )
+                    }
+
+                    if (filteredEntries.size > visibleLimit) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                var isLoadMoreFocused by remember { mutableStateOf(false) }
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isLoadMoreFocused) AmberWarm else if (isDarkTheme) SurfaceRaised else Color.White)
+                                        .border(1.dp, if (isLoadMoreFocused) AmberWarm else Color.Transparent, RoundedCornerShape(12.dp))
+                                        .clickable { visibleLimit += 60 }
+                                        .onFocusChanged { isLoadMoreFocused = it.isFocused }
+                                        .focusable()
+                                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Cargar más (+60 libros) • Mostrando ${visibleEntries.size} de ${filteredEntries.size}",
+                                        color = if (isLoadMoreFocused) Color(0xFF131316) else AmberWarm,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -472,10 +613,11 @@ fun YourBooksScreen(
         }
     }
 
-    // Modal de Gestión / Lectura
-    bookToManage?.let { book ->
+    // Modal de Gestión / Lectura / Descarga Bajo Demanda
+    bookToManage?.let { entry ->
+        val book = entry.book
         AlertDialog(
-            onDismissRequest = { bookToManage = null },
+            onDismissRequest = { if (!isDownloadingBook) bookToManage = null },
             title = {
                 Text(
                     text = book.title,
@@ -487,32 +629,98 @@ fun YourBooksScreen(
                 )
             },
             text = {
-                Text(
-                    text = "¿Qué deseas hacer con este libro en la televisión?",
-                    color = if (isDarkTheme) TextSecondary else InkSecondary,
-                    fontSize = 14.sp
-                )
+                Column {
+                    val originDesc = when {
+                        entry.isDownloaded -> "Guardado en memoria de la TV (${formatBytes(entry.sizeBytes)})"
+                        entry.origin == BookOriginFilter.OPDS -> "Ubicado en Servidor OPDS personal (Descarga bajo demanda)"
+                        entry.origin == BookOriginFilter.DRIVE -> "Ubicado en Google Drive (Descarga bajo demanda)"
+                        else -> "En tu catálogo"
+                    }
+                    Text(
+                        text = originDesc,
+                        color = AmberWarm,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = if (entry.isDownloaded) {
+                            "¿Qué deseas hacer con este libro en la televisión?"
+                        } else {
+                            "Este libro no está descargado localmente en la TV. Puedes descargarlo ahora para leerlo fluidamente en 3D."
+                        },
+                        color = if (isDarkTheme) TextSecondary else InkSecondary,
+                        fontSize = 14.sp
+                    )
+                    if (isDownloadingBook) {
+                        Spacer(Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                color = AmberWarm,
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = "Descargando a memoria local...",
+                                color = textPrimaryColor,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        val b = book
-                        bookToManage = null
-                        onBookSelected(b)
+                if (!isDownloadingBook) {
+                    if (entry.isDownloaded) {
+                        TextButton(
+                            onClick = {
+                                val b = book
+                                bookToManage = null
+                                onBookSelected(b)
+                            }
+                        ) {
+                            Text("📖 Leer Ahora", color = AmberWarm, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        TextButton(
+                            onClick = {
+                                isDownloadingBook = true
+                                coroutineScope.launch {
+                                    val file = withContext(Dispatchers.IO) {
+                                        repository.resolveBookFile(book)
+                                    }
+                                    isDownloadingBook = false
+                                    bookToManage = null
+                                    refreshStorageInfo()
+                                    if (file != null) {
+                                        onBookSelected(book)
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("📥 Descargar y Leer", color = AmberWarm, fontWeight = FontWeight.Bold)
+                        }
                     }
-                ) {
-                    Text("📖 Leer Ahora", color = AmberWarm, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        val b = book
-                        bookToManage = null
-                        bookToDelete = b
+                if (!isDownloadingBook) {
+                    if (entry.isDownloaded) {
+                        TextButton(
+                            onClick = {
+                                val b = book
+                                bookToManage = null
+                                bookToDelete = b
+                            }
+                        ) {
+                            Text("🗑️ Liberar Espacio", color = Color(0xFFEF5350))
+                        }
+                    } else {
+                        TextButton(onClick = { bookToManage = null }) {
+                            Text("Cancelar", color = if (isDarkTheme) TextSecondary else InkSecondary)
+                        }
                     }
-                ) {
-                    Text("🗑️ Liberar Espacio", color = Color(0xFFEF5350))
                 }
             },
             containerColor = if (isDarkTheme) SurfaceCard else Color(0xFFF7F5F0),
@@ -534,7 +742,7 @@ fun YourBooksScreen(
             },
             text = {
                 Text(
-                    text = "¿Eliminar el archivo físico de «${book.title}» de la memoria del televisor? Tu progreso y notas seguirán guardados.",
+                    text = "¿Eliminar el archivo físico de «${book.title}» de la memoria del televisor? Seguirá en tu lista para volver a descargar cuando lo desees.",
                     color = if (isDarkTheme) TextSecondary else InkSecondary,
                     fontSize = 14.sp
                 )
@@ -547,6 +755,8 @@ fun YourBooksScreen(
                             val f = File(path)
                             if (f.exists()) f.delete()
                         }
+                        val fEpub = File(context.filesDir, "book_${book.id}.epub")
+                        if (fEpub.exists()) fEpub.delete()
                         bookToDelete = null
                         refreshStorageInfo()
                     }
@@ -581,8 +791,7 @@ fun YourBooksScreen(
 
 @Composable
 private fun YourBookItemCard(
-    book: Book,
-    sizeBytes: Long,
+    entry: YourBookEntry,
     authHeader: String? = null,
     isDarkTheme: Boolean = true,
     isInteractive: Boolean = true,
@@ -591,6 +800,7 @@ private fun YourBookItemCard(
     onClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
+    val book = entry.book
     var isFocused by remember { mutableStateOf(false) }
     val coverBmp = rememberCoverImage(book.coverUrl, authHeader)
 
@@ -638,6 +848,28 @@ private fun YourBookItemCard(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp)
         )
+
+        val (badgeText, badgeColor, badgeBg) = when {
+            entry.isDownloaded -> Triple("💾 ${formatBytes(entry.sizeBytes)}", Color(0xFF4CAF50), Color(0xFF4CAF50).copy(alpha = 0.15f))
+            entry.origin == BookOriginFilter.OPDS -> Triple("🌐 OPDS", CyanElectric, CyanElectric.copy(alpha = 0.15f))
+            entry.origin == BookOriginFilter.DRIVE -> Triple("☁️ Drive", AmberWarm, AmberWarm.copy(alpha = 0.15f))
+            else -> Triple("💾 Local", Color(0xFF4CAF50), Color(0xFF4CAF50).copy(alpha = 0.15f))
+        }
+
+        Box(
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .background(badgeBg, RoundedCornerShape(4.dp))
+                .padding(horizontal = 5.dp, vertical = 1.dp)
+        ) {
+            Text(
+                text = badgeText,
+                color = badgeColor,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+        }
     }
 }
 

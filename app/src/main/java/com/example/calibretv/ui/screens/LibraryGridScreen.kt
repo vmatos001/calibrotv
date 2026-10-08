@@ -79,7 +79,6 @@ import com.example.calibretv.data.image.CoverLoader
 import com.example.calibretv.data.image.rememberCoverImage
 import com.example.calibretv.data.model.Book
 import com.example.calibretv.data.opds.OpdsClient
-import com.example.calibretv.data.opds.OpdsFeedContent
 import com.example.calibretv.theme.AmberWarm
 import androidx.compose.ui.platform.LocalContext
 import com.example.calibretv.theme.BackgroundDark
@@ -157,18 +156,20 @@ data class CircleShelfFilter(
     val bookCount: Int = 0
 )
 
-fun getBookDifficultyLevel(book: Book): Int {
-    val levelRegex = Regex("""(?i)(\d+)\s*(?:nivel|level|grado|grade|l)?""")
-    val levelRegex2 = Regex("""(?i)(?:nivel|level|grado|grade|l)?\s*(\d+)""")
+private val LEVEL_REGEX_1 = Regex("""(?i)(\d+)\s*(?:nivel|level|grado|grade|l)?""")
+private val LEVEL_REGEX_2 = Regex("""(?i)(?:nivel|level|grado|grade|l)?\s*(\d+)""")
+private val LEVEL_SHELF_REGEX = Regex("""^\d+\s*nivel.*""", RegexOption.IGNORE_CASE)
+private val LEVEL_NUM_REGEX = Regex("""^[1-5]$""")
 
+fun getBookDifficultyLevel(book: Book): Int {
     val allTokens = book.shelves + book.tags + listOf(book.category)
     for (token in allTokens) {
         val trimmed = token.trim()
         if (trimmed in listOf("1", "2", "3", "4", "5")) {
             return trimmed.toInt()
         }
-        levelRegex.find(trimmed)?.groupValues?.get(1)?.toIntOrNull()?.let { if (it in 1..5) return it }
-        levelRegex2.find(trimmed)?.groupValues?.get(1)?.toIntOrNull()?.let { if (it in 1..5) return it }
+        LEVEL_REGEX_1.find(trimmed)?.groupValues?.get(1)?.toIntOrNull()?.let { if (it in 1..5) return it }
+        LEVEL_REGEX_2.find(trimmed)?.groupValues?.get(1)?.toIntOrNull()?.let { if (it in 1..5) return it }
     }
     return 99
 }
@@ -207,8 +208,8 @@ fun LibraryGridScreen(
     val prefsManager = remember { com.example.calibretv.data.storage.PreferencesManager(context) }
     var isDarkTheme by remember { mutableStateOf(prefsManager.isDarkTheme()) }
 
-    var feedContent by remember { mutableStateOf<OpdsFeedContent?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
+    var curatedSections by remember { mutableStateOf(CuratorRepository.getCuratedSections()) }
+    var isLoading by remember { mutableStateOf(curatedSections.isEmpty()) }
     var selectedFilterId by remember { mutableStateOf("all") }
     var activeProfile by remember { mutableStateOf(repository.getActiveProfile()) }
 
@@ -220,7 +221,6 @@ fun LibraryGridScreen(
     var selectedCuratedBook by remember { mutableStateOf<CuratedBook?>(null) }
     var isDownloadingCuratedBook by remember { mutableStateOf(false) }
     var isSearchOpen by remember { mutableStateOf(false) }
-    var curatedSections by remember { mutableStateOf(CuratorRepository.getCuratedSections()) }
     val bookFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
 
     BackHandler {
@@ -238,63 +238,30 @@ fun LibraryGridScreen(
     val config = remember { repository.getServerConfig() }
     val authHeader = remember(config) { CoverLoader.buildBasicAuth(config.username, config.password) }
 
-    // Load full catalog, sync with Cloud Firestore and enrich shelves
+    // Sincronizar catálogo curado con Cloud Firestore en segundo plano sin bloquear la UI
     LaunchedEffect(activeProfile) {
-        isLoading = true
-        withContext(Dispatchers.IO) {
-            val synced = CuratorRepository.syncWithCms()
-            if (synced) {
-                curatedSections = CuratorRepository.getCuratedSections()
-            }
+        if (curatedSections.isEmpty()) {
+            isLoading = true
         }
-        val result = repository.getFeed()
-        feedContent = result
-        if (config.serverUrl.isNotBlank()) {
+        try {
             withContext(Dispatchers.IO) {
-                try {
-                    repository.loadAndApplyShelves(config)
-                    val updated = repository.getCachedBooks()
-                    if (updated.isNotEmpty()) {
-                        feedContent = feedContent?.copy(books = updated)
-                    }
-                } catch (_: Exception) {}
+                val synced = CuratorRepository.syncWithCms()
+                if (synced) {
+                    curatedSections = CuratorRepository.getCuratedSections()
+                }
             }
+        } catch (e: Exception) {
+            android.util.Log.e("LibraryGridScreen", "Error sincronizando con Firebase/CMS: ${e.message}")
+        } finally {
+            isLoading = false
         }
-        isLoading = false
     }
 
-    // Escaparate de Inspiración: Combina las obras curadas de la nube con las sincronizadas de OPDS
-    val allBooks = remember(curatedSections, feedContent) {
-        val cloudBooks = CuratorRepository.getAllCuratedBooks().map { it.toBook() }
-        val feedBooks = feedContent?.books ?: emptyList()
-        val mergedList = mutableListOf<Book>()
-        val matchedFeedIds = mutableSetOf<String>()
-
-        cloudBooks.forEach { cBook ->
-            val matchingFeed = feedBooks.find { f ->
-                f.id == cBook.id ||
-                CuratorRepository.normalizeTitleForMatching(f.title) == CuratorRepository.normalizeTitleForMatching(cBook.title)
-            }
-            if (matchingFeed != null) {
-                matchedFeedIds.add(matchingFeed.id)
-                mergedList.add(
-                    matchingFeed.copy(
-                        coverUrl = if (!matchingFeed.coverUrl.isNullOrBlank()) matchingFeed.coverUrl else cBook.coverUrl,
-                        category = if (matchingFeed.category.isBlank() || matchingFeed.category.equals("General", ignoreCase = true)) cBook.category else matchingFeed.category,
-                        shelves = (matchingFeed.shelves + cBook.shelves).distinct(),
-                        summary = if (matchingFeed.summary.isBlank()) cBook.summary else matchingFeed.summary
-                    )
-                )
-            } else {
-                mergedList.add(cBook)
-            }
-        }
-
-        feedBooks.filterNot { it.id in matchedFeedIds }.forEach {
-            mergedList.add(it)
-        }
-
-        mergedList
+    // Escaparate de Inspiración: Obras curadas de la nube (Cloud Firestore) y catálogo local integrado
+    val allBooks = remember(curatedSections) {
+        val fromSections = curatedSections.flatMap { it.books }
+        val allCurated = CuratorRepository.getAllCuratedBooks()
+        (fromSections + allCurated).distinctBy { it.id }.map { it.toBook() }
     }
 
     // Circular Shelf Filters (Sección A: Estanterías de Personajes y Dificultad)
@@ -324,30 +291,6 @@ fun LibraryGridScreen(
                     type = CircleShelfType.CHARACTER,
                     coverUrl = section.avatarUrl ?: section.books.firstOrNull()?.coverUrl,
                     bookCount = matchingCount
-                )
-            )
-        }
-
-        // Shelves de Personajes adicionales desde Calibre-Web si existen
-        val cachedShelves = repository.getShelves()
-        val shelvesFromBooks = allBooks.flatMap { it.shelves }.distinct()
-            .filter { it.isNotBlank() && !it.equals("null", ignoreCase = true) && !it.matches(Regex("""^\d+\s*nivel.*""", RegexOption.IGNORE_CASE)) && !it.contains("ingl", ignoreCase = true) && !it.matches(Regex("""^[1-5]$""")) }
-
-        val charShelves = shelvesFromBooks.filter { OpdsClient.isCharacterShelfName(it) && curatedSections.none { s -> s.name.equals(it, ignoreCase = true) } }.sorted()
-
-        charShelves.forEach { shelfName ->
-            val matchingBooks = allBooks.filter { b ->
-                b.shelves.any { it.equals(shelfName, ignoreCase = true) }
-            }
-            val shelfObj = cachedShelves.firstOrNull { it.name.equals(shelfName, ignoreCase = true) }
-            val coverUrl = shelfObj?.imageUrl ?: matchingBooks.firstOrNull { !it.coverUrl.isNullOrBlank() }?.coverUrl
-            list.add(
-                CircleShelfFilter(
-                    id = shelfName,
-                    title = shelfName,
-                    type = CircleShelfType.CHARACTER,
-                    coverUrl = coverUrl,
-                    bookCount = matchingBooks.size
                 )
             )
         }
@@ -520,8 +463,16 @@ fun LibraryGridScreen(
                                 onQuickSync = {
                                     coroutineScope.launch {
                                         isLoading = true
-                                        feedContent = repository.getFeed()
-                                        isLoading = false
+                                        try {
+                                            withContext(Dispatchers.IO) {
+                                                val synced = CuratorRepository.syncWithCms()
+                                                if (synced) {
+                                                    curatedSections = CuratorRepository.getCuratedSections()
+                                                }
+                                            }
+                                        } finally {
+                                            isLoading = false
+                                        }
                                     }
                                 },
                                 onNotificationsClick = onNavigateToSettings
@@ -663,7 +614,6 @@ fun LibraryGridScreen(
                             val res = CuratorRepository.downloadPublicDomainBook(context, curatedBook, repository)
                             if (res.isSuccess) {
                                 isCuratedDownloaded = true
-                                feedContent = repository.getFeed()
                                 android.widget.Toast.makeText(context, "¡Descarga completada! Ya puedes abrir el libro.", android.widget.Toast.LENGTH_SHORT).show()
                             } else {
                                 android.widget.Toast.makeText(context, "Error al descargar: ${res.exceptionOrNull()?.message ?: "Comprueba tu conexión"}", android.widget.Toast.LENGTH_LONG).show()
